@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 英语对话教练 · Speak with AI</title>
+<link rel="stylesheet" href="css/style.css?v=20260824d">
+<link rel="stylesheet" href="vendor/katex/katex.min.css?v=20260824d">
+</head>
+<body>
+
+<!-- ============ Header ============ -->
+<div class="header">
+  <div class="logo" onclick="showHome()" style="cursor:pointer" title="返回首页">
+    <div class="logo-icon">🇺🇸</div>
+    <div>
+      <h1>AI 英语教练</h1>
+      <p>Speak with AI · 四大功能模块</p>
+    </div>
+  </div>
+  <div class="header-controls">
+    <div class="mode-nav" id="modeNav">
+      <button class="mode-btn" data-mode="chat" onclick="switchMode('chat')">💬 Chat</button>
+      <button class="mode-btn" data-mode="practice" onclick="switchMode('practice')">📝 Practice</button>
+      <button class="mode-btn" data-mode="writing" onclick="switchMode('writing')">✍️ Writing</button>
+      <button class="mode-btn" data-mode="translation" onclick="switchMode('translation')">🌐 Translation</button>
+      <button class="mode-btn" data-mode="charade" onclick="switchMode('charade')">🎭 Charade</button>
+    </div>
+    <div class="ctl" id="difficultyCtl">
+      <label>CET 难度</label>
+      <div class="difficulty">
+        <input type="range" id="difficulty" min="1" max="10" value="6">
+        <span class="lv" id="diffLabel">CET-6</span>
+      </div>
+    </div>
+    <span class="user-badge" id="userBadge" title="当前账户"></span>
+    <button class="toggle-btn" id="ankiToggle" onclick="toggleAnki()" title="自动添加到 Anki">📚 Anki</button>
+    <button class="toggle-btn" id="autoReadToggle" onclick="toggleAutoRead()" title="自动朗读回复">🔊 Auto</button>
+    <button class="new-topic-btn" id="newConvBtn" onclick="promptNewConversation()">🔄 新对话</button>
+    <button class="debug-btn" onclick="openSettings()" title="设置">⚙️ 设置</button>
+    <button class="debug-btn" onclick="exportDebug()" title="导出调试快照">🔧 调试</button>
+    <button class="debug-btn" onclick="showHome()" title="返回首页">🏠 首页</button>
+  </div>
+</div>
+
+<!-- ============ 首页 ============ -->
+<div id="homePage" class="home-page" style="display:none">
+  <div class="home-inner">
+    <div class="home-logo">🇺🇸</div>
+    <h1 class="home-title">AI English Coach</h1>
+    <p class="home-sub">Welcome, <span id="homeUser" style="font-weight:700"></span> · Pick a mode to start</p>
+    <div class="home-grid">
+      <div class="home-card" onclick="switchMode('chat')">
+        <div class="home-ico">💬</div>
+        <div class="home-name">CHAT</div>
+        <div class="home-desc">Have a conversation with AI. Practice speaking English naturally.</div>
+      </div>
+      <div class="home-card" onclick="switchMode('practice')">
+        <div class="home-ico">📝</div>
+        <div class="home-name">PRACTICE</div>
+        <div class="home-desc">Review weak points with smart flashcards generated from your chats.</div>
+      </div>
+      <div class="home-card" onclick="switchMode('writing')">
+        <div class="home-ico">✍️</div>
+        <div class="home-name">WRITING</div>
+        <div class="home-desc">Write essays on any topic for 高考 / CET / 考研, then get detailed feedback.</div>
+      </div>
+      <div class="home-card" onclick="switchMode('translation')">
+        <div class="home-ico">🌐</div>
+        <div class="home-name">TRANSLATION</div>
+        <div class="home-desc">Practice Chinese → English translation. Question bank or AI-generated.</div>
+      </div>
+      <div class="home-card" onclick="switchMode('charade')">
+        <div class="home-ico">🎭</div>
+        <div class="home-name">CHARADE</div>
+        <div class="home-desc">Describe a word in English without saying it. Bank or AI-chosen words.</div>
+      </div>
+    </div>
+    <button class="home-logout" onclick="logout()">退出登录</button>
+  </div>
+</div>
+
+<!-- ============ Layout ============ -->
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h3>💬 对话记录</h3>
+      <button class="sidebar-new-btn" onclick="sidebarNewConversation()">＋ 新对话</button>
+    </div>
+    <div class="sidebar-list" id="sidebarList"></div>
+    <div class="sidebar-anki" id="ankiSidebar"></div>
+    <div class="sidebar-footer">对话自动保存在本地浏览器</div>
+  </div>
+  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="对话管理">▶</button>
+  <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" onclick="toggleSidebar()" title="对话记录">💬</button>
+
+  <!-- Main area -->
+  <div class="main-area" id="mainArea">
+    <!-- Chat (default) -->
+    <div class="chat-area" id="chatArea" style="display:flex;flex-direction:column;height:100%">
+      <div class="messages" id="messages"></div>
+      <div class="input-area">
+<div class="slash-menu" id="slashMenu" style="display:none"></div>
+         <textarea id="userInput" placeholder="用英语回复... (Enter 发送，Shift+Enter 换行)" rows="1" autocomplete="off"></textarea>
+         <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+          <span class="spin"></span> 发送        </button>
+        <button class="send-btn" id="stopBtn" onclick="stopSending()" style="display:none;background:#dc2626">⏹ 停止</button>
+      </div>
+    </div>
+
+    <!-- Practice -->
+    <div class="module-area" id="practiceArea" style="display:none;flex-direction:column;height:100%;padding:24px;overflow-y:auto">
+      <h2 style="margin:0 0 8px">📝 Practice</h2>
+      <p style="color:var(--text2);margin:0 0 16px;font-size:14px">Review weak points and flashcards generated from your conversations.</p>
+      <div id="practiceStats" class="practice-stats" style="margin-bottom:16px"></div>
+      <button class="send-btn" onclick="startWebReview()" style="padding:10px 24px;font-size:15px">✅ 开始网页复习</button>
+      <div style="margin-top:16px;font-size:13px;color:var(--text2)">Open Anki to review your flashcards. The app automatically creates cards from your weak points.</div>
+    </div>
+
+    <!-- Writing -->
+    <div class="module-area" id="writingArea" style="display:none;flex-direction:column;height:100%">
+      <div class="writing-config" style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div>
+          <label style="font-size:11px;color:var(--text2);display:block">Exam Type</label>
+          <select id="wExamType" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:13px;background:var(--bg)">
+            <option value="高考英语">College Entrance Exam</option>
+            <option value="考研英语">Postgraduate Exam</option>
+            <option value="大学英语四级">CET-4</option>
+            <option value="大学英语六级">CET-6</option>
+            <option value="雅思">IELTS</option>
+            <option value="托福">TOEFL</option>
+            <option value="GRE">GRE</option>
+            <option value="其他">Other</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:200px">
+          <label style="font-size:11px;color:var(--text2);display:block">Topic</label>
+          <div style="display:flex;gap:6px">
+            <input id="wTopicInput" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:13px" placeholder="Enter your essay topic, or pick a suggestion below">
+            <button class="dict-btn" onclick="startWriting()" style="padding:4px 14px;font-size:13px">开始写作</button>
+          </div>
+          <div id="wTopicSuggest" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"></div>
+        </div>
+        <button class="toggle-btn" onclick="clearWriting()" title="清除" style="align-self:flex-end">🗑️ 清除</button>
+      </div>
+      <textarea id="wText" placeholder="Write your essay here in English..." style="flex:1;width:100%;border:none;padding:16px;font-size:15px;line-height:1.8;resize:none;outline:none;background:var(--bg);font-family:inherit"></textarea>
+      <div class="writing-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+        <button class="send-btn" onclick="submitWriting()" style="padding:6px 18px;font-size:14px">📊 提交评分</button>
+        <span id="wWordCount" style="font-size:12px;color:var(--text2)"></span>
+      </div>
+      <div id="wFeedback" style="padding:12px 16px;max-height:35vh;overflow-y:auto;border-top:1px solid var(--border);flex-shrink:0;display:none"></div>
+    </div>
+
+    <!-- Translation -->
+    <div class="module-area" id="translateArea" style="display:none;flex-direction:column;height:100%">
+      <div class="translate-config" style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:600">🌐 Chinese → English Translation</span>
+        <button class="toggle-btn" onclick="translateSource('bank')" id="trBankBtn" style="font-size:12px">📚 题库</button>
+        <button class="toggle-btn" onclick="translateSource('ai')" id="trAiBtn" style="font-size:12px">🤖 AI 出题</button>
+        <span style="font-size:11px;color:var(--text2)">目前: <span id="trSourceLabel">题库</span></span>
+        <button class="dict-btn" onclick="nextTranslate()" style="font-size:12px;margin-left:auto">下一题 →</button>
+      </div>
+      <div id="trQuestion" class="tr-question" style="padding:20px 24px;font-size:18px;line-height:1.6;text-align:center;flex-shrink:0">点击「下一题」开始</div>
+      <textarea id="trInput" placeholder="Write your English translation here..." style="flex:1;width:100%;border:none;padding:16px;font-size:15px;line-height:1.8;resize:none;outline:none;background:var(--bg);font-family:inherit"></textarea>
+      <div class="translate-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+        <button class="send-btn" onclick="submitTranslate()" style="padding:6px 18px;font-size:14px">✅ 提交</button>
+        <button class="dict-btn" onclick="showTranslateAnswer()" style="font-size:12px">显示参考答案</button>
+      </div>
+      <div id="trFeedback" style="padding:12px 16px;max-height:30vh;overflow-y:auto;border-top:1px solid var(--border);flex-shrink:0;display:none"></div>
+    </div>
+
+    <!-- Charade -->
+    <div class="module-area" id="charadeArea" style="display:none;flex-direction:column;height:100%">
+      <div class="charade-config" style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:600">🎭 Charade — Describe the Word</span>
+        <button class="toggle-btn" onclick="charadeSource('bank')" id="chBankBtn" style="font-size:12px">📚 题库</button>
+        <button class="toggle-btn" onclick="charadeSource('ai')" id="chAiBtn" style="font-size:12px">🤖 AI 出词</button>
+        <span style="font-size:11px;color:var(--text2)">目前: <span id="chSourceLabel">题库</span></span>
+        <button class="dict-btn" onclick="charadeNext()" style="font-size:12px;margin-left:auto">下一个 →</button>
+      </div>
+      <div id="chWord" class="ch-word" style="padding:32px 24px;text-align:center;flex-shrink:0">
+        <div style="font-size:14px;color:var(--text2);margin-bottom:8px">Click the button to reveal the word</div>
+        <button class="send-btn" onclick="charadeReveal()" style="padding:8px 24px;font-size:16px">🎯 显示单词</button>
+      </div>
+      <div id="chHint" style="padding:0 16px;text-align:center;font-size:13px;color:var(--text2);flex-shrink:0"></div>
+      <textarea id="chDesc" placeholder="Describe the word in English. Do not say the word itself. Use full sentences." style="flex:1;width:100%;border:none;padding:16px;font-size:15px;line-height:1.8;resize:none;outline:none;background:var(--bg);font-family:inherit"></textarea>
+      <div class="charade-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+        <button class="send-btn" onclick="submitCharade()" style="padding:6px 18px;font-size:14px">✅ 提交评分</button>
+        <button class="dict-btn" onclick="charadeNext()" style="font-size:12px">下一个 →</button>
+      </div>
+      <div id="chFeedback" style="padding:12px 16px;max-height:30vh;overflow-y:auto;border-top:1px solid var(--border);flex-shrink:0;display:none"></div>
+    </div>
+  </div>
+
+  <!-- Side panel -->
+<div class="side-panel panel-expanded" id="sidePanel">
+     <div class="panel-drag-handle" id="panelDragHandle" title="拖动移动小窗"></div>
+     <div class="panel-mode-controls" aria-label="反馈面板模式"><button onclick="setFeedbackPanelMode('collapsed')" title="关闭">×</button><button onclick="setFeedbackPanelMode('mini')" title="小窗悬浮">□</button><button onclick="setFeedbackPanelMode('expanded')" title="展开">▣</button></div>
+     <div class="resize-handle resize-handle-left" id="panelResize"></div>
+     <div class="panel-resize-corner" id="panelResizeCorner" title="拖动调整大小"></div>
+    <div class="right-tabs">
+      <button class="right-tab active" data-tab="feedback" onclick="switchRightTab('feedback')">📊 反馈</button>
+      <button class="right-tab" data-tab="dict" onclick="switchRightTab('dict')">🔤 词典翻译</button>
+    </div>
+    <div class="right-tab-content" id="tab-feedback">
+      <div class="panel-section" id="analysisSection">
+        <h3>📊 本次评分</h3>
+        <div id="analysisContent">
+          <div class="empty" style="padding:24px 0">开始对话后，这里会显示你的回答评分与改进建议</div>
+        </div>
+      </div>
+      <div class="panel-section">
+        <h3>📖 生词本<span class="badge" id="wordCount">0</span></h3>
+        <div id="vocabContent">
+          <div class="empty">划选 AI 的回复，点击「加入生词本」</div>
+        </div>
+      </div>
+      <div class="panel-section">
+        <h3>🎯 知识薄弱点</h3>
+        <div id="weakContent">
+          <div class="empty">对话中自动追踪你的薄弱环节</div>
+        </div>
+      </div>
+    </div>
+    <div class="right-tab-content" id="tab-dict" style="display:none">
+      <div id="dictHistory" class="dict-history" style="margin-bottom:6px;max-height:100px;overflow-y:auto;font-size:11px"></div>
+      <div class="dict-input-wrap">
+        <textarea id="dictInput" rows="3" placeholder="输入中文或英文单词/句子，或直接提问（如：如何用英语表达'我很期待'？）..."></textarea>
+        <button class="dict-btn" id="dictBtn" onclick="queryDict()">查询</button>
+      </div>
+      <div id="dictContext" class="dict-context-hint"></div>
+      <div id="dictResult"></div>
+    </div>
+  </div>
+  <button class="side-panel-toggle" onclick="toggleMobilePanel()" title="侧栏">📊</button>
+</div>
+
+<!-- ============ Translation tooltip ============ -->
+<div class="translate-tip" id="translateTip">
+  <div class="tip-dragbar" id="tipDragBar">
+    <span class="tip-title" id="tipWord"></span>
+    <span class="tip-drag-hint" title="按住拖动">⠟ 拖动</span>
+  </div>
+  <div class="tip-body">
+    <div class="meaning" id="tipMeaning"><span class="loading">翻译中...</span></div>
+    <div class="tip-actions">
+      <button class="tip-add" id="tipAdd" onclick="addFromTip()">加入生词本</button>
+      <button class="tip-close" onclick="hideTip()">关闭</button>
+    </div>
+  </div>
+  <div class="tip-resize" id="tipResize" title="拖动右下角调整大小"></div>
+</div>
+
+<script src="vendor/katex/katex.min.js?v=20260824d"></script>
+<script src="js/config.js?v=20260824d"></script>
+<script src="js/storage.js?v=20260824d"></script>
+<script src="js/app.js?v=20260824d"></script>
+
+<!-- ============ 登录 ============ -->
+<div id="loginOverlay" class="login-overlay" style="display:none">
+  <div class="login-card">
+    <div class="login-logo">🇺🇸</div>
+    <h2>AI English Coach</h2>
+    <p class="login-sub">Login to start · 四大功能模块 · 数据按账户隔离存储</p>
+    <input id="loginUser" type="text" placeholder="用户名" autocomplete="username">
+    <input id="loginPass" type="password" placeholder="密码" autocomplete="current-password">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin:6px 0 4px;cursor:pointer">
+      <input id="loginRemember" type="checkbox" style="width:14px;height:14px" checked>
+      <span>记住我（保持登录状态）</span>
+    </label>
+    <div id="loginMsg" class="login-msg"></div>
+    <button id="loginBtn" class="login-btn">🔓 登录</button>
+    <div class="login-hint">默认账户 test / catten（密码与账户名相同）<br>修改密码：python scripts\manage_users.py reset &lt;用户名&gt; &lt;新密码&gt;</div>
+  </div>
+</div>
+
+<!-- ============ 新对话 · 话题选择 ============ -->
+<div id="topicModal" class="topic-modal" style="display:none">
+  <div class="topic-card">
+    <h3>💬 开始新对话 · 选择话题</h3>
+    <div id="topicList" class="topic-list"></div>
+    <button class="topic-cancel" onclick="closeTopicModal()">取消</button>
+  </div>
+</div>
+</body>
+</html>
