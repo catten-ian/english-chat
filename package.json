@@ -1,0 +1,14 @@
+{
+  "name": "ai-english-chat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI 英语对话教练（副应用）—— 零依赖 Node 后端 + 无构建前端",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test \"test/*.test.js\"",
+    "check": "node --check server.js && node --check js/app.js && node --check js/storage.js && node --check js/config.js && node --check js/shgaoka_bank.js"
+  }
+}

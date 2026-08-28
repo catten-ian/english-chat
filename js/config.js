@@ -1,6 +1,6 @@
 /* ============================================================
    AI 英语对话教练 - Configuration
-   NOTE: API keys live in ai-english-chat/.env (gitignored), read by server.py.
+   NOTE: API keys live in ai-english-chat/.env (gitignored), read by server.js.
    This file must NEVER contain keys.
 ============================================================ */
 const API_URL = 'https://api.minimaxi.com/v1/chat/completions';

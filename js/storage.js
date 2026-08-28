@@ -4,7 +4,9 @@
    - 所有 /api/db/* 与代理均带 Authorization: Bearer <token>
 ============================================================ */
 
-const BACKEND_URL = "";  // 同源：Caddy/Nginx 反代 /api → 后端 8091
+// 同源（Caddy/Nginx 反代 /api → 后端 8091）时为空字符串；
+// 若用 file:// 直接双击打开 index.html，则显式指向本地后端（服务端 CORS 已放行 null 来源）
+const BACKEND_URL = (typeof location !== 'undefined' && location.protocol === 'file:') ? 'http://localhost:8091' : "";
 
 /* ---------- Auth ---------- */
 let authToken = localStorage.getItem('ai_en_token') || sessionStorage.getItem('ai_en_token') || null;
@@ -75,19 +77,65 @@ async function apiChangePassword(oldPassword, newPassword) {
   return data;
 }
 
-/* ---------- DB CRUD（按登录用户隔离） ---------- */
-async function apiSave(key, data) {
+/* ---------- DB CRUD（按登录用户隔离） ----------
+   保存必须串行：同一 key 若有请求在途，新数据先进 pending，
+   在途请求结束后只发送「最后一份」快照。
+   这样可以避免旧快照后到、覆盖服务端较新数据（last-write-wins 回退）。 */
+const _saveInflight = {};   // key -> Promise
+const _savePending = {};    // key -> 最新待发数据（只保留一份）
+const syncStatus = { pending: 0, failed: 0, lastError: null, lastSavedAt: null };
+
+async function _saveNow(key, data) {
   try {
     const res = await fetch(BACKEND_URL + '/api/db/' + key, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(data)
     });
-    return res.ok;
+    if (!res.ok) {
+      syncStatus.failed++;
+      syncStatus.lastError = key + ': HTTP ' + res.status;
+      console.warn('apiSave rejected:', key, res.status);
+      return false;
+    }
+    syncStatus.lastSavedAt = new Date().toISOString();
+    return true;
   } catch (e) {
+    syncStatus.failed++;
+    syncStatus.lastError = key + ': ' + e.message;
     console.warn('apiSave failed:', key, e.message);
     return false;
   }
+}
+
+function apiSave(key, data) {
+  if (_saveInflight[key]) {
+    // 已有请求在途：覆盖 pending（只保留最新快照），复用同一条队列
+    _savePending[key] = data;
+    return _saveInflight[key];
+  }
+  syncStatus.pending++;
+  const run = (async () => {
+    let payload = data;
+    let ok = true;
+    // 循环消费 pending，直到没有新的待发数据
+    /* eslint-disable no-constant-condition */
+    while (true) {
+      ok = await _saveNow(key, payload);
+      if (Object.prototype.hasOwnProperty.call(_savePending, key)) {
+        payload = _savePending[key];
+        delete _savePending[key];
+        continue;
+      }
+      break;
+    }
+    return ok;
+  })();
+  _saveInflight[key] = run.finally(() => {
+    delete _saveInflight[key];
+    syncStatus.pending = Math.max(0, syncStatus.pending - 1);
+  });
+  return _saveInflight[key];
 }
 async function apiLoad(key) {
   try {
@@ -100,23 +148,118 @@ async function apiLoad(key) {
   }
 }
 
-/* 登录后：从 DB 加载数据到本地缓存 */
+/* ---------- 高考翻译题库 API ---------- */
+async function apiGaokaoExams() {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/gaokao/exams', { headers: authHeaders() });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) { console.warn('apiGaokaoExams failed:', e.message); return null; }
+}
+async function apiGaokaoExam(name) {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/gaokao/exam/' + encodeURIComponent(name), { headers: authHeaders() });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) { console.warn('apiGaokaoExam failed:', e.message); return null; }
+}
+async function apiGaokaoPushed() {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/gaokao/pushed', { headers: authHeaders() });
+    if (!res.ok) return { ids: [] };
+    return await res.json();
+  } catch (e) { return { ids: [] }; }
+}
+async function apiGaokaoPushToAnki(ids) {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/gaokao/push-to-anki', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ ids })
+    });
+    return await res.json();
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+
+/* ---------- 本地缓存归属（防止 A 账户缓存被 B 账户读到/回写） ----------
+   localStorage 是浏览器级共享的，而账户数据在服务端按 user_id 隔离。
+   这里用 owner 标记登记「当前缓存属于谁」：
+   - owner 与当前登录用户不一致 → 先清空全部用户态缓存，再从服务端 hydration
+   - owner 缺失（老版本升级） → 视为当前用户，保留现有缓存，仅补写标记 */
+const CACHE_OWNER_KEY = 'ai_en_cache_owner';
+// 用户态缓存的固定 key（不含 ai_en_setting_* 前缀键，另行处理）
+const USER_CACHE_KEYS = [
+  'ai_en_convs', 'ai_en_vocab', 'ai_en_weak', 'ai_en_current_conv',
+  'ai_en_settings_backup', 'ai_en_backup_latest', 'ai_en_backup_history',
+  'ai_en_dict_history', 'ai_en_mode', 'ai_en_game_tab'
+];
+
+function clearUserCache() {
+  try {
+    USER_CACHE_KEYS.forEach(k => localStorage.removeItem(k));
+    // 所有 ai_en_setting_* 偏好（角色、Anki 开关、阅读、翻译规则等）
+    const doomed = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('ai_en_setting_')) doomed.push(k);
+    }
+    doomed.forEach(k => localStorage.removeItem(k));
+  } catch (e) {}
+}
+
+/* 在 hydration 之前调用：确认缓存归属，必要时清空 */
+function ensureCacheOwner(username) {
+  if (!username) return;
+  let owner = null;
+  try { owner = localStorage.getItem(CACHE_OWNER_KEY); } catch (e) {}
+  if (owner && owner !== username) {
+    clearUserCache();
+  }
+  try { localStorage.setItem(CACHE_OWNER_KEY, username); } catch (e) {}
+}
+
+/* 登录后：从 DB 加载数据到本地缓存
+   服务端返回 null 时必须写入空默认值，不能保留旧值（否则会残留上一账户数据） */
 async function loadUserData() {
+  ensureCacheOwner(currentUser());
+
   const convs = await apiLoad('conversations');
-  if (convs && typeof convs === 'object') localStorage.setItem('ai_en_convs', JSON.stringify(convs));
+  localStorage.setItem('ai_en_convs', JSON.stringify(convs && typeof convs === 'object' && !Array.isArray(convs) ? convs : {}));
+
   const vocab = await apiLoad('vocab');
-  if (Array.isArray(vocab)) localStorage.setItem('ai_en_vocab', JSON.stringify(vocab));
+  localStorage.setItem('ai_en_vocab', JSON.stringify(Array.isArray(vocab) ? vocab : []));
+
   const weak = await apiLoad('weak');
-  if (weak && typeof weak === 'object') localStorage.setItem('ai_en_weak', JSON.stringify(weak));
+  localStorage.setItem('ai_en_weak', JSON.stringify(weak && typeof weak === 'object' && !Array.isArray(weak) ? weak : {}));
+
   const settings = await apiLoad('settings');
-  if (settings && typeof settings === 'object') localStorage.setItem('ai_en_settings_backup', JSON.stringify(settings));
+  const settingsObj = settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
+  localStorage.setItem('ai_en_settings_backup', JSON.stringify(settingsObj));
+  // 服务端 settings 展开写入真实 setting 键（此前只写 backup，导致设置无法跨浏览器恢复）
+  hydrateSettingsFromServer(settingsObj);
+
   const avatar = await apiLoad('avatar');
-  if (avatar) setSetting('avatar', avatar);
+  setSetting('avatar', typeof avatar === 'string' ? avatar : '');
+
   const characters = await apiLoad('characters');
-  if (Array.isArray(characters)) setSetting('characters', characters);
+  setSetting('characters', Array.isArray(characters) ? characters : []);
+
   const strategist = await apiLoad('strategist');
-  if (Array.isArray(strategist)) setSetting('strategistInstructions', strategist);
+  setSetting('strategistInstructions', Array.isArray(strategist) ? strategist : []);
   return true;
+}
+
+/* settings 对象 → ai_en_setting_* 键。current_conv 单独处理（不是偏好项） */
+function hydrateSettingsFromServer(settingsObj) {
+  if (!settingsObj || typeof settingsObj !== 'object') return;
+  for (const [k, v] of Object.entries(settingsObj)) {
+    if (k === 'current_conv') {
+      if (v) localStorage.setItem('ai_en_current_conv', String(v));
+      continue;
+    }
+    if (v === undefined) continue;
+    setSetting(k, v);
+  }
 }
 
 /* ---------- Vocabulary ---------- */
@@ -277,13 +420,18 @@ function getCurrentConvId() {
 function setCurrentConvId(id) {
   if (id) localStorage.setItem('ai_en_current_conv', id);
   else localStorage.removeItem('ai_en_current_conv');
-  // current_conv 一并持久化到 DB settings
+  // current_conv 一并持久化到 DB settings。
+  // 必须同时更新本地 backup 快照，否则下次读到的是旧快照，会把新保存的设置覆盖回去。
   const settings = getSettingsBackup();
   settings.current_conv = id || null;
+  saveSettingsBackup(settings);
   apiSave('settings', settings);
 }
 function getSettingsBackup() {
   try { return JSON.parse(localStorage.getItem('ai_en_settings_backup') || '{}'); } catch(e) { return {}; }
+}
+function saveSettingsBackup(settings) {
+  try { localStorage.setItem('ai_en_settings_backup', JSON.stringify(settings || {})); } catch (e) {}
 }
 
 function generateConvId() {

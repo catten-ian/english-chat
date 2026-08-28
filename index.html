@@ -1,287 +1,879 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI 英语对话教练 · Speak with AI</title>
-<link rel="stylesheet" href="css/style.css?v=20260824d">
-<link rel="stylesheet" href="vendor/katex/katex.min.css?v=20260824d">
-</head>
-<body>
 
+<html lang="zh-CN">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>AI 英语对话教练 · Speak with AI</title>
+
+<link rel="stylesheet" href="css/style.css?v=20260828b">
+
+<link rel="stylesheet" href="vendor/katex/katex.min.css?v=20260828b">
+
+</head>
+
+<body><div class="header">
 <!-- ============ Header ============ -->
-<div class="header">
+
   <div class="logo" onclick="showHome()" style="cursor:pointer" title="返回首页">
+
     <div class="logo-icon">🇺🇸</div>
+
     <div>
+
       <h1>AI 英语教练</h1>
-      <p>Speak with AI · 四大功能模块</p>
+
+      <p>Speak with AI · 六大功能模块</p>
+
     </div>
+
   </div>
+
   <div class="header-controls">
+
     <div class="mode-nav" id="modeNav">
+
       <button class="mode-btn" data-mode="chat" onclick="switchMode('chat')">💬 Chat</button>
+
+      <button class="mode-btn" data-mode="reading" onclick="switchMode('reading')">📖 Reading</button>
+
       <button class="mode-btn" data-mode="practice" onclick="switchMode('practice')">📝 Practice</button>
+
       <button class="mode-btn" data-mode="writing" onclick="switchMode('writing')">✍️ Writing</button>
+
       <button class="mode-btn" data-mode="translation" onclick="switchMode('translation')">🌐 Translation</button>
-      <button class="mode-btn" data-mode="charade" onclick="switchMode('charade')">🎭 Charade</button>
+
+      <button class="mode-btn" data-mode="game" onclick="switchMode('game')">🎮 Game</button>
+
     </div>
+
     <div class="ctl" id="difficultyCtl">
-      <label>CET 难度</label>
+
+      <label for="difficulty">CET 难度</label>
+
       <div class="difficulty">
-        <input type="range" id="difficulty" min="1" max="10" value="6">
+
+        <input type="range" id="difficulty" min="1" max="10" value="6" aria-label="CET 难度">
+
         <span class="lv" id="diffLabel">CET-6</span>
+
       </div>
+
     </div>
+
     <span class="user-badge" id="userBadge" title="当前账户"></span>
+
     <button class="toggle-btn" id="ankiToggle" onclick="toggleAnki()" title="自动添加到 Anki">📚 Anki</button>
+
     <button class="toggle-btn" id="autoReadToggle" onclick="toggleAutoRead()" title="自动朗读回复">🔊 Auto</button>
+
+    <button class="music-btn" id="musicToggle" onclick="toggleMusic()" title="背景音乐：单击播放/暂停，双击下一首，滚轮调音量">🎵<span class="music-bubble" id="musicBubble"></span></button>
+
     <button class="new-topic-btn" id="newConvBtn" onclick="promptNewConversation()">🔄 新对话</button>
+
     <button class="debug-btn" onclick="openSettings()" title="设置">⚙️ 设置</button>
+
     <button class="debug-btn" onclick="exportDebug()" title="导出调试快照">🔧 调试</button>
+
     <button class="debug-btn" onclick="showHome()" title="返回首页">🏠 首页</button>
+
   </div>
+
 </div>
+
+
 
 <!-- ============ 首页 ============ -->
+
 <div id="homePage" class="home-page" style="display:none">
+
   <div class="home-inner">
+
     <div class="home-logo">🇺🇸</div>
+
     <h1 class="home-title">AI English Coach</h1>
+
     <p class="home-sub">Welcome, <span id="homeUser" style="font-weight:700"></span> · Pick a mode to start</p>
+
     <div class="home-grid">
-      <div class="home-card" onclick="switchMode('chat')">
-        <div class="home-ico">💬</div>
+
+      <button class="home-card" onclick="switchMode('chat')" type="button">
+
+        <div class="home-ico"><img class="home-ico-img" src="img/icons/chat.jpg" alt=""></div>
+
         <div class="home-name">CHAT</div>
+
         <div class="home-desc">Have a conversation with AI. Practice speaking English naturally.</div>
-      </div>
-      <div class="home-card" onclick="switchMode('practice')">
-        <div class="home-ico">📝</div>
+
+      </button>
+
+      <button class="home-card" onclick="switchMode('reading')" type="button">
+
+        <div class="home-ico"><img class="home-ico-img" src="img/icons/reading.jpg" alt=""></div>
+
+        <div class="home-name">READING</div>
+
+        <div class="home-desc">Read articles with highlights, word lookup, and recite mode.</div>
+
+      </button>
+
+      <button class="home-card" onclick="switchMode('practice')" type="button">
+
+        <div class="home-ico"><img class="home-ico-img" src="img/icons/practice.jpg" alt=""></div>
+
         <div class="home-name">PRACTICE</div>
+
         <div class="home-desc">Review weak points with smart flashcards generated from your chats.</div>
-      </div>
-      <div class="home-card" onclick="switchMode('writing')">
-        <div class="home-ico">✍️</div>
+
+      </button>
+
+      <button class="home-card" onclick="switchMode('writing')" type="button">
+
+        <div class="home-ico"><img class="home-ico-img" src="img/icons/writing.jpg" alt=""></div>
+
         <div class="home-name">WRITING</div>
+
         <div class="home-desc">Write essays on any topic for 高考 / CET / 考研, then get detailed feedback.</div>
-      </div>
-      <div class="home-card" onclick="switchMode('translation')">
-        <div class="home-ico">🌐</div>
+
+      </button>
+
+      <button class="home-card" onclick="switchMode('translation')" type="button">
+
+        <div class="home-ico"><img class="home-ico-img" src="img/icons/translation.jpg" alt=""></div>
+
         <div class="home-name">TRANSLATION</div>
+
         <div class="home-desc">Practice Chinese → English translation. Question bank or AI-generated.</div>
-      </div>
-      <div class="home-card" onclick="switchMode('charade')">
-        <div class="home-ico">🎭</div>
-        <div class="home-name">CHARADE</div>
-        <div class="home-desc">Describe a word in English without saying it. Bank or AI-chosen words.</div>
-      </div>
+
+      </button>
+
+      <button class="home-card" onclick="switchMode('game')" type="button">
+
+        <div class="home-ico"><img class="home-ico-img" src="img/icons/game.jpg" alt=""></div>
+
+        <div class="home-name">GAME</div>
+
+        <div class="home-desc">Charade (AI 猜词) · Cloze (11选10) · Wordle (猜单词).</div>
+
+      </button>
+
     </div>
+
     <button class="home-logout" onclick="logout()">退出登录</button>
+
   </div>
+
 </div>
+
+
 
 <!-- ============ Layout ============ -->
+
 <div class="layout">
+
   <!-- Sidebar -->
+
   <div class="sidebar" id="sidebar">
+
     <div class="sidebar-header">
+
       <h3>💬 对话记录</h3>
+
       <button class="sidebar-new-btn" onclick="sidebarNewConversation()">＋ 新对话</button>
+
     </div>
+
     <div class="sidebar-list" id="sidebarList"></div>
+
     <div class="sidebar-anki" id="ankiSidebar"></div>
+
     <div class="sidebar-footer">对话自动保存在本地浏览器</div>
+
   </div>
+
   <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="对话管理">▶</button>
+
   <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" onclick="toggleSidebar()" title="对话记录">💬</button>
 
+  <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawers()"></div>
+
+
+
   <!-- Main area -->
+
   <div class="main-area" id="mainArea">
+
     <!-- Chat (default) -->
+
     <div class="chat-area" id="chatArea" style="display:flex;flex-direction:column;height:100%">
+
       <div class="messages" id="messages"></div>
+
       <div class="input-area">
+
 <div class="slash-menu" id="slashMenu" style="display:none"></div>
-         <textarea id="userInput" placeholder="用英语回复... (Enter 发送，Shift+Enter 换行)" rows="1" autocomplete="off"></textarea>
+
+         <textarea id="userInput" placeholder="用英语回复\.\.\. (Enter 发送，Shift+Enter 换行)" rows="1" autocomplete="off" aria-label="消息输入框"></textarea>
+
          <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-          <span class="spin"></span> 发送        </button>
+
+          <span class="spin"></span> 发送       </button>
+
         <button class="send-btn" id="stopBtn" onclick="stopSending()" style="display:none;background:#dc2626">⏹ 停止</button>
+
       </div>
+
     </div>
+
+
+
+    <!-- Reading -->
+
+    <div class="module-area reading-area" id="readingArea" style="display:none">
+
+      <div class="reading-toolbar">
+
+        <strong style="font-size:13px">📖 阅读 Reading</strong>
+
+        <span class="reading-source-pill" id="rdSourcePill">📰 时政精选</span>
+
+        <span class="lang-chip" id="rdLangChip">EN</span>
+
+        <span class="toolbar-spacer"></span>
+
+        <button class="a-btn small" id="rdHlBtn" onclick="toggleHighlightMode()">🖍️ 高亮</button>
+
+        <button class="a-btn small" id="rdNotesBtn" onclick="toggleNotesPanel()">📒 笔记 <span id="rdNoteCount" class="draft-indicator"></span></button>
+
+        <button class="a-btn small" id="rdTtsBtn" onclick="readingTts()">🔊 朗读</button>
+
+        <button class="a-btn small" onclick="openReadingPicker()">📚 切换文章</button>
+
+        <button class="a-btn primary small" onclick="openReciteInMain()">📝 背诵练习</button>
+
+      </div>
+
+      <div class="reading-body">
+
+        <article class="reading-paper" id="rdPaper" aria-label="阅读文章">
+
+          <div class="reading-empty" id="rdEmpty">
+
+            <h2>📖 选一篇开始阅读</h2>
+
+            <p>支持时政精选文章，或者粘贴你自己的英文材料<br>支持划线高亮 · 划词翻译 · 一键进入背诵练习</p>
+
+            <div class="reading-source-tabs" id="rdSourceTabs">
+
+              <button class="active" data-src="presets">📰 时政精选</button>
+
+              <button data-src="paste">📝 粘贴文章</button>
+
+              <button data-src="history">🕘 最近阅读</button>
+
+            </div>
+
+            <div id="rdSourceBody">
+
+              <div id="rdPresetsPane" class="rd-pane">
+
+                <div class="reading-presets" id="rdPresetsList"></div>
+
+                <p style="font-size:11px;color:var(--text3);margin-top:8px">点击卡片加载文章</p>
+
+              </div>
+
+              <div id="rdPastePane" class="rd-pane" style="display:none">
+
+                <div class="reading-paste-form">
+
+                  <input type="text" id="rdPasteTitle" placeholder="文章标题（可选）" aria-label="文章标题" />
+
+                  <textarea id="rdPasteText" placeholder="在此粘贴英文文章..." aria-label="文章正文"></textarea>
+
+                  <div class="paste-actions">
+
+                    <button class="a-btn" onclick="resetReadingPicker()">取消</button>
+
+                    <button class="a-btn primary" onclick="startReadingFromPaste()">开始阅读</button>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+              <div id="rdHistoryPane" class="rd-pane" style="display:none">
+
+                <div class="reading-presets" id="rdHistoryList" style="flex-direction:column;align-items:stretch"></div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </article>
+
+      </div>
+
+    </div>
+
+
 
     <!-- Practice -->
+
     <div class="module-area" id="practiceArea" style="display:none;flex-direction:column;height:100%;padding:24px;overflow-y:auto">
+
       <h2 style="margin:0 0 8px">📝 Practice</h2>
+
       <p style="color:var(--text2);margin:0 0 16px;font-size:14px">Review weak points and flashcards generated from your conversations.</p>
+
       <div id="practiceStats" class="practice-stats" style="margin-bottom:16px"></div>
-      <button class="send-btn" onclick="startWebReview()" style="padding:10px 24px;font-size:15px">✅ 开始网页复习</button>
-      <div style="margin-top:16px;font-size:13px;color:var(--text2)">Open Anki to review your flashcards. The app automatically creates cards from your weak points.</div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="send-btn" onclick="startWebReview()" style="padding:10px 24px;font-size:15px">✅ 开始网页复习</button>
+        <button class="a-btn primary" onclick="pushAllToAnki()" style="padding:10px 18px;font-size:14px">📚 一键同步到 Anki</button>
+      </div>
+      <div style="margin-top:8px;font-size:13px;color:var(--text2)">Open Anki to review your flashcards. The app automatically creates cards from your weak points.</div>
+      <div style="margin-top:4px;font-size:12px;color:var(--text3)">「一键同步」把生词本所有词 + 薄弱点 AI 出题，全部推到对应 Anki 卡组</div>
+
     </div>
+
+
 
     <!-- Writing -->
+
     <div class="module-area" id="writingArea" style="display:none;flex-direction:column;height:100%">
+
       <div class="writing-config" style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+
         <div>
+
           <label style="font-size:11px;color:var(--text2);display:block">Exam Type</label>
+
           <select id="wExamType" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:13px;background:var(--bg)">
+
             <option value="高考英语">College Entrance Exam</option>
+
             <option value="考研英语">Postgraduate Exam</option>
+
             <option value="大学英语四级">CET-4</option>
+
             <option value="大学英语六级">CET-6</option>
+
             <option value="雅思">IELTS</option>
+
             <option value="托福">TOEFL</option>
+
             <option value="GRE">GRE</option>
+
             <option value="其他">Other</option>
+
           </select>
+
         </div>
-        <div style="flex:1;min-width:200px">
-          <label style="font-size:11px;color:var(--text2);display:block">Topic</label>
-          <div style="display:flex;gap:6px">
-            <input id="wTopicInput" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:13px" placeholder="Enter your essay topic, or pick a suggestion below">
-            <button class="dict-btn" onclick="startWriting()" style="padding:4px 14px;font-size:13px">开始写作</button>
+
+        <div style="flex:1;min-width:280px">
+
+          <label style="font-size:11px;color:var(--text2);display:block">Topic <span style="color:var(--text3);font-weight:400">（支持换行，可附加图片）</span></label>
+
+          <div style="display:flex;gap:6px;align-items:flex-start">
+
+            <textarea id="wTopicInput" rows="3" style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border);font-size:13px;line-height:1.5;resize:vertical;min-height:64px;font-family:inherit" placeholder="Enter your essay topic (supports newlines), or pick a suggestion below"></textarea>
+
+            <div style="display:flex;flex-direction:column;gap:6px">
+
+              <button class="dict-btn" onclick="startWriting()" style="padding:4px 14px;font-size:13px">开始写作</button>
+
+              <label class="toggle-btn" style="padding:4px 12px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="附加题目图片（也可直接拖拽到下方题目区）">
+
+                <input type="file" id="wTopicImageInput" accept="image/*" style="display:none" onchange="handleTopicImageUpload(event)">
+
+                🖼️ 图片
+
+              </label>
+
+            </div>
+
           </div>
+
           <div id="wTopicSuggest" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"></div>
+
         </div>
+
         <button class="toggle-btn" onclick="clearWriting()" title="清除" style="align-self:flex-end">🗑️ 清除</button>
+
       </div>
-      <textarea id="wText" placeholder="Write your essay here in English..." style="flex:1;width:100%;border:none;padding:16px;font-size:15px;line-height:1.8;resize:none;outline:none;background:var(--bg);font-family:inherit"></textarea>
+
+      <div id="wTopicDisplay" ondragover="event.preventDefault()" ondrop="handleTopicImageDrop(event)" style="padding:24px 32px;text-align:center;font-size:22px;font-weight:700;color:var(--text);background:linear-gradient(135deg,var(--primary-bg),#fdf4ff);border-bottom:1px solid var(--border);min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.6;white-space:pre-wrap">
+
+        <div id="wTopicTextWrap"><span style="color:var(--text2);font-weight:500;font-size:15px">📝 选择或输入一个作文题目，开始写作</span></div>
+
+        <div id="wTopicImageWrap" style="margin-top:12px;display:none;position:relative">
+
+          <img id="wTopicImage" style="max-width:100%;max-height:280px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.12)" />
+
+          <button onclick="event.stopPropagation();clearTopicImage()" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:none;background:var(--red);color:#fff;cursor:pointer;font-size:13px;line-height:1;padding:0" title="删除图片">×</button>
+
+        </div>
+
+      </div>
+
+      <div class="answer-area" id="wAnswerArea">
+
+        <textarea id="wText" placeholder="Write your essay here in English..." aria-label="作文作答区"></textarea>
+
+        <div class="ann-overlay" id="wAnnOverlay" aria-label="作文标注视图"></div>
+
+      </div>
+
       <div class="writing-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+
         <button class="send-btn" onclick="submitWriting()" style="padding:6px 18px;font-size:14px">📊 提交评分</button>
+
         <span id="wWordCount" style="font-size:12px;color:var(--text2)"></span>
+
       </div>
-      <div id="wFeedback" style="padding:12px 16px;max-height:35vh;overflow-y:auto;border-top:1px solid var(--border);flex-shrink:0;display:none"></div>
+
     </div>
+
+
 
     <!-- Translation -->
+
     <div class="module-area" id="translateArea" style="display:none;flex-direction:column;height:100%">
+
       <div class="translate-config" style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+
         <span style="font-size:13px;font-weight:600">🌐 Chinese → English Translation</span>
+
         <button class="toggle-btn" onclick="translateSource('bank')" id="trBankBtn" style="font-size:12px">📚 题库</button>
+
         <button class="toggle-btn" onclick="translateSource('ai')" id="trAiBtn" style="font-size:12px">🤖 AI 出题</button>
-        <span style="font-size:11px;color:var(--text2)">目前: <span id="trSourceLabel">题库</span></span>
+
+        <select id="trCategorySelect" onchange="trCategoryChanged()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg)"></select>
+
+        <label class="toggle-btn" style="font-size:12px;padding:4px 10px;cursor:pointer" title="导入自定义题库（JSON 文件）">
+
+          <input type="file" id="trImportInput" accept="application/json,.json" style="display:none" onchange="importTrBank(event)">
+
+          📥 导入
+
+        </label>
+
+        <button class="toggle-btn" onclick="exportTrBank()" style="font-size:12px;padding:4px 10px" title="导出当前题库为 JSON">💾 导出</button>
+
         <button class="dict-btn" onclick="nextTranslate()" style="font-size:12px;margin-left:auto">下一题 →</button>
+
       </div>
+
+      <div id="trQuestionProgress" style="padding:0 20px;flex-shrink:0"></div>
+
       <div id="trQuestion" class="tr-question" style="padding:20px 24px;font-size:18px;line-height:1.6;text-align:center;flex-shrink:0">点击「下一题」开始</div>
-      <textarea id="trInput" placeholder="Write your English translation here..." style="flex:1;width:100%;border:none;padding:16px;font-size:15px;line-height:1.8;resize:none;outline:none;background:var(--bg);font-family:inherit"></textarea>
-      <div class="translate-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
-        <button class="send-btn" onclick="submitTranslate()" style="padding:6px 18px;font-size:14px">✅ 提交</button>
-        <button class="dict-btn" onclick="showTranslateAnswer()" style="font-size:12px">显示参考答案</button>
+
+      <div id="trQuestionWords" style="padding:0 24px 6px;display:none;flex-wrap:wrap;gap:6px;justify-content:center;font-size:12px"></div>
+
+      <div class="answer-area" id="trAnswerArea">
+
+        <textarea id="trInput" placeholder="Write your English translation here..." aria-label="翻译作答区"></textarea>
+
+        <div class="ann-overlay" id="trAnnOverlay" aria-label="翻译标注视图"></div>
+
       </div>
-      <div id="trFeedback" style="padding:12px 16px;max-height:30vh;overflow-y:auto;border-top:1px solid var(--border);flex-shrink:0;display:none"></div>
+
+      <div class="translate-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+
+        <button class="send-btn" onclick="submitTranslate()" style="padding:6px 18px;font-size:14px">✅ 提交</button>
+
+        <button class="dict-btn" onclick="showTranslateAnswer()" style="font-size:12px">显示参考答案</button>
+
+        <button class="dict-btn" onclick="toggleTranslateHistory()" style="font-size:12px;margin-left:auto">📋 历史 <span id="trHistCount" style="color:var(--text3)">(0)</span></button>
+
+      </div>
+
+      <div id="trHistoryList" style="display:none;padding:8px 16px;max-height:30vh;overflow-y:auto;border-top:1px solid var(--border);flex-shrink:0;background:var(--bg)"></div>
+
     </div>
 
-    <!-- Charade -->
-    <div class="module-area" id="charadeArea" style="display:none;flex-direction:column;height:100%">
-      <div class="charade-config" style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:13px;font-weight:600">🎭 Charade — Describe the Word</span>
-        <button class="toggle-btn" onclick="charadeSource('bank')" id="chBankBtn" style="font-size:12px">📚 题库</button>
-        <button class="toggle-btn" onclick="charadeSource('ai')" id="chAiBtn" style="font-size:12px">🤖 AI 出词</button>
-        <span style="font-size:11px;color:var(--text2)">目前: <span id="chSourceLabel">题库</span></span>
-        <button class="dict-btn" onclick="charadeNext()" style="font-size:12px;margin-left:auto">下一个 →</button>
+
+
+    <!-- Game 中心（Charade / Cloze / Wordle）-->
+
+    <div class="module-area" id="gameArea" style="display:none;flex-direction:column;height:100%">
+
+      <div class="game-tabs">
+
+        <button class="game-tab active" data-game="charade" onclick="switchGameTab('charade')">🎭 Charade</button>
+
+        <button class="game-tab" data-game="cloze" onclick="switchGameTab('cloze')">📝 Cloze</button>
+
+        <button class="game-tab" data-game="wordle" onclick="switchGameTab('wordle')">🟩 Wordle</button>
+
       </div>
-      <div id="chWord" class="ch-word" style="padding:32px 24px;text-align:center;flex-shrink:0">
-        <div style="font-size:14px;color:var(--text2);margin-bottom:8px">Click the button to reveal the word</div>
-        <button class="send-btn" onclick="charadeReveal()" style="padding:8px 24px;font-size:16px">🎯 显示单词</button>
+
+
+
+      <!-- Charade -->
+
+      <div class="game-module" id="charadeArea" style="display:flex;flex-direction:column;flex:1;min-height:0">
+
+        <div class="charade-config" style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+
+          <span style="font-size:13px;font-weight:600">🎭 Charade — 你描述，AI 猜</span>
+
+          <button class="toggle-btn" onclick="charadeSource('bank')" id="chBankBtn" style="font-size:12px">📚 题库</button>
+
+          <button class="toggle-btn" onclick="charadeSource('ai')" id="chAiBtn" style="font-size:12px">🤖 AI 出词</button>
+
+          <span id="chScore" style="font-size:12px;font-weight:700;color:var(--green);margin-left:auto">✅ 0/0</span>
+
+          <button class="dict-btn" onclick="charadeNext()" style="font-size:12px">跳过 →</button>
+
+        </div>
+
+        <div id="chWord" class="ch-word" style="padding:32px 24px;text-align:center;flex-shrink:0;min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+
+          <div style="font-size:14px;color:var(--text2);margin-bottom:8px">只有你能看到这个词，描述它让 AI 猜</div>
+
+          <button class="send-btn" onclick="charadeReveal()" style="padding:8px 24px;font-size:16px">🎯 显示单词</button>
+
+        </div>
+
+        <div id="chGuess" style="display:none;margin:0 20px;padding:14px 16px;border-radius:12px;flex-shrink:0;font-size:14px;line-height:1.7"></div>
+
+<div class="answer-area" id="chAnswerArea">
+
+        <textarea id="chDesc" placeholder="Describe the word in English. Do NOT say the word itself. AI will try to guess it." aria-label="描述作答区"></textarea>
+
+        <div class="ann-overlay" id="chAnnOverlay" aria-label="描述标注视图"></div>
+
       </div>
-      <div id="chHint" style="padding:0 16px;text-align:center;font-size:13px;color:var(--text2);flex-shrink:0"></div>
-      <textarea id="chDesc" placeholder="Describe the word in English. Do not say the word itself. Use full sentences." style="flex:1;width:100%;border:none;padding:16px;font-size:15px;line-height:1.8;resize:none;outline:none;background:var(--bg);font-family:inherit"></textarea>
+
       <div class="charade-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
-        <button class="send-btn" onclick="submitCharade()" style="padding:6px 18px;font-size:14px">✅ 提交评分</button>
-        <button class="dict-btn" onclick="charadeNext()" style="font-size:12px">下一个 →</button>
+          <button class="send-btn" id="chSubmitBtn" onclick="submitCharade()" style="padding:6px 18px;font-size:14px">🤔 让 AI 猜</button>
+
+          <button class="dict-btn" id="chHintBtn" onclick="charadeShowHint()" style="font-size:12px;display:none">💡 提示</button>
+
+          <button class="dict-btn" onclick="charadeNext()" style="font-size:12px">跳过 →</button>
+
+        </div>
+
       </div>
-      <div id="chFeedback" style="padding:12px 16px;max-height:30vh;overflow-y:auto;border-top:1px solid var(--border);flex-shrink:0;display:none"></div>
+
+
+
+      <!-- Cloze 11选10 -->
+
+      <div class="game-module" id="clozeArea" style="display:none;flex-direction:column;flex:1;min-height:0">
+
+        <div class="cloze-config" style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+
+          <span style="font-size:13px;font-weight:600">📝 Cloze · 11选10</span>
+
+          <button class="toggle-btn" onclick="clozeSource('vocab')" id="clozeVocabBtn" style="font-size:12px">📚 生词本</button>
+
+          <button class="toggle-btn" onclick="clozeSource('ai')" id="clozeAiBtn" style="font-size:12px">🤖 AI 出题</button>
+
+          <span id="clozeScore" style="font-size:12px;font-weight:700;color:var(--green);margin-left:auto">✅ 0/0</span>
+
+          <button class="dict-btn" onclick="clozeNext()" style="font-size:12px">新一组 →</button>
+
+        </div>
+
+        <div id="clozeCandidates" style="padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;flex-wrap:wrap;gap:8px;background:var(--bg)"></div>
+
+        <div id="clozeQuestions" style="flex:1;overflow-y:auto;padding:14px 20px"></div>
+
+        <div class="cloze-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--surface)">
+
+          <button class="send-btn" onclick="submitCloze()" style="padding:6px 18px;font-size:14px">✅ 提交答案</button>
+
+          <button class="dict-btn" onclick="clozeShowAnswers()" style="font-size:12px">显示答案</button>
+
+        </div>
+
+      </div>
+
+
+
+      <!-- Wordle -->
+
+      <div class="game-module" id="wordleArea" style="display:none;flex-direction:column;flex:1;min-height:0;align-items:center;justify-content:flex-start;padding:16px">
+
+        <div class="wordle-config" style="width:100%;max-width:480px;padding-bottom:12px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+
+          <span style="font-size:13px;font-weight:600">🟩 Wordle</span>
+
+          <button class="toggle-btn" onclick="wordleSource('ai')" id="wlAiBtn" style="font-size:12px">🤖 AI 出词</button>
+
+          <button class="toggle-btn" onclick="wordleSource('custom')" id="wlCustomBtn" style="font-size:12px">✏️ 自定义</button>
+
+          <span id="wordleStatus" style="font-size:12px;color:var(--text2);margin-left:auto">猜词中...</span>
+
+          <button class="dict-btn" onclick="wordleNew()" style="font-size:12px">新词 →</button>
+
+        </div>
+
+        <div id="wordleBoard" style="display:grid;gap:6px;margin:18px 0;justify-content:center"></div>
+
+        <div id="wordleKeyboard" style="width:100%;max-width:480px;margin-top:8px"></div>
+
+      </div>
+
     </div>
+
   </div>
+
+
 
   <!-- Side panel -->
+
 <div class="side-panel panel-expanded" id="sidePanel">
+
      <div class="panel-drag-handle" id="panelDragHandle" title="拖动移动小窗"></div>
-     <div class="panel-mode-controls" aria-label="反馈面板模式"><button onclick="setFeedbackPanelMode('collapsed')" title="关闭">×</button><button onclick="setFeedbackPanelMode('mini')" title="小窗悬浮">□</button><button onclick="setFeedbackPanelMode('expanded')" title="展开">▣</button></div>
+
+     <div class="panel-mode-controls" aria-label="反馈面板模式"><button onclick="setFeedbackPanelMode('collapsed')" title="关闭反馈面板" aria-label="关闭反馈面板">×</button><button onclick="setFeedbackPanelMode('mini')" title="浮动显示" aria-label="浮动显示">□</button><button onclick="setFeedbackPanelMode('expanded')" title="固定显示" aria-label="固定显示">▣</button></div>
+
      <div class="resize-handle resize-handle-left" id="panelResize"></div>
+
      <div class="panel-resize-corner" id="panelResizeCorner" title="拖动调整大小"></div>
+
     <div class="right-tabs">
+
       <button class="right-tab active" data-tab="feedback" onclick="switchRightTab('feedback')">📊 反馈</button>
+
       <button class="right-tab" data-tab="dict" onclick="switchRightTab('dict')">🔤 词典翻译</button>
+
+      <button class="right-tab" data-tab="gaokao" onclick="switchRightTab('gaokao')">📚 题库</button>
+
     </div>
+
     <div class="right-tab-content" id="tab-feedback">
-      <div class="panel-section" id="analysisSection">
-        <h3>📊 本次评分</h3>
+
+      <div class="right-tabs inner-tabs" id="feedbackTabs">
+
+        <button class="right-tab active" data-ftab="current" onclick="switchFeedbackTab('current')">📊 本次反馈</button>
+
+        <button class="right-tab" data-ftab="vocab" onclick="switchFeedbackTab('vocab')">📖 生词本<span class="badge" id="wordCount">0</span></button>
+
+        <button class="right-tab" data-ftab="weak" onclick="switchFeedbackTab('weak')">🎯 知识薄弱点</button>
+
+      </div>
+
+      <div class="panel-section" id="analysisSection" data-ftab-pane="current">
+
         <div id="analysisContent">
+
           <div class="empty" style="padding:24px 0">开始对话后，这里会显示你的回答评分与改进建议</div>
+
         </div>
+
       </div>
-      <div class="panel-section">
-        <h3>📖 生词本<span class="badge" id="wordCount">0</span></h3>
+
+      <div class="panel-section" data-ftab-pane="vocab" style="display:none">
+
         <div id="vocabContent">
+
           <div class="empty">划选 AI 的回复，点击「加入生词本」</div>
+
         </div>
+
       </div>
-      <div class="panel-section">
-        <h3>🎯 知识薄弱点</h3>
+
+      <div class="panel-section" data-ftab-pane="weak" style="display:none">
+
         <div id="weakContent">
+
           <div class="empty">对话中自动追踪你的薄弱环节</div>
+
         </div>
+
       </div>
+
     </div>
+
     <div class="right-tab-content" id="tab-dict" style="display:none">
+
       <div id="dictHistory" class="dict-history" style="margin-bottom:6px;max-height:100px;overflow-y:auto;font-size:11px"></div>
+
       <div class="dict-input-wrap">
+
         <textarea id="dictInput" rows="3" placeholder="输入中文或英文单词/句子，或直接提问（如：如何用英语表达'我很期待'？）..."></textarea>
+
         <button class="dict-btn" id="dictBtn" onclick="queryDict()">查询</button>
+
       </div>
+
       <div id="dictContext" class="dict-context-hint"></div>
+
       <div id="dictResult"></div>
+
     </div>
+
+    <div class="right-tab-content" id="tab-gaokao" style="display:none">
+
+      <div class="gaokao-toolbar" style="display:flex;gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap">
+
+        <select id="bankModeSel" onchange="renderTrBankPanel()" style="font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:#fff">
+
+          <option value="translate">🌐 翻译题库</option>
+
+          <option value="gaokao">📖 高考真题卷</option>
+
+        </select>
+
+        <select id="bankCatSel" onchange="renderTrBankPanel()" style="font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:#fff;flex:1;min-width:80px"></select>
+
+        <select id="bankStatusSel" onchange="renderTrBankPanel()" title="筛选作答状态" style="font-size:12px;padding:4px 4px;border-radius:6px;border:1px solid var(--border);background:#fff">
+
+          <option value="all">全部</option>
+
+          <option value="unanswered">未答</option>
+
+          <option value="answered">已答</option>
+
+        </select>
+
+        <input id="bankSearch" type="text" placeholder="🔍 搜索题目..." oninput="renderTrBankPanel()" style="flex:1;min-width:100px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+
+      </div>
+
+      <div id="gaokaoList" class="gaokao-list" style="overflow-y:auto;flex:1"></div>
+
+      <div id="gaokaoDetail" class="gaokao-detail" style="display:none;overflow-y:auto;flex:1"></div>
+
+    </div>
+
   </div>
+
   <button class="side-panel-toggle" onclick="toggleMobilePanel()" title="侧栏">📊</button>
+
 </div>
+
+
 
 <!-- ============ Translation tooltip ============ -->
+
 <div class="translate-tip" id="translateTip">
+
   <div class="tip-dragbar" id="tipDragBar">
+
     <span class="tip-title" id="tipWord"></span>
+
     <span class="tip-drag-hint" title="按住拖动">⠟ 拖动</span>
+
   </div>
+
   <div class="tip-body">
-    <div class="meaning" id="tipMeaning"><span class="loading">翻译中...</span></div>
+
+    <div class="meaning" id="tipMeaning"><span class="loading">翻译中\.\.\.</span></div>
+
     <div class="tip-actions">
+
       <button class="tip-add" id="tipAdd" onclick="addFromTip()">加入生词本</button>
+
       <button class="tip-close" onclick="hideTip()">关闭</button>
+
     </div>
+
   </div>
+
   <div class="tip-resize" id="tipResize" title="拖动右下角调整大小"></div>
+
 </div>
 
-<script src="vendor/katex/katex.min.js?v=20260824d"></script>
-<script src="js/config.js?v=20260824d"></script>
-<script src="js/storage.js?v=20260824d"></script>
-<script src="js/app.js?v=20260824d"></script>
+
+
+<script src="vendor/katex/katex.min.js?v=20260828b"></script>
+
+<script src="js/config.js?v=20260828b"></script>
+
+<script src="js/shgaoka_bank.js?v=20260828b"></script>
+
+<script src="js/storage.js?v=20260828b"></script>
+
+<script src="js/app.js?v=20260828c"></script>
+
+
 
 <!-- ============ 登录 ============ -->
+
 <div id="loginOverlay" class="login-overlay" style="display:none">
+
   <div class="login-card">
+
     <div class="login-logo">🇺🇸</div>
+
     <h2>AI English Coach</h2>
-    <p class="login-sub">Login to start · 四大功能模块 · 数据按账户隔离存储</p>
-    <input id="loginUser" type="text" placeholder="用户名" autocomplete="username">
-    <input id="loginPass" type="password" placeholder="密码" autocomplete="current-password">
+
+    <p class="login-sub">Login to start · 五大功能模块 · 数据按账户隔离存储</p>
+
+    <input id="loginUser" type="text" placeholder="用户名" autocomplete="username" aria-label="用户名">
+
+    <input id="loginPass" type="password" placeholder="密码" autocomplete="current-password" aria-label="密码">
+
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin:6px 0 4px;cursor:pointer">
+
       <input id="loginRemember" type="checkbox" style="width:14px;height:14px" checked>
+
       <span>记住我（保持登录状态）</span>
+
     </label>
-    <div id="loginMsg" class="login-msg"></div>
+
+    <div id="loginMsg" class="login-msg" role="alert"></div>
+
     <button id="loginBtn" class="login-btn">🔓 登录</button>
+
     <div class="login-hint">默认账户 test / catten（密码与账户名相同）<br>修改密码：python scripts\manage_users.py reset &lt;用户名&gt; &lt;新密码&gt;</div>
+
   </div>
+
 </div>
 
+
+
 <!-- ============ 新对话 · 话题选择 ============ -->
-<div id="topicModal" class="topic-modal" style="display:none">
+
+<div id="topicModal" class="topic-modal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="topicModalTitle">
+
   <div class="topic-card">
-    <h3>💬 开始新对话 · 选择话题</h3>
+
+    <h3 id="topicModalTitle">💬 开始新对话 · 选择话题</h3>
+
     <div id="topicList" class="topic-list"></div>
+
     <button class="topic-cancel" onclick="closeTopicModal()">取消</button>
+
   </div>
+
 </div>
+
+
+
+<!-- Toast 提示队列（替代 alert）-->
+
+<div id="toastStack" class="toast-stack" role="status" aria-live="polite"></div>
+
+
+
+<!-- 高亮颜色选择器-->
+
+<div id="hlPicker" class="hl-picker" role="dialog" aria-label="高亮颜色" style="display:none"></div>
+
+
+
+
+
+
+
 </body>
+
 </html>
+
+
+
