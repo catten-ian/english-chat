@@ -1,10 +1,10 @@
 # AI 英语对话教练
 
-一个多角色、多功能的 AI 英语沉浸式对话练习平台。**登录后进入首页，6 大功能模块独立选择**：Chat 对话、Reading 阅读、Practice 复习、Writing 写作、Translation 翻译、Game 猜词（含 Charade/Cloze/Wordle）。支持智能评分反馈、划词翻译、生词本、薄弱点追踪、Anki 集成、语音朗读和多模态作文评分。
+一个多角色、多功能的 AI 英语沉浸式对话练习平台。**登录后进入首页，7 大功能模块独立选择**：Chat 对话、Reading 阅读、Practice 复习、Writing 写作、Translation 翻译、Game 猜词（含 Charade/Cloze/Wordle）、Progress 学习者模型仪表盘。支持智能评分反馈、划词翻译、生词本、薄弱点追踪、Anki 集成、语音朗读和多模态作文评分。
 
 ## 功能概要
 
-- **首页 + 6 大功能模块**：登录后显示首页，按需进入 Chat / Reading / Practice / Writing / Translation / Game（Game 内含 Charade / Cloze / Wordle）任意模块
+- **首页 + 7 大功能模块**：登录后显示首页，按需进入 Chat / Reading / Practice / Writing / Translation / Game（Game 内含 Charade / Cloze / Wordle）/ Progress 任意模块
 - **AI 角色对话**：4 个内置角色（Alex/Emma/Sakura/Mateo） + 自定义角色（Chat 模块）
 - **智能评分系统**：每次回复自动获取语法、表达、搭配、风格四维度评分
 - **多 Agent 架构**：策略师（风格分析）+ 执行者（联网搜索研究）
@@ -30,6 +30,7 @@
 - **多用户登录**：PBKDF2 密码哈希，数据按账户隔离
 - **版本树对话**：编辑消息保留旧版本，可切换查看
 - **数据备份**：SQLite `VACUUM INTO` 快照，浏览器每 2 分钟触发 + **服务端常驻定时备份**（默认每小时）；每份快照生成后做只读完整性校验（`integrity_check`），坏文件直接删除；按 2分钟/5分钟/10分钟/1小时/1天/2天/3天/7天/30天节点分层保留；支持**异盘副本**与**恢复 CLI**（见下）
+- **Progress 学习者仪表盘**：第 7 模块（顶栏 + 首页 + 移动端底栏均有入口）。聚合生词本/薄弱点/对话/翻译历史 + Anki 连续天数：4 张统计卡 + Chat 四维均分（语法/表达/搭配/文采，0–10 横向条）+ 翻译得分趋势（最近 20 次纯 CSS 柱状图）+ 薄弱点分类分布 + 最近 5 条对话。纯本地聚合，无外部依赖
 
 ## 技术栈
 

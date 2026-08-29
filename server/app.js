@@ -36,14 +36,18 @@ const server = http.createServer(async (req, res) => {
   req.id = logger.newRequestId();
   const t0 = Date.now();
   res.on('finish', () => {
-    // API 请求全记；静态资源只记异常（404/500），避免每次刷页面几十条噪音
-    if (pathname.startsWith('/api/') || res.statusCode >= 400) {
-      const meta = { id: req.id, method, path: pathname, status: res.statusCode, ms: Date.now() - t0 };
-      if (req.uid) meta.uid = req.uid;
-      const line = `${method} ${pathname} → ${res.statusCode} ${meta.ms}ms`;
-      if (res.statusCode >= 500) logger.error(line, meta);
-      else logger.info(line, meta);
-    }
+    // try/catch 兜底：客户端断连 / stdout 管道已关闭时 console 写入会抛 EPIPE，
+    // 这里不能让日志逻辑把 uncaughtException 推出去。
+    try {
+      // API 请求全记；静态资源只记异常（404/500），避免每次刷页面几十条噪音
+      if (pathname.startsWith('/api/') || res.statusCode >= 400) {
+        const meta = { id: req.id, method, path: pathname, status: res.statusCode, ms: Date.now() - t0 };
+        if (req.uid) meta.uid = req.uid;
+        const line = `${method} ${pathname} → ${res.statusCode} ${meta.ms}ms`;
+        if (res.statusCode >= 500) logger.error(line, meta);
+        else logger.info(line, meta);
+      }
+    } catch (e) { /* 日志失败不影响请求 */ }
   });
 
   if (method === 'OPTIONS') {
@@ -190,7 +194,11 @@ process.on('unhandledRejection', (reason) => {
     { err: reason instanceof Error ? reason : null });
 });
 process.on('uncaughtException', (err) => {
-  logger.error('uncaughtException: ' + (err && err.message ? err.message : String(err)), { err });
+  // 瞬时网络 / 客户端断连类错误：记录后继续运行，不退出进程
+  // EPIPE/ECONNRESET 等在客户端突然断开时会冒泡到这里
+  const transient = err && (err.code === 'EPIPE' || err.code === 'ECONNRESET' || err.code === 'ERR_STREAM_DESTROYED');
+  logger.error('uncaughtException: ' + (err && err.message ? err.message : String(err)) + (transient ? '（瞬时网络错误，继续运行）' : ''), { err });
+  if (transient) return;
   // 状态已不可信：收尾数据库后退出，由启动器/用户重启
   finalizeDb();
   process.exit(1);

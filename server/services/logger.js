@@ -67,6 +67,12 @@ function writeFile(line) {
   }
 }
 
+function safeConsole(fn, line) {
+  // stdout/stderr 管道在客户端断开 / 父进程关闭后会被设 EPIPE；
+  // 这里吞掉异常，保证日志失败不会反过来把请求拉下水
+  try { fn(line); } catch (e) { /* stderr broken, swallow */ }
+}
+
 function log(level, msg, meta) {
   if (LEVELS[level] < MIN_LEVEL) return;
   const t = new Date();
@@ -76,9 +82,9 @@ function log(level, msg, meta) {
   const tag = { debug: 'DEBUG', info: 'INFO ', warn: 'WARN ', error: 'ERROR' }[level];
   // 控制台：人类可读
   const consoleFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
-  consoleFn(`[${htime}] ${tag}${idTag} ${msg}`);
+  safeConsole(consoleFn, `[${htime}] ${tag}${idTag} ${msg}`);
   // 错误对象在控制台也打出堆栈（文件里则序列化为 err 字段）
-  if (meta && meta.err) consoleFn(meta.err instanceof Error ? (meta.err.stack || meta.err.message) : meta.err);
+  if (meta && meta.err) safeConsole(consoleFn, meta.err instanceof Error ? (meta.err.stack || meta.err.message) : meta.err);
   // 文件：JSONL
   const entry = Object.assign({ ts: t.toISOString(), level, msg }, meta || {});
   if (entry.err instanceof Error) { entry.err = entry.err.stack || entry.err.message; }

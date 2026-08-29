@@ -56,6 +56,32 @@ test('低于阈值的 debug 不写文件', () => {
   assert.strictEqual(after, before, 'debug 不应写入任何字节');
 });
 
+test('console 写入失败（如 stdout 管道断开/EPIPE）不应抛出，影响文件落盘', () => {
+  // 临时把 console.log/error 替换成会抛 EPIPE 的 stub，验证 logger 仍安全
+  const origLog = console.log, origErr = console.error;
+  console.log = () => { const e = new Error('EPIPE broken pipe'); e.code = 'EPIPE'; throw e; };
+  console.error = console.log;
+  try {
+    logger.info('EPIPE 测试 - 不应抛出');
+    logger.error('EPIPE 测试 - error 也不应抛出');
+  } finally {
+    console.log = origLog;
+    console.error = origErr;
+  }
+  // 文件日志仍正常落盘
+  const lines = readJsonl(LOG_FILE);
+  assert.ok(lines.some(l => l.msg === 'EPIPE 测试 - 不应抛出'), '文件仍应有第一条日志');
+  assert.ok(lines.some(l => l.msg === 'EPIPE 测试 - error 也不应抛出'), '文件仍应有第二条日志');
+});
+
+test('低于阈值的 debug 不写文件', () => {
+  const before = fs.existsSync(LOG_FILE) ? fs.statSync(LOG_FILE).size : 0;
+  logger.debug('this should be filtered');
+  const after = fs.statSync(LOG_FILE).size;
+  assert.ok(!readJsonl(LOG_FILE).some(l => l.msg === 'this should be filtered'));
+  assert.strictEqual(after, before, 'debug 不应写入任何字节');
+});
+
 test('超过大小上限自动轮转，保留文件数受 KEEP 限制', () => {
   // 写入超过 4096 字节触发轮转
   const big = 'x'.repeat(200);
