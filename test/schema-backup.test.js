@@ -5,7 +5,7 @@ const { test, before, after, describe } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { startServer, request, login, openDb, makeTempDir, APP_DIR } = require('./helpers');
+const { startServer, request, login, openDb, makeTempDir, APP_DIR, serverSource } = require('./helpers');
 
 const SOURCE_BANK = path.join(APP_DIR, 'data', 'gaokao_translations.json');
 
@@ -93,7 +93,7 @@ describe('schema 版本管理', () => {
   test('周期性 checkpoint 已注册（防止 Windows 直接关窗口时 WAL 无限增长）', async () => {
     // Windows 关闭控制台窗口走 TerminateProcess，不触发信号处理，
     // 因此不能只依赖关闭时 checkpoint。这里校验定时 checkpoint 存在。
-    const src = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
+    const src = serverSource();
     assert.match(src, /setInterval\(\s*\(\)\s*=>\s*checkpointWal/, '应存在周期性 WAL checkpoint');
     assert.match(src, /wal_checkpoint\(TRUNCATE\)/, '优雅关闭时应做 TRUNCATE checkpoint');
   });

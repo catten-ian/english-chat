@@ -38,10 +38,12 @@
 
 ```bash
 cd ai-english-chat
-node server.js
+node server.js          # 或 npm start
 ```
 
 浏览器打开 [http://localhost:8091](http://localhost:8091)。
+
+> 🗂 **前端结构**：`js/app.js`（单体）已拆分为 `js/app/01-core.js … 19-init.js` 共 19 个按领域划分的顺序切片，由 `index.html` 按序加载，运行效果与原单体完全一致。**不要调整脚本顺序**，也不要改动 `index.html` 里这些 `<script>` 的先后关系。`npm test` 会校验切片完整性与加载顺序。改动前端代码后记得提升 `index.html` 中对应 `<script src>` 的 `?v=` 版本号以刷新缓存。
 
 ### 登录
 
@@ -80,14 +82,39 @@ node server.js
 
 设置面板底部点击「🚪 退出登录」→ 确认后清除本地缓存并刷新页面。
 
+退出会做三件事：
+
+1. 通知服务端删除当前会话（token 立即失效）
+2. 停止所有后台任务（主回复、评分分析、分析重试定时器）
+3. 清空**全部**用户态本地缓存，包括对话、生词、薄弱点、阅读记录、词典历史、以及所有 `ai_en_setting_*` 偏好
+
+### 会话管理（多设备）
+
+后端提供两个接口，用于查看和撤销登录会话：
+
+| 接口 | 作用 |
+|---|---|
+| `GET /api/auth/sessions` | 列出本账户所有活跃会话（创建时间、过期时间、最后使用时间，标记哪个是当前会话） |
+| `POST /api/auth/revoke-others` | 退出除当前会话外的所有设备 |
+
+> 会话 token 在数据库中**只保存 SHA-256 哈希**，原始 token 仅在登录响应里返回一次。即使 `data/app.db`、WAL 或备份文件被读取，也无法直接拿去冒充用户。会话列表里显示的 id 是哈希前 12 位，仅用于识别，不足以还原 token。
+>
+> 过期会话会在服务启动时和之后每天自动清理一次。
+
 ### 用户管理脚本
 
+脚本位于**工作区根目录**（`ai-english-chat` 的上一级），需要从那里运行：
+
 ```bash
-python scripts/manage_users.py list              # 列出所有用户
-python scripts/manage_users.py add <用户名> <密码>  # 添加用户
-python scripts/manage_users.py reset <用户名> <新密码>  # 重置密码
-python scripts/manage_users.py delete <用户名>    # 删除用户（级联清除数据）
+cd F:\my_doc\code\article-memorizing
+
+python scripts\manage_users.py list                    # 列出所有用户
+python scripts\manage_users.py add <用户名> <密码>       # 添加用户
+python scripts\manage_users.py reset <用户名> <新密码>    # 重置密码
+python scripts\manage_users.py delete <用户名>          # 删除用户（级联清除数据）
 ```
+
+> 用脚本 `reset` 重置密码**不会**撤销已签发的会话（只有应用内「修改密码」会撤销）。如需强制其他设备下线，重置后再登录一次并点「退出其他设备」。
 
 ---
 
@@ -110,6 +137,12 @@ python scripts/manage_users.py delete <用户名>    # 删除用户（级联清�
 
 > 💡 **记住当前模式**：进入某个模块后，**刷新页面不会回到首页**，会自动恢复上次所在的模式（Game 模式还会记住子页签）。只有主动点击「🏠 首页」后刷新才回到首页。
 
+> 💡 **作答草稿自动保存**：写作/翻译/描述作答框的内容在**切换模式时自动保存**（含已评分的内联标注状态），切回时自动恢复，**不再弹「确认切换」对话框**中断操作。
+
+> 💡 **反馈面板随模式重置**：切换模式时右侧反馈面板自动重置为对应模式的引导文案，不会残留上一个模式（如作文/翻译）的评分内容。
+
+> 💡 **首页主推**：首页新增产品 tagline（实时 AI 反馈 · 内联批注 · 个性化 Anki 复习 · 多模态评分），CHAT 卡片以渐变高亮作为主推入口。
+
 ### 顶部模式切换器
 
 顶部导航的胶囊按钮可快速切换模式：
@@ -120,8 +153,8 @@ python scripts/manage_users.py delete <用户名>    # 删除用户（级联清�
 
 ### 各模式通用特点
 
-- **左侧对话栏**：在 Chat 模式下显示历史对话；其他模式下显示 Anki 复习面板
-- **右侧反馈栏**：在任何模式下都可访问「📊 反馈」和「🔤 词典翻译」标签
+- **左侧对话栏**：在 Chat 模式下显示历史对话；其他模式下显示 Anki 复习面板（大屏 ≥1440px 默认展开并记住你上次的展开/收起状态）
+- **右侧反馈栏**：在任何模式下都可访问「📊 反馈」和「🔤 词典翻译」标签；平板宽度（768-1023px）可通过右侧悬浮按钮折叠回收空间
 - **难度调节**：仅在 Chat 模式下显示（其他模式不需要）
 - **新对话按钮**：仅在 Chat 模式下显示
 
@@ -201,6 +234,8 @@ Reading 模式让你像读真实文章一样浏览英文材料，同时把每一
 | 🕘 最近阅读 | 最近 30 篇阅读历史，一键恢复 |
 
 点击任一卡片即可开始。文章以"报纸版式"卡片呈现：标题区（来源/语言/段数/时间）+ 段落正文（18-19px 中文 1.95 行高，约 70-90ch 阅读宽度）。
+
+> 💡 **工具栏随文章显示**：未选择文章时，顶部的高亮/笔记/朗读/切换文章等工具栏自动隐藏（避免空状态下可点无意义按钮）；选中文章后才出现。
 
 ### 高亮笔
 
@@ -370,6 +405,10 @@ Practice 模式显示：
 - 今日复习数 + 连续学习天数
 - 7 天柱状图
 - 「✅ 开始网页复习」按钮 → 调用 `startWebReview()` 打开 Anki GUI 复习会话
+- **「📚 一键同步到 Anki」** 按钮 → 调用 `pushAllToAnki()`，把**生词本全部生词**和**全部薄弱点**按当前模式批量推送到 Anki：
+  - 生词：用「英语学习-词汇」默写卡（Front=中文释义，Back=英文单词+例句/语境；若开启「自动朗读」还会附 ElevenLabs 音频），按英文单词去重（已在卡组里的跳过）
+  - 薄弱点：AI 自动出题（选择题/填空/纠错），生成「英语学习-薄弱点问答」卡，每个薄弱点补足到「每薄弱点题数」；薄弱点很多时会按 12 个/轮循环出题直到全部覆盖
+  - 适用场景：启用 Anki 自动添加之前积累的生词/薄弱点，或想一次性补齐卡片时使用
 
 ### 完整复习流程
 
@@ -732,6 +771,33 @@ Anki 集成支持在浏览器中直接进行复习，无需切换到 Anki 桌面
 - **addNote/addNotes 兜底**：AnkiConnect 部分版本的 `addNote` 不接受 `deckName` 参数（卡片落到默认牌组），前端在添加卡片后会自动调用 `changeDeck` 移动到正确牌组
 - **词汇默写题型**：词汇卡使用专用模型 `英语学习-词汇`（Front=中文释义，Back=英文单词），模板美观（渐变背景、大字号、虚线分隔）
 
+### 代理安全约束
+
+AnkiConnect 是**本机无鉴权**的高权限接口，能读写整个 Anki 集合。因此后端代理不做透明转发，而是有两道限制：
+
+**1. action 白名单** —— 只放行本应用实际用到的动作：
+
+| 类别 | 放行的 action |
+|---|---|
+| 只读 | `version` `deckNames` `modelNames` `getNumCardsReviewedToday` `getNumCardsReviewedByDay` |
+| GUI 复习 | `guiCurrentCard` `guiShowAnswer` `guiAnswerCard` |
+| 受校验 | `addNote` `addNotes` `canAddNotes` `createDeck` `changeDeck` `findCards` `cardsInfo` `getDeckStats` `guiDeckReview` `findNotes` `notesInfo` `createModel` `updateModelStyling` `storeMediaFile` |
+
+其余一律 **403**，包括 `deleteDecks`、`deleteNotes`、`sync`、`exportPackage`、`importPackage`、`multi`、`guiExitAnki` 等。
+
+**2. 牌组归属** —— 所有涉及牌组的操作强制限定在 `英语学习::<当前登录用户>` 子树内：
+
+- `addNote` / `addNotes` / `canAddNotes`：每条 note 的 `deckName` 都要在本人子树内，且 `modelName` 必须是本应用的四个模型之一
+- `createDeck` / `guiDeckReview` / `getDeckStats` / `changeDeck`：目标牌组必须属于本人
+- `findCards` / `findNotes`：查询必须含 `deck:英语学习::<用户>`（`findCards` 另允许纯 `nid:` 列表，用于新增卡片后归位牌组）
+- `cardsInfo` / `notesInfo` / `changeDeck`：id 必须是正整数，单次最多 500 个
+- `addNotes` / `canAddNotes`：单次最多 200 条
+- `storeMediaFile`：文件名必须匹配 `ai_en_<字母数字>.<mp3|m4a|ogg|wav>`，禁止 `path` / `url` 参数（否则可让 Anki 读取本机任意文件或发起外部请求），base64 上限 8MB
+
+因此 `test` 账户无法操作 `catten` 的牌组，反之亦然；也无法操作 `Default` 或其他任何非本应用牌组。
+
+> 这些校验在连接 AnkiConnect **之前**完成，所以即使 Anki 没运行也会立即返回 4xx。
+
 ---
 
 ## 16. 多 Agent 架构详解
@@ -856,7 +922,7 @@ Anki 集成支持在浏览器中直接进行复习，无需切换到 Anki 桌面
 
 ## 20. 设置面板详解
 
-点击顶部「⚙️ 设置」按钮打开。
+点击顶部「⚙️ 设置」按钮打开。设置项按分组折叠展示，**默认展开前 3 组**（账户 → 作答设置 → 角色卡），其余分组点击标题展开。
 
 ### 账户设置
 
@@ -865,6 +931,16 @@ Anki 集成支持在浏览器中直接进行复习，无需切换到 Anki 桌面
 | 头像上传 | 支持 JPG/PNG，最大 2MB，自动保存到服务器 |
 | 当前账户 | 显示当前登录用户名 |
 | 修改密码 | 输入原密码和新密码 |
+
+### 作答设置（作文 / 翻译 / 描述作答框）
+
+| 设置 | 说明 |
+|---|---|
+| 字体大小 | 作答框文本字号（13–24px，默认 15px） |
+| 字体样式 | 默认（跟随系统）/ 无衬线 / 衬线 Serif / 等宽 Mono / 手写 Comic / 花体 Cursive |
+
+- 作答框**默认左右留出较大边缘间距**，内容变长后自动缩短边缘留白以容纳更多文字
+- 该设置同样作用于提交评分后的内联标注视图
 
 ### 角色卡
 
@@ -923,22 +999,77 @@ Anki 集成支持在浏览器中直接进行复习，无需切换到 Anki 桌面
 
 ### 自动备份
 
-- 打开应用且登录后，前端每 **2 分钟**触发一次备份
-- 本地备份：localStorage 快照（分层保留）
-- 服务端备份：SQLite 数据库快照（`VACUUM INTO`）
+- **浏览器侧**：打开应用且登录后，前端每 **2 分钟**触发一次备份（localStorage 快照分层保留 + 触发服务端快照）
+- **服务端侧**：后端常驻定时备份，**不依赖浏览器开着**，默认每 **60 分钟**一次（`VACUUM INTO`）
 - 备份文件：`data/backups/<时间戳>_chat.db`（同一秒并发时会追加毫秒+随机后缀，避免覆盖）
+- 每份快照生成后会**只读打开做完整性校验**（`PRAGMA integrity_check` + 表计数）；校验失败的坏文件会被立即删除，不会留下"看似成功"的备份
 - 保留策略：服务端按 **2分钟 / 5分钟 / 10分钟 / 1小时 / 1天 / 2天 / 3天 / 7天 / 30天** 时间节点分层保留，每个节点保留最接近该时间的一份 + 最新一份
+- **异盘副本**（可选）：设置环境变量 `AI_EN_BACKUP_EXTRA_DIR=E:\backups\ai-english-chat` 后，每份备份会额外复制一份到该目录并做同样校验，防单盘损坏
+- 备份间隔可调：`AI_EN_BACKUP_INTERVAL_MIN=30`（分钟，默认 60；设 `0` 关闭服务端定时备份）
 
-> ⚠️ 备份由**浏览器页面**触发（每 2 分钟的定时器），页面未打开时不会自动备份；需要服务端常驻定时备份时可配合计划任务调用 `POST /api/backup`。
+> 手动备份、浏览器定时备份、服务端定时备份三者共用同一把互斥锁，并发时后到者会跳过而不是报错。
 
 ### 手动备份
 
 设置面板中点击「立即备份」：
 - 本地 localStorage 快照
-- 服务端数据库快照
+- 服务端数据库快照（含异盘副本，如已配置）
 - 显示 toast 提示结果
 
-> 备份是 `VACUUM INTO` 生成的一致性快照，可直接用 SQLite 打开；恢复时需先停止服务再整体替换 `data/app.db`（注意 WAL/SHM 文件）。
+> 备份是 `VACUUM INTO` 生成的一致性快照，可直接用 SQLite 打开。
+
+### 备份管理 / 恢复 CLI
+
+`scripts/backup_cli.js` 是零依赖命令行工具（只用 Node 内置模块），路径同样遵循 `AI_EN_DATA_DIR` 环境变量：
+
+```bash
+# 列出所有备份：序号、校验状态（OK/BAD）、时间、大小、用户数/表数
+node scripts/backup_cli.js list
+
+# 校验某个备份（latest = 最新；也可传 list 里的序号或文件名）
+node scripts/backup_cli.js verify latest
+
+# 恢复备份 —— 不带 --yes 是"演练模式"，只打印将执行的操作，不改任何文件
+node scripts/backup_cli.js restore latest
+
+# 确认无误后正式恢复：
+node scripts/backup_cli.js restore latest --yes
+```
+
+恢复 CLI 的安全护栏：
+
+1. **先校验源备份**：integrity_check 不过直接拒绝恢复
+2. **检测 WAL**：若存在 `app.db-wal` 说明服务可能还在运行，会警告（应先 Ctrl+C 停服）
+3. **恢复前自动留保险**：把当前 `app.db` 复制为 `backups/<时间戳>_prerestore_chat.db`
+4. **替换后清理 WAL/SHM**：旧 `-wal`/`-shm` 属于旧库，留着会导致状态错乱，CLI 自动删除
+5. **恢复后再次校验**：新库不通过会提示用恢复前快照回滚
+
+> 手动恢复（不使用 CLI）的等价步骤：停服 → `copy app.db app.db.before-restore` → 用 `PRAGMA integrity_check` 校验候选备份 → `copy /Y backups\<文件> app.db` 并 `del app.db-wal app.db-shm` → 重启验证。只复制 `app.db` 而不管 `-wal` 是最常见的错误：WAL 模式下最近的写入可能还在 `-wal` 里。服务运行期间也不要直接复制 `app.db`，请走 `POST /api/backup`。
+
+### 数据库维护要点
+
+- schema 版本由 `PRAGMA user_version` 管理，启动时自动迁移（单事务内执行，失败即终止启动并保持原数据不变）
+- 每 60 秒自动做一次被动 WAL checkpoint；优雅关闭时做 `TRUNCATE` checkpoint
+- Windows 下**直接关闭后端窗口**（而不是 Ctrl+C）不会触发优雅关闭，靠上面的定时 checkpoint 兜底
+- `PRAGMA busy_timeout = 5000`：与 `manage_users.py` 等外部工具并发写时会等待，而不是立刻报 `SQLITE_BUSY`
+
+### 服务端日志
+
+后端运行日志在 `data/logs/server.log`（JSONL 格式，每行一个 JSON 对象）：
+
+- **每条请求一行**：带 12 位短 request id，记录方法/路径/状态码/耗时（如 `POST /api/auth/login -> 200 36ms`）
+- 控制台输出人类可读行（格式 `[时:分:秒.毫秒] LEVEL (id) 消息`），文件里是结构化 JSON
+- **按大小轮转**：单文件默认 5MB，超出后改名 `server.log.1`，依次后移，保留最近 5 份
+- 排查问题时可用 id 把同一请求的多条日志（请求日志 + 错误详情）串起来看
+
+可调环境变量：
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `AI_EN_LOG_TO_FILE` | `1` | 设 `0` 关闭文件日志（只留控制台） |
+| `AI_EN_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `AI_EN_LOG_MAX_BYTES` | `5242880` | 单文件字节上限 |
+| `AI_EN_LOG_KEEP` | `5` | 轮转保留份数 |
 
 ---
 
@@ -998,13 +1129,17 @@ Anki 集成支持在浏览器中直接进行复习，无需切换到 Anki 桌面
 
 ### 设置面板
 
-设置 →「🎵 背景音乐」提供独立控制：启用/停用顶部音乐按钮、播放结束自动下一首、选择曲目、音量以及上一首/播放暂停/下一首。
+设置 →「🎵 背景音乐」提供独立控制：启用/停用顶部音乐按钮、播放结束自动下一首、选择曲目、音量以及上一首/播放暂停/下一首。另有「朗读（TTS）时自动压低背景音乐」开关 + 「朗读时音乐」音量滑杆（0–100%，0 = 朗读期间完全暂停音乐，默认压到 20%；朗读结束自动恢复）。压低偏好随账户设置同步。
 
 ### 记忆与状态
 
 - 音量、当前曲目索引保存在浏览器 localStorage（`ai_en_music_vol` / `ai_en_music_idx`）
 - 刷新/重启后再次点击 🎵 会从上次的曲目继续
 - 数据与账户无关（音乐文件为全局共享，个人偏好本地保存）
+
+### 多标签页互斥
+
+同一个浏览器 profile 里同时打开多个本应用标签页时，**背景音乐不会重叠**：任一标签页开始播放（播放/下一首/选择曲目）都会通过 `BroadcastChannel('ai-en-music')` 广播，其它正在播放的标签页会自动静默暂停并跟随当前曲目（气泡提示「已在另一页面播放，本页已暂停」）。即同一时刻全局只有一个标签页在放背景音乐。
 
 ### 备份保留
 

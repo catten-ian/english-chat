@@ -14,18 +14,22 @@
 - **阅读模式**：时政精选 / 粘贴文章 / 历史回看，5 色高亮 + 笔记面板 + 一键进入主应用背诵练习（联动 `article-memorizing`）
 - **生词本**：一键添加，卡片式管理，支持导出
 - **薄弱点追踪**：自动追踪语法错误，间隔复习排程，Anki 联动
-- **Anki 集成**：自动将生词、语法纠错、拓展知识和薄弱点题目添加到 Anki，支持浏览器内网页答题复习与复习统计
+- **Anki 集成**：自动将生词、语法纠错、拓展知识和薄弱点题目添加到 Anki，支持浏览器内网页答题复习与复习统计；Practice 模式提供 **「一键同步到 Anki」**——把生词本全部生词（词汇默写卡）与全部薄弱点（AI 自动出题，薄弱点问答卡）按当前模式批量补推，按英文单词/每薄弱点题数去重
 - **写作模块**：选题（题库 + 自定义）+ 考试类型（高考/考研/CET-4/6/IELTS/TOEFL/GRE）+ AI 多模态评分
 - **翻译模块**：题库 + AI 出题（中→英），AI 评分 + 改进建议（有参考答案的题同时显示参考答案 + AI译文，无答案的只显示 AI译文）
 - **作答框内联标注**：作文/翻译提交评分后，直接在作答文本上标注（正确=绿、错误=红、表达不地道=黄），悬停查看中文说明，可一键「返回编辑」；作答框默认左右留出较大边缘间距，内容变长后自动缩短留白以容纳更多文字
 - **作答字体设置**：设置面板可调整作答框（作文/翻译/描述）的字体大小与字体样式（无衬线/衬线/等宽/手写/花体）
 - **记住当前模式**：进入某功能模块后刷新页面不会回到首页，自动恢复上次所在模式（含 Game 子页签）
+- **作答草稿自动保存**：写作/翻译/描述作答框的内容在切换模式时自动保存（含已评分的内联标注状态），切回自动恢复，不再弹确认框打断操作
+- **反馈面板随模式重置**：切换模式时右侧反馈面板自动重置为对应模式的引导文案，不会残留上一个模式的评分
+- **阅读工具栏随文章显示**：未选择文章时隐藏高亮/笔记/朗读等工具栏，选中文章后才出现
+- **首页价值主张**：首页新增产品 tagline 与 CHAT 主推卡片（渐变高亮），突出「实时 AI 反馈 + 内联批注 + Anki 复习 + 多模态评分」
 - **猜词模块**：题库 + AI 出词（英文），用户用英文描述，AI 评分
-- **背景音乐**：顶部导航栏 🎵 按钮，单击播放/暂停、双击下一首、滚轮调音量；设置面板有独立音乐栏目（启用、自动下一首、曲目、音量、上下曲）；把音频放进 `music/` 即可
+- **背景音乐**：顶部导航栏 🎵 按钮，单击播放/暂停、双击下一首、滚轮调音量；设置面板有独立音乐栏目（启用、自动下一首、曲目、音量、上下曲）；把音频放进 `music/` 即可；**多标签页互斥**（同一 profile 开多个页面不会音乐重叠，任一页开始播放会顶掉其它页）
 - **语音朗读**：ElevenLabs TTS 朗读每条回复，支持自动朗读
 - **多用户登录**：PBKDF2 密码哈希，数据按账户隔离
 - **版本树对话**：编辑消息保留旧版本，可切换查看
-- **数据备份**：SQLite 快照自动备份 + 手动备份；按 2分钟/5分钟/10分钟/1小时/1天/2天/3天/7天/30天节点分层保留
+- **数据备份**：SQLite `VACUUM INTO` 快照，浏览器每 2 分钟触发 + **服务端常驻定时备份**（默认每小时）；每份快照生成后做只读完整性校验（`integrity_check`），坏文件直接删除；按 2分钟/5分钟/10分钟/1小时/1天/2天/3天/7天/30天节点分层保留；支持**异盘副本**与**恢复 CLI**（见下）
 
 ## 技术栈
 
@@ -44,12 +48,40 @@
 
 ```bash
 cd ai-english-chat
-node server.js          # http://localhost:8091
+npm start               # 等价于 node server.js，http://localhost:8091
 ```
 
-或双击 `ai-english-chat/start.bat`。
+或双击 `ai-english-chat/start.bat`（会检查 Node 版本、端口占用，并轮询 `/api/health` 确认就绪后再打开浏览器）。
 
-> 需要在 `ai-english-chat/.env` 中配置 `MINIMAX_API_KEY` 和 `ELEVEN_API_KEY` 才能使用 AI 对话和语音朗读功能。
+> 需要 **Node 22.5+**（使用内置 `node:sqlite`）。需要在 `ai-english-chat/.env` 中配置 `MINIMAX_API_KEY` 和 `ELEVEN_API_KEY` 才能使用 AI 对话和语音朗读功能。
+
+停止服务请在后端窗口按 `Ctrl+C`：会触发优雅关闭（停止接收新连接 → 等待在途请求 → WAL 并回主库 → 关闭数据库）。
+
+## 测试
+
+```bash
+cd ai-english-chat
+npm test                # node:test，零依赖，117 个用例
+npm run check           # 语法检查（server.js + server/**/*.js + js/**/*.js + test/ + scripts/）
+```
+
+测试全部在临时目录中启动独立服务进程（通过 `AI_EN_DATA_DIR` 注入），**不会读写 `data/app.db` 或 `.env`**，也不调用任何外部 API。
+
+覆盖范围：
+
+| 文件 | 覆盖内容 |
+|---|---|
+| `test/static-security.test.js` | 路径穿越（20 种变体）、NUL、扩展名白名单、nosniff、**严格 CSP（script-src 'self'）**、health 不泄露路径、index.html 引用的资源可访问 |
+| `test/auth.test.js` | 登录/登出、伪造 token、**数据库中不存明文 token**、会话列表、退出其他设备、修改密码全流程 |
+| `test/user-data.test.js` | 账户隔离、JSON 与顶层类型校验、损坏数据不覆盖有效数据、chunked 请求体上限 |
+| `test/anki-proxy.test.js` | Anki action 白名单、牌组归属（跨用户拒绝）、参数与数量校验、storeMediaFile 文件名约束 |
+| `test/schema-backup.test.js` | schema 版本管理与幂等迁移、题库导入原子性（源文件损坏不清空旧库）、备份同秒不冲突、备份可打开 |
+| `test/backup-service.test.js` | 备份产物完整性校验、损坏/伪造备份被拒、异盘副本落盘且可校验、定时调度器触发与关闭开关 |
+| `test/logger.test.js` | request id 格式、JSONL 落盘（级别/消息/元数据）、Error 序列化、debug 级过滤、大小轮转与保留数、真实进程请求日志（id/路径/状态/耗时） |
+| `test/render-security.test.js` | `renderMD()` XSS corpus（fenced code / 正文 / inline code / 链接 / 数学）、Cloze 句子转义 |
+| `test/api-contract.test.js` | 前端调用的每个 `/api/*` 都有后端路由、Anki action 与模型白名单前后端一致、user_data key 一致、无残留的旧 Python 入口引用、前端配置不含 key |
+| `test/app-split.test.js` | app.js 拆分完整性：切片齐全/命名规范、index.html 顺序加载、无重复顶层声明、拼接可解析、关键函数齐全 |
+| `test/required-words.test.js` | 翻译必用词匹配：变式（defers/stopped/studies）、词性标注、多词短语、句型骨架、句首大写；以真实题库参考答案命中率做回归 |
 
 ### 默认账户
 
@@ -67,23 +99,76 @@ node server.js          # http://localhost:8091
 ```
 ai-english-chat/
 ├── index.html           # 主页面
-├── server.js            # 后端服务（端口 8091，需要 Node 22.5+）
+├── server.js            # 后端入口（node server.js [port]，实现拆分到 server/）
+├── server/              # 后端模块（零依赖，Node 22.5+）
+│   ├── app.js           # HTTP 组装：路由分发 + 生命周期 + 监听
+│   ├── config.js        # 路径 / 常量 / env 密钥 / Anki·静态白名单
+│   ├── db.js            # SQLite 连接（WAL）+ 题库播种
+│   ├── migrations.js    # schema 版本迁移（PRAGMA user_version）
+│   ├── auth.js          # PBKDF2 / 会话 token 哈希 / 鉴权 / 用户播种
+│   ├── validation.js    # user_data 类型校验 + Anki 代理守卫
+│   ├── rate-limit.js    # 滑动窗口限流框架（默认不启用）
+│   ├── helpers.js       # CORS / JSON / 请求体读取
+│   ├── routes/          # health / music / auth / user-data / gaokao / backup / proxy / static
+│   └── services/        # backup（快照+分层保留）/ anki（AnkiConnect）/ proxy（上游转发）
 ├── start.bat            # 启动脚本
 ├── .env                 # 密钥（gitignored）
 ├── css/
 │   └── style.css        # 样式
+├── package.json         # engines.node >=22.5 + start/test/check 脚本（零第三方依赖）
 ├── js/
-│   ├── app.js           # 主应用逻辑（7600+ 行）
+│   ├── app/             # 主应用逻辑，按领域拆分为 19 个切片（原单体 app.js，约 8200 行）
+│   │   ├── 01-core.js        # 全局状态、工具函数、Markdown 渲染、系统提示词、callAPI
+│   │   ├── 02-agents.js      # 策略师 / 执行者（联网研究）/ SSE 流式
+│   │   ├── 03-parse.js       # 高容忍度 JSON 解析、AI 回复提取
+│   │   ├── 04-chat-tree.js   # 消息版本树
+│   │   ├── 05-chat-view.js   # 聊天渲染、反馈、生词本 / 薄弱点
+│   │   ├── 06-anki.js        # Anki 集成（推送 / 出题 / 复习）
+│   │   ├── 07-chat-actions.js# 消息编辑、评分分析、发送、对话管理、侧栏
+│   │   ├── 08-selection.js   # TTS、划词翻译、调试导出、右侧页签
+│   │   ├── 09-gaokao.js      # 高考翻译题库
+│   │   ├── 10-dictionary.js  # 词典 / 翻译查询
+│   │   ├── 11-ui-panels.js   # 面板、模态框、本地备份、toast
+│   │   ├── 12-settings.js    # 设置面板、AnkiConnect、登出、改密、角色卡、斜杠命令
+│   │   ├── 13-banks.js       # 写作/翻译题库、翻译规则、必用词匹配
+│   │   ├── 14-music.js       # 背景音乐播放器
+│   │   ├── 15-modes.js       # 首页与模块切换、作答草稿
+│   │   ├── 16-reading.js     # 阅读模式（文章 / 高亮 / 划词 / TTS / 联动主应用）
+│   │   ├── 17-practice.js    # Writing / Translation 模块与内联标注
+│   │   ├── 18-games.js       # Charade / Cloze / Wordle
+│   │   └── 19-init.js        # DOMContentLoaded 初始化、登录引导、定时备份
 │   ├── config.js        # 角色卡、配置常量（不含密钥）
 │   └── storage.js       # 存储层（登录 + SQLite 读写 + 本地缓存隔离）
+├── scripts/
+│   └── check-syntax.js  # npm run check 实际执行：枚举 js/** 逐个 node --check
+├── test/                # node:test 测试（临时 DB，不碰真实数据）
+│   ├── helpers.js       # 启动隔离服务进程 / HTTP 工具
+│   ├── static-security.test.js
+│   ├── auth.test.js
+│   ├── user-data.test.js
+│   ├── anki-proxy.test.js
+│   ├── schema-backup.test.js
+│   ├── render-security.test.js
+│   ├── api-contract.test.js
+│   ├── app-split.test.js
+│   └── required-words.test.js
+├── docs/
+│   └── audit-2026-08.md # 代码审查与修复记录
+├── img/icons/           # 首页功能卡图标
 ├── vendor/
 │   └── katex/           # KaTeX 数学渲染
 ├── music/               # 背景音乐目录（放入音频文件即可播放，gitignored）
-├── data/
-│   ├── app.db           # SQLite 数据库（gitignored）
-│   └── backups/         # 数据库快照备份
-└── scripts/
-    └── manage_users.py  # 用户管理脚本（位于工作区根目录 scripts/，即 ai-english-chat 的上一级）
+└── data/
+    ├── app.db           # SQLite 数据库（gitignored）
+    ├── gaokao_translations.json  # 高考翻译题源数据（启动导入 SQLite）
+    └── backups/         # 数据库快照备份
+```
+
+用户管理脚本位于**工作区根目录**（`ai-english-chat` 的上一级）：
+
+```bash
+cd F:\my_doc\code\article-memorizing
+python scripts\manage_users.py list
 ```
 
 ## 详细操作指南
@@ -92,12 +177,54 @@ ai-english-chat/
 
 代码审查与修复记录见 [docs/audit-2026-08.md](./docs/audit-2026-08.md)（含已修问题、跳过项、遗留项与后续路线）。
 
+## 前端结构说明
+
+`js/app.js` 已拆分为 `js/app/01-core.js … 19-init.js` 共 **19 个顺序切片**，由 `index.html` 按序加载。这是「顺序切片」而非模块化重构，原因：原文件含顶层 IIFE、事件绑定与 `const/let` 声明，重排会改变执行顺序与 TDZ 行为。切片本身没有 `import/export`，函数仍声明在全局作用域，跨切片调用靠加载顺序保证。
+
+拆分由 `_archive/ai-english-chat-legacy-20260828/split-app.js`（gitignored，不在仓库内运行）生成，校验约束：
+
+1. 拼接所有切片（去掉头注释）与拆分前内容**逐字节一致** → 无丢失/无重复
+2. 每个切片单独 `node --check` 通过 → 括号/字符串/模板未被切在中间
+3. `test/app-split.test.js`（11 用例）固化：切片齐全、index.html 顺序加载且不再引用单体、无重复顶层声明、拼接可解析、关键函数齐全
+4. 旧单体已归档到 `_archive/ai-english-chat-legacy-20260828/app.js.monolith-before-split`（gitignored）
+
+> 改动某个切片后：`npm run check` 自动对新内容做语法检查；`npm test` 的 `app-split` 与 `api-contract` 用例保证切分不退化。切片 **顺序不可调整**。
+
 ## 安全
 
 - 后端仅绑定 `127.0.0.1`，局域网不可达
-- 静态文件白名单：只服务 `index.html` + `/css/*` + `/js/*` + `/vendor/*` + `/music/*`
+- **静态文件按前缀映射到独立物理目录**：`index.html` + `/css/*` + `/js/*` + `/vendor/*` + `/music/*` + `/img/*`；解码后逐段校验，拒绝 `..`/反斜杠/NUL/绝对路径，扩展名必须在白名单内（无 octet-stream 兜底），响应带 `X-Content-Type-Options: nosniff`
+- **严格 CSP**（`Content-Security-Policy`）：`script-src 'self'`（禁止 inline 事件/脚本，前端交互全部走 `data-action` + 事件委托，见 `js/app/19-init.js`）、`style-src 'self' 'unsafe-inline'`、`img/media-src` 放开 `data:`/`blob:`（头像 dataURL、TTS/录音 blob）、`frame-src/object-src 'none'`
 - 所有 `/api/*` 接口（除登录/健康检查/音乐列表）需 `Authorization: Bearer <token>`
-- 密码 PBKDF2 哈希，会话 30 天有效期；修改密码会撤销该账户除当前会话外的所有会话
-- `/api/db/*` 服务端强校验：必须是合法 JSON 且顶层类型符合该 key 约定
+- 密码 PBKDF2 加盐哈希 + timing-safe 比较；会话 30 天有效期，过期会话自动清理
+- **会话 token 只以 SHA-256 落库**，原始 token 仅在登录响应中返回一次；数据库/WAL/备份泄露无法直接冒充用户
+- 修改密码会撤销该账户除当前会话外的所有会话；也可在「查看会话 → 退出其他设备」手动撤销
+- **请求体按实际字节计量**，不信任 `Content-Length`；chunked 请求同样受限（user_data 8MB / Anki 12MB / 改密 8KB / 其他 24MB）
+- `/api/db/*` 服务端强校验：必须是合法 JSON 且顶层类型符合该 key 约定，损坏数据不能覆盖有效数据
+- **AnkiConnect 代理白名单**：只放行本应用实际使用的 action，且所有牌组操作强制限定在 `英语学习::<当前用户>` 子树内；`storeMediaFile` 只接受应用自己生成的文件名，禁止 `path`/`url`
 - 数据按用户 ID 隔离存储，本地缓存带账户归属标记，切换账户自动清空
-- 密钥仅存在于服务器端 `.env`，前端不暴露
+- 前端渲染：模型输出的 Markdown 代码块、Cloze 句子等一律转义后再插入 DOM
+- 密钥仅存在于服务器端 `.env`，前端不暴露（契约测试会检查）
+
+### 数据库与运维
+
+- schema 版本由 `PRAGMA user_version` 管理，迁移在单事务内执行；迁移失败即终止启动，不带半迁移状态运行
+- 启动时校验关键表/列存在；schema 版本高于程序支持时拒绝启动
+- 优雅关闭（`Ctrl+C` / SIGTERM）：停止接收新连接 → 等待在途请求（上限 10s）→ `wal_checkpoint(TRUNCATE)` → 关闭数据库
+- 每 60 秒做一次被动 WAL checkpoint（Windows 直接关窗口不触发信号，靠这个保证 `app.db` 不会长期落后）
+- `PRAGMA busy_timeout = 5000`，与 `manage_users.py` 等外部工具并发写时等待而非立即报错
+- 备份有互斥锁，同秒重名自动加毫秒+随机后缀；每份快照生成后只读打开做 `PRAGMA integrity_check` + 表计数校验，校验失败的文件立即删除
+- **结构化日志**：`data/logs/server.log`（JSONL，按大小轮转，默认 5MB × 5 份）--每个请求带 12 位短 id，响应结束记录方法/路径/状态/耗时；控制台仍输出人类可读行。环境变量：`AI_EN_LOG_TO_FILE=0` 关闭文件日志、`AI_EN_LOG_MAX_BYTES`、`AI_EN_LOG_KEEP`、`AI_EN_LOG_LEVEL`（debug/info/warn/error，默认 info）
+- **服务端常驻备份调度**：不依赖浏览器开着，后端按间隔自动备份。环境变量：
+  - `AI_EN_BACKUP_INTERVAL_MIN`：备份间隔分钟，默认 `60`，设 `0` 关闭
+  - `AI_EN_BACKUP_EXTRA_DIR`：异盘副本目录（如 `E:\backups\ai-english-chat`），每份备份额外复制一份过去并同样校验/清理，防单盘损坏
+- **备份恢复 CLI**（零依赖，仅用内置模块；路径同样遵循 `AI_EN_DATA_DIR`）：
+
+```bash
+node scripts/backup_cli.js list                        # 列出备份（含校验状态/用户数）
+node scripts/backup_cli.js verify latest               # 校验最新备份（也可传序号或文件名）
+node scripts/backup_cli.js restore latest              # 演练：只打印计划，不改文件
+node scripts/backup_cli.js restore latest --yes        # 执行：先自动存一份恢复前快照，再替换并校验
+```
+
+> ⚠️ 恢复前请先停止服务。CLI 会检测 `app.db-wal` 并警告；恢复时会自动删除 `app.db-wal`/`app.db-shm`（否则旧 WAL 会与替换后的主库不一致），恢复后自动重新校验，并在 `backups/` 留下 `*_prerestore_chat.db` 回滚快照。

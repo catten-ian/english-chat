@@ -1,14 +1,13 @@
 /* 渲染安全：不可信文本（模型输出）不得注入可执行 HTML
 
-   app.js 是浏览器脚本（无 module.exports），这里按函数名从源码里
-   截取 esc / renderMD 的完整定义再求值，避免为了测试改动生产代码。 */
+   前端是浏览器脚本（无 module.exports），这里按函数名从源码里
+   截取 esc / renderMD 的完整定义再求值，避免为了测试改动生产代码。
+   源码来自 js/app/ 下所有切片按加载顺序拼接（见 helpers.readAppSource）。 */
 'use strict';
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
-const fs = require('node:fs');
-const path = require('node:path');
-const { APP_DIR } = require('./helpers');
+const { readAppSource } = require('./helpers');
 
 /* 从源码中按大括号配对截取一个顶层函数定义 */
 function extractFunction(src, name) {
@@ -42,7 +41,7 @@ function extractFunction(src, name) {
   throw new Error(`函数 ${name} 未闭合`);
 }
 
-const src = fs.readFileSync(path.join(APP_DIR, 'js', 'app.js'), 'utf8');
+const src = readAppSource();
 const sandbox = { esc: null, renderMD: null };
 // eslint-disable-next-line no-new-func
 new Function('sandbox', `

@@ -9,6 +9,6 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test \"test/*.test.js\"",
-    "check": "node --check server.js && node --check js/app.js && node --check js/storage.js && node --check js/config.js && node --check js/shgaoka_bank.js"
+    "check": "node scripts/check-syntax.js"
   }
 }

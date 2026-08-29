@@ -193,4 +193,64 @@ function openDb(dbPath) {
   return new DatabaseSync(dbPath);
 }
 
-module.exports = { APP_DIR, SERVER, startServer, request, rawGet, login, sleep, makeTempDir, freePort, openDb, crypto };
+/* ---- 前端脚本片段 ----
+   app.js 已按领域拆分到 js/app/01-*.js … 19-*.js。
+   这些切片按 index.html 中的顺序加载，等价于原来的单文件；
+   测试需要"整份前端代码"时用下面两个函数，避免各测试各自维护文件列表。 */
+const APP_DIR_JS = path.join(APP_DIR, 'js');
+const APP_PARTS_DIR = path.join(APP_DIR_JS, 'app');
+const SERVER_DIR = path.join(APP_DIR, 'server');
+
+/* 按文件名排序返回所有切片的绝对路径（01… → 19…，与加载顺序一致） */
+function appPartFiles() {
+  return fs
+    .readdirSync(APP_PARTS_DIR)
+    .filter((f) => /^\d{2}-.*\.js$/.test(f))
+    .sort()
+    .map((f) => path.join(APP_PARTS_DIR, f));
+}
+
+/* 把所有切片按加载顺序拼成一份源码（用于整体扫描/正则匹配） */
+function readAppSource() {
+  return appPartFiles()
+    .map((p) => fs.readFileSync(p, 'utf8'))
+    .join('\n');
+}
+
+/* ---- 后端源码（server.js 已拆分到 server/） ----
+   契约测试需要扫描"后端全部源码"（路由字面量 / 白名单常量），
+   这里把入口 + server/ 下所有 .js 按稳定顺序合并，等价于原来的单文件。 */
+function serverSource() {
+  const parts = [];
+  if (fs.existsSync(SERVER)) parts.push(SERVER);
+  if (fs.existsSync(SERVER_DIR)) {
+    const walk = (dir) => {
+      for (const f of fs.readdirSync(dir).sort()) {
+        const abs = path.join(dir, f);
+        const st = fs.statSync(abs);
+        if (st.isDirectory()) walk(abs);
+        else if (f.endsWith('.js')) parts.push(abs);
+      }
+    };
+    walk(SERVER_DIR);
+  }
+  return parts.map((p) => fs.readFileSync(p, 'utf8')).join('\n');
+}
+
+module.exports = {
+  APP_DIR,
+  SERVER,
+  APP_PARTS_DIR,
+  appPartFiles,
+  readAppSource,
+  serverSource,
+  startServer,
+  request,
+  rawGet,
+  login,
+  sleep,
+  makeTempDir,
+  freePort,
+  openDb,
+  crypto
+};

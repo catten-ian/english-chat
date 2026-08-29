@@ -48,7 +48,7 @@ describe('静态文件服务', () => {
   });
 
   test('公开资源可正常访问', async () => {
-    for (const p of ['/', '/index.html', '/js/app.js', '/js/storage.js', '/js/config.js', '/css/style.css', '/vendor/katex/katex.min.js', '/img/icons/chat.jpg']) {
+    for (const p of ['/', '/index.html', '/js/app/01-core.js', '/js/app/19-init.js', '/js/storage.js', '/js/config.js', '/css/style.css', '/vendor/katex/katex.min.js', '/img/icons/chat.jpg']) {
       const r = await request({ port: srv.port, path: p });
       assert.strictEqual(r.status, 200, `${p} 应为 200，实际 ${r.status}`);
     }
@@ -80,8 +80,17 @@ describe('静态文件服务', () => {
   });
 
   test('静态响应带 nosniff', async () => {
-    const r = await request({ port: srv.port, path: '/js/app.js' });
+    const r = await request({ port: srv.port, path: '/js/app/01-core.js' });
     assert.strictEqual(r.headers['x-content-type-options'], 'nosniff');
+  });
+
+  test('静态响应带严格 CSP（script-src 仅同源，禁 inline 脚本）', async () => {
+    const r = await request({ port: srv.port, path: '/' });
+    const csp = r.headers['content-security-policy'];
+    assert.ok(csp, '必须返回 Content-Security-Policy');
+    assert.match(csp, /script-src 'self'/, 'script-src 应为严格同源策略');
+    assert.ok(!/unsafe-inline/.test(csp.split('script-src')[1].split(';')[0]), 'script-src 不得含 unsafe-inline');
+    assert.match(csp, /object-src 'none'/, '应禁用插件对象');
   });
 
   test('/api/health 不泄露数据库绝对路径', async () => {

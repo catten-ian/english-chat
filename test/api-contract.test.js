@@ -10,10 +10,16 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { APP_DIR } = require('./helpers');
+const { APP_DIR, appPartFiles, readAppSource, serverSource } = require('./helpers');
 
-const FRONTEND_FILES = ['js/app.js', 'js/storage.js', 'js/config.js'];
-const serverSrc = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
+/* app.js 已拆分到 js/app/，这里把切片与其他前端脚本一并纳入扫描 */
+const FRONTEND_FILES = [
+  ...appPartFiles().map((p) => path.relative(APP_DIR, p).replace(/\\/g, '/')),
+  'js/storage.js',
+  'js/config.js'
+];
+const serverSrc = serverSource();
+const appSrc = readAppSource();
 
 /* 从前端源码里抽出所有 /api/... 字面量。
    覆盖 '/api/db/' + key 这类拼接：只取字面量前缀部分，再按前缀匹配路由。 */
@@ -100,12 +106,13 @@ describe('前后端 API 契约', () => {
     }
   });
 
-  test('文档中不再引用已删除的 server.py', () => {
-    for (const rel of ['README.md', 'WIKI.md', 'js/app.js', 'js/config.js', 'js/storage.js', 'start.bat']) {
+  test('文档与代码中不再引用已删除的旧 Python 入口', () => {
+    const targets = ['README.md', 'WIKI.md', 'js/config.js', 'js/storage.js', 'start.bat', ...FRONTEND_FILES];
+    for (const rel of new Set(targets)) {
       const abs = path.join(APP_DIR, rel);
       if (!fs.existsSync(abs)) continue;
       const txt = fs.readFileSync(abs, 'utf8');
-      assert.ok(!/server\.py/.test(txt), `${rel} 仍引用 server.py`);
+      assert.ok(!/server\.py/.test(txt), `${rel} 仍引用旧的 Python 入口`);
     }
   });
 
@@ -128,7 +135,6 @@ describe('前后端 API 契约', () => {
   });
 
   test('前端使用的 Anki action 全部在后端白名单内', () => {
-    const appSrc = fs.readFileSync(path.join(APP_DIR, 'js', 'app.js'), 'utf8');
     // 只取 ankiPostCall / ankiCall 语境下的 action
     const used = new Set();
     const re = /action:\s*'([a-zA-Z]+)'\s*,\s*version:\s*6/g;
@@ -154,7 +160,6 @@ describe('前后端 API 契约', () => {
   });
 
   test('前端使用的笔记类型在后端模型白名单内', () => {
-    const appSrc = fs.readFileSync(path.join(APP_DIR, 'js', 'app.js'), 'utf8');
     const cfg = fs.readFileSync(path.join(APP_DIR, 'js', 'config.js'), 'utf8');
 
     const mm = serverSrc.match(/ANKI_ALLOWED_MODELS\s*=\s*new Set\(\[([\s\S]*?)\]\)/);
@@ -174,7 +179,6 @@ describe('前后端 API 契约', () => {
 
   test('user_data key 前后端一致', () => {
     const storage = fs.readFileSync(path.join(APP_DIR, 'js', 'storage.js'), 'utf8');
-    const appSrc = fs.readFileSync(path.join(APP_DIR, 'js', 'app.js'), 'utf8');
     const front = new Set();
     for (const src of [storage, appSrc]) {
       for (const m of src.matchAll(/api(?:Save|Load)\(\s*'([a-z_]+)'/g)) front.add(m[1]);

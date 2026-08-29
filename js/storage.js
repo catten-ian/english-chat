@@ -83,7 +83,9 @@ async function apiChangePassword(oldPassword, newPassword) {
    这样可以避免旧快照后到、覆盖服务端较新数据（last-write-wins 回退）。 */
 const _saveInflight = {};   // key -> Promise
 const _savePending = {};    // key -> 最新待发数据（只保留一份）
-const syncStatus = { pending: 0, failed: 0, lastError: null, lastSavedAt: null };
+// 同步状态（顶栏指示器读取）：pending 在途请求数；failedKeys 当前仍未同步成功的 key 集合；
+// lastError 最近一次错误；lastSavedAt 最近一次成功时间。某 key 成功后即从 failedKeys 移除。
+const syncStatus = { pending: 0, failedKeys: new Set(), lastError: null, lastSavedAt: null };
 
 async function _saveNow(key, data) {
   try {
@@ -93,15 +95,17 @@ async function _saveNow(key, data) {
       body: JSON.stringify(data)
     });
     if (!res.ok) {
-      syncStatus.failed++;
+      syncStatus.failedKeys.add(key);
       syncStatus.lastError = key + ': HTTP ' + res.status;
       console.warn('apiSave rejected:', key, res.status);
       return false;
     }
+    syncStatus.failedKeys.delete(key);
+    if (syncStatus.failedKeys.size === 0) syncStatus.lastError = null;
     syncStatus.lastSavedAt = new Date().toISOString();
     return true;
   } catch (e) {
-    syncStatus.failed++;
+    syncStatus.failedKeys.add(key);
     syncStatus.lastError = key + ': ' + e.message;
     console.warn('apiSave failed:', key, e.message);
     return false;
@@ -146,6 +150,27 @@ async function apiLoad(key) {
     console.warn('apiLoad failed:', key, e.message);
     return null;
   }
+}
+
+/* ---------- 失败重传（网络恢复 / 点击指示器重试时调用） ----------
+   把 localStorage 缓存里的核心集合重新 POST 一遍。只重传这四类有
+   固定本地镜像的数据（对话/生词/薄弱点/设置）；头像、角色卡、阅读进度等
+   会在下次各自编辑时自然重试。无 token / 离线时直接跳过。 */
+async function flushLocalToServer() {
+  if (!authToken) return { skipped: true };
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return { offline: true };
+  const tasks = [];
+  const parse = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return fallback; } };
+  const convs = parse('ai_en_convs', null);
+  if (convs && typeof convs === 'object') tasks.push(['conversations', convs]);
+  const vocab = parse('ai_en_vocab', null);
+  if (Array.isArray(vocab)) tasks.push(['vocab', vocab]);
+  const weak = parse('ai_en_weak', null);
+  if (weak && typeof weak === 'object') tasks.push(['weak', weak]);
+  const settings = parse('ai_en_settings_backup', null);
+  if (settings && typeof settings === 'object') tasks.push(['settings', settings]);
+  const results = await Promise.all(tasks.map(([k, d]) => _saveNow(k, d)));
+  return { flushed: results.filter(Boolean).length, total: tasks.length };
 }
 
 /* ---------- 高考翻译题库 API ---------- */

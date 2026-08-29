@@ -10,6 +10,9 @@
 
 <title>AI 英语对话教练 · Speak with AI</title>
 
+<link rel="icon" type="image/jpeg" href="img/icons/favicon.jpg?v=20260829a">
+<link rel="apple-touch-icon" href="img/icons/favicon.jpg?v=20260829a">
+
 <link rel="stylesheet" href="css/style.css?v=20260828b">
 
 <link rel="stylesheet" href="vendor/katex/katex.min.css?v=20260828b">
@@ -19,7 +22,7 @@
 <body><div class="header">
 <!-- ============ Header ============ -->
 
-  <div class="logo" onclick="showHome()" style="cursor:pointer" title="返回首页">
+  <div class="logo" data-action="go-home" style="cursor:pointer" title="返回首页">
 
     <div class="logo-icon">🇺🇸</div>
 
@@ -37,17 +40,19 @@
 
     <div class="mode-nav" id="modeNav">
 
-      <button class="mode-btn" data-mode="chat" onclick="switchMode('chat')">💬 Chat</button>
+      <button class="mode-btn" data-mode="chat" data-action="switch-mode">💬 Chat</button>
 
-      <button class="mode-btn" data-mode="reading" onclick="switchMode('reading')">📖 Reading</button>
+      <button class="mode-btn" data-mode="reading" data-action="switch-mode">📖 Reading</button>
 
-      <button class="mode-btn" data-mode="practice" onclick="switchMode('practice')">📝 Practice</button>
+      <button class="mode-btn" data-mode="practice" data-action="switch-mode">📝 Practice</button>
 
-      <button class="mode-btn" data-mode="writing" onclick="switchMode('writing')">✍️ Writing</button>
+      <button class="mode-btn" data-mode="writing" data-action="switch-mode">✍️ Writing</button>
 
-      <button class="mode-btn" data-mode="translation" onclick="switchMode('translation')">🌐 Translation</button>
+      <button class="mode-btn" data-mode="translation" data-action="switch-mode">🌐 Translation</button>
 
-      <button class="mode-btn" data-mode="game" onclick="switchMode('game')">🎮 Game</button>
+      <button class="mode-btn" data-mode="game" data-action="switch-mode">🎮 Game</button>
+
+      <button class="mode-btn" data-mode="progress" data-action="switch-mode">📊 Progress</button>
 
     </div>
 
@@ -65,21 +70,36 @@
 
     </div>
 
+    <span class="sync-ind" id="syncIndicator" title="同步状态" style="display:none">💾</span>
+
     <span class="user-badge" id="userBadge" title="当前账户"></span>
 
-    <button class="toggle-btn" id="ankiToggle" onclick="toggleAnki()" title="自动添加到 Anki">📚 Anki</button>
+    <button class="toggle-btn" id="ankiToggle" data-action="toggle-anki" title="自动添加到 Anki">📚 Anki</button>
 
-    <button class="toggle-btn" id="autoReadToggle" onclick="toggleAutoRead()" title="自动朗读回复">🔊 Auto</button>
+    <button class="toggle-btn" id="autoReadToggle" data-action="toggle-auto-read" title="自动朗读回复">🔊 Auto</button>
 
-    <button class="music-btn" id="musicToggle" onclick="toggleMusic()" title="背景音乐：单击播放/暂停，双击下一首，滚轮调音量">🎵<span class="music-bubble" id="musicBubble"></span></button>
+    <button class="music-btn" id="musicToggle" data-action="toggle-music" title="背景音乐：单击播放/暂停，双击下一首，滚轮调音量">🎵<span class="music-bubble" id="musicBubble"></span></button>
 
-    <button class="new-topic-btn" id="newConvBtn" onclick="promptNewConversation()">🔄 新对话</button>
+    <button class="new-topic-btn" id="newConvBtn" data-action="prompt-new-conv">🔄 新对话</button>
 
-    <button class="debug-btn" onclick="openSettings()" title="设置">⚙️ 设置</button>
+    <button class="debug-btn" data-action="open-settings" title="设置">⚙️ 设置</button>
 
-    <button class="debug-btn" onclick="exportDebug()" title="导出调试快照">🔧 调试</button>
+    <button class="debug-btn" data-action="export-debug" title="导出调试快照">🔧 调试</button>
 
-    <button class="debug-btn" onclick="showHome()" title="返回首页">🏠 首页</button>
+    <button class="debug-btn" data-action="go-home" title="返回首页">🏠 首页</button>
+
+    <button class="mobile-more-btn" data-action="toggle-mobile-more" title="更多" aria-label="更多功能" aria-haspopup="true">⋯</button>
+
+    <div class="mobile-more-menu" id="mobileMoreMenu" role="menu" aria-label="更多功能">
+      <div class="mmm-user" id="mmmUser"></div>
+      <button class="mmm-item" data-action="toggle-anki" role="menuitem">📚 Anki 自动添加</button>
+      <button class="mmm-item" data-action="toggle-auto-read" role="menuitem">🔊 自动朗读回复</button>
+      <button class="mmm-item" data-action="toggle-music" role="menuitem">🎵 背景音乐</button>
+      <button class="mmm-item" data-action="prompt-new-conv" role="menuitem">🔄 新对话</button>
+      <button class="mmm-item" data-action="open-settings" role="menuitem">⚙️ 设置</button>
+      <button class="mmm-item" data-action="export-debug" role="menuitem">🔧 调试快照</button>
+      <button class="mmm-item" data-action="go-home" role="menuitem">🏠 返回首页</button>
+    </div>
 
   </div>
 
@@ -99,9 +119,11 @@
 
     <p class="home-sub">Welcome, <span id="homeUser" style="font-weight:700"></span> · Pick a mode to start</p>
 
+    <p class="home-tagline">实时 AI 反馈 · 内联批注 · 个性化 Anki 复习 · 多模态评分</p>
+
     <div class="home-grid">
 
-      <button class="home-card" onclick="switchMode('chat')" type="button">
+      <button class="home-card home-card-featured" data-mode="chat" data-action="switch-mode" type="button">
 
         <div class="home-ico"><img class="home-ico-img" src="img/icons/chat.jpg" alt=""></div>
 
@@ -111,7 +133,7 @@
 
       </button>
 
-      <button class="home-card" onclick="switchMode('reading')" type="button">
+      <button class="home-card" data-mode="reading" data-action="switch-mode" type="button">
 
         <div class="home-ico"><img class="home-ico-img" src="img/icons/reading.jpg" alt=""></div>
 
@@ -121,7 +143,7 @@
 
       </button>
 
-      <button class="home-card" onclick="switchMode('practice')" type="button">
+      <button class="home-card" data-mode="practice" data-action="switch-mode" type="button">
 
         <div class="home-ico"><img class="home-ico-img" src="img/icons/practice.jpg" alt=""></div>
 
@@ -131,7 +153,7 @@
 
       </button>
 
-      <button class="home-card" onclick="switchMode('writing')" type="button">
+      <button class="home-card" data-mode="writing" data-action="switch-mode" type="button">
 
         <div class="home-ico"><img class="home-ico-img" src="img/icons/writing.jpg" alt=""></div>
 
@@ -141,7 +163,7 @@
 
       </button>
 
-      <button class="home-card" onclick="switchMode('translation')" type="button">
+      <button class="home-card" data-mode="translation" data-action="switch-mode" type="button">
 
         <div class="home-ico"><img class="home-ico-img" src="img/icons/translation.jpg" alt=""></div>
 
@@ -151,7 +173,7 @@
 
       </button>
 
-      <button class="home-card" onclick="switchMode('game')" type="button">
+      <button class="home-card" data-mode="game" data-action="switch-mode" type="button">
 
         <div class="home-ico"><img class="home-ico-img" src="img/icons/game.jpg" alt=""></div>
 
@@ -161,9 +183,19 @@
 
       </button>
 
+      <button class="home-card" data-mode="progress" data-action="switch-mode" type="button">
+
+        <div class="home-ico">📊</div>
+
+        <div class="home-name">PROGRESS</div>
+
+        <div class="home-desc">Your learner model: vocab, weak points, scores and trends.</div>
+
+      </button>
+
     </div>
 
-    <button class="home-logout" onclick="logout()">退出登录</button>
+    <button class="home-logout" data-action="logout-app">退出登录</button>
 
   </div>
 
@@ -183,7 +215,7 @@
 
       <h3>💬 对话记录</h3>
 
-      <button class="sidebar-new-btn" onclick="sidebarNewConversation()">＋ 新对话</button>
+      <button class="sidebar-new-btn" data-action="sidebar-new-conv">＋ 新对话</button>
 
     </div>
 
@@ -195,11 +227,11 @@
 
   </div>
 
-  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="对话管理">▶</button>
+  <button class="sidebar-toggle" id="sidebarToggle" data-action="toggle-sidebar" title="对话管理">▶</button>
 
-  <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" onclick="toggleSidebar()" title="对话记录">💬</button>
+  <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" data-action="toggle-sidebar" title="对话记录">💬</button>
 
-  <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawers()"></div>
+  <div class="drawer-backdrop" id="drawerBackdrop" data-action="close-drawers"></div>
 
 
 
@@ -217,13 +249,13 @@
 
 <div class="slash-menu" id="slashMenu" style="display:none"></div>
 
-         <textarea id="userInput" placeholder="用英语回复\.\.\. (Enter 发送，Shift+Enter 换行)" rows="1" autocomplete="off" aria-label="消息输入框"></textarea>
+         <textarea id="userInput" placeholder="用英语回复... (Enter 发送，Shift+Enter 换行)" rows="1" autocomplete="off" aria-label="消息输入框"></textarea>
 
-         <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+         <button class="send-btn" id="sendBtn" data-action="send-message">
 
           <span class="spin"></span> 发送       </button>
 
-        <button class="send-btn" id="stopBtn" onclick="stopSending()" style="display:none;background:#dc2626">⏹ 停止</button>
+        <button class="send-btn" id="stopBtn" data-action="stop-sending" style="display:none;background:#dc2626">⏹ 停止</button>
 
       </div>
 
@@ -245,15 +277,15 @@
 
         <span class="toolbar-spacer"></span>
 
-        <button class="a-btn small" id="rdHlBtn" onclick="toggleHighlightMode()">🖍️ 高亮</button>
+        <button class="a-btn small" id="rdHlBtn" data-action="toggle-hl">🖍️ 高亮</button>
 
-        <button class="a-btn small" id="rdNotesBtn" onclick="toggleNotesPanel()">📒 笔记 <span id="rdNoteCount" class="draft-indicator"></span></button>
+        <button class="a-btn small" id="rdNotesBtn" data-action="toggle-notes">📒 笔记 <span id="rdNoteCount" class="draft-indicator"></span></button>
 
-        <button class="a-btn small" id="rdTtsBtn" onclick="readingTts()">🔊 朗读</button>
+        <button class="a-btn small" id="rdTtsBtn" data-action="reading-tts">🔊 朗读</button>
 
-        <button class="a-btn small" onclick="openReadingPicker()">📚 切换文章</button>
+        <button class="a-btn small" data-action="open-reading-picker">📚 切换文章</button>
 
-        <button class="a-btn primary small" onclick="openReciteInMain()">📝 背诵练习</button>
+        <button class="a-btn primary small" data-action="open-recite">📝 背诵练习</button>
 
       </div>
 
@@ -297,9 +329,9 @@
 
                   <div class="paste-actions">
 
-                    <button class="a-btn" onclick="resetReadingPicker()">取消</button>
+                    <button class="a-btn" data-action="reset-reading-picker">取消</button>
 
-                    <button class="a-btn primary" onclick="startReadingFromPaste()">开始阅读</button>
+                    <button class="a-btn primary" data-action="start-reading-paste">开始阅读</button>
 
                   </div>
 
@@ -336,11 +368,24 @@
       <div id="practiceStats" class="practice-stats" style="margin-bottom:16px"></div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-        <button class="send-btn" onclick="startWebReview()" style="padding:10px 24px;font-size:15px">✅ 开始网页复习</button>
-        <button class="a-btn primary" onclick="pushAllToAnki()" style="padding:10px 18px;font-size:14px">📚 一键同步到 Anki</button>
+        <button class="send-btn" data-action="start-web-review" style="padding:10px 24px;font-size:15px">✅ 开始网页复习</button>
+        <button class="a-btn primary" data-action="push-all-anki" style="padding:10px 18px;font-size:14px">📚 一键同步到 Anki</button>
       </div>
       <div style="margin-top:8px;font-size:13px;color:var(--text2)">Open Anki to review your flashcards. The app automatically creates cards from your weak points.</div>
       <div style="margin-top:4px;font-size:12px;color:var(--text3)">「一键同步」把生词本所有词 + 薄弱点 AI 出题，全部推到对应 Anki 卡组</div>
+
+    </div>
+
+
+
+    <!-- Progress（学习者模型仪表盘） -->
+    <div class="module-area" id="progressArea" style="display:none;flex-direction:column;height:100%;padding:24px;overflow-y:auto">
+
+      <h2 style="margin:0 0 8px">📊 Progress</h2>
+
+      <p style="color:var(--text2);margin:0 0 16px;font-size:14px">Your learner model: vocabulary, weak points, chat scores and translation trends.</p>
+
+      <div id="progressDashboard"></div>
 
     </div>
 
@@ -388,11 +433,11 @@
 
             <div style="display:flex;flex-direction:column;gap:6px">
 
-              <button class="dict-btn" onclick="startWriting()" style="padding:4px 14px;font-size:13px">开始写作</button>
+              <button class="dict-btn" data-action="start-writing" style="padding:4px 14px;font-size:13px">开始写作</button>
 
               <label class="toggle-btn" style="padding:4px 12px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="附加题目图片（也可直接拖拽到下方题目区）">
 
-                <input type="file" id="wTopicImageInput" accept="image/*" style="display:none" onchange="handleTopicImageUpload(event)">
+                <input type="file" id="wTopicImageInput" accept="image/*" style="display:none" data-action="topic-image">
 
                 🖼️ 图片
 
@@ -406,11 +451,11 @@
 
         </div>
 
-        <button class="toggle-btn" onclick="clearWriting()" title="清除" style="align-self:flex-end">🗑️ 清除</button>
+        <button class="toggle-btn" data-action="clear-writing" title="清除" style="align-self:flex-end">🗑️ 清除</button>
 
       </div>
 
-      <div id="wTopicDisplay" ondragover="event.preventDefault()" ondrop="handleTopicImageDrop(event)" style="padding:24px 32px;text-align:center;font-size:22px;font-weight:700;color:var(--text);background:linear-gradient(135deg,var(--primary-bg),#fdf4ff);border-bottom:1px solid var(--border);min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.6;white-space:pre-wrap">
+      <div id="wTopicDisplay" style="padding:24px 32px;text-align:center;font-size:22px;font-weight:700;color:var(--text);background:linear-gradient(135deg,var(--primary-bg),#fdf4ff);border-bottom:1px solid var(--border);min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.6;white-space:pre-wrap">
 
         <div id="wTopicTextWrap"><span style="color:var(--text2);font-weight:500;font-size:15px">📝 选择或输入一个作文题目，开始写作</span></div>
 
@@ -418,7 +463,7 @@
 
           <img id="wTopicImage" style="max-width:100%;max-height:280px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.12)" />
 
-          <button onclick="event.stopPropagation();clearTopicImage()" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:none;background:var(--red);color:#fff;cursor:pointer;font-size:13px;line-height:1;padding:0" title="删除图片">×</button>
+          <button data-action="clear-topic-image" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:none;background:var(--red);color:#fff;cursor:pointer;font-size:13px;line-height:1;padding:0" title="删除图片">×</button>
 
         </div>
 
@@ -434,7 +479,7 @@
 
       <div class="writing-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
 
-        <button class="send-btn" onclick="submitWriting()" style="padding:6px 18px;font-size:14px">📊 提交评分</button>
+        <button class="send-btn" data-action="submit-writing" style="padding:6px 18px;font-size:14px">📊 提交评分</button>
 
         <span id="wWordCount" style="font-size:12px;color:var(--text2)"></span>
 
@@ -452,23 +497,23 @@
 
         <span style="font-size:13px;font-weight:600">🌐 Chinese → English Translation</span>
 
-        <button class="toggle-btn" onclick="translateSource('bank')" id="trBankBtn" style="font-size:12px">📚 题库</button>
+        <button class="toggle-btn" id="trBankBtn" data-action="translate-source" data-arg1="bank" style="font-size:12px">📚 题库</button>
 
-        <button class="toggle-btn" onclick="translateSource('ai')" id="trAiBtn" style="font-size:12px">🤖 AI 出题</button>
+        <button class="toggle-btn ai-btn" id="trAiBtn" data-action="translate-source" data-arg1="ai" style="font-size:12px">🤖 AI 出题</button>
 
-        <select id="trCategorySelect" onchange="trCategoryChanged()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg)"></select>
+        <select id="trCategorySelect" data-action="tr-category-changed" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg)"></select>
 
         <label class="toggle-btn" style="font-size:12px;padding:4px 10px;cursor:pointer" title="导入自定义题库（JSON 文件）">
 
-          <input type="file" id="trImportInput" accept="application/json,.json" style="display:none" onchange="importTrBank(event)">
+          <input type="file" id="trImportInput" accept="application/json,.json" style="display:none" data-action="import-tr-bank">
 
           📥 导入
 
         </label>
 
-        <button class="toggle-btn" onclick="exportTrBank()" style="font-size:12px;padding:4px 10px" title="导出当前题库为 JSON">💾 导出</button>
+        <button class="toggle-btn" data-action="export-tr-bank" style="font-size:12px;padding:4px 10px" title="导出当前题库为 JSON">💾 导出</button>
 
-        <button class="dict-btn" onclick="nextTranslate()" style="font-size:12px;margin-left:auto">下一题 →</button>
+        <button class="dict-btn" data-action="next-translate" style="font-size:12px;margin-left:auto">下一题 →</button>
 
       </div>
 
@@ -488,11 +533,11 @@
 
       <div class="translate-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
 
-        <button class="send-btn" onclick="submitTranslate()" style="padding:6px 18px;font-size:14px">✅ 提交</button>
+        <button class="send-btn" data-action="submit-translate" style="padding:6px 18px;font-size:14px">✅ 提交</button>
 
-        <button class="dict-btn" onclick="showTranslateAnswer()" style="font-size:12px">显示参考答案</button>
+        <button class="dict-btn" data-action="show-translate-answer" style="font-size:12px">显示参考答案</button>
 
-        <button class="dict-btn" onclick="toggleTranslateHistory()" style="font-size:12px;margin-left:auto">📋 历史 <span id="trHistCount" style="color:var(--text3)">(0)</span></button>
+        <button class="dict-btn" data-action="toggle-tr-history" style="font-size:12px;margin-left:auto">📋 历史 <span id="trHistCount" style="color:var(--text3)">(0)</span></button>
 
       </div>
 
@@ -508,11 +553,11 @@
 
       <div class="game-tabs">
 
-        <button class="game-tab active" data-game="charade" onclick="switchGameTab('charade')">🎭 Charade</button>
+        <button class="game-tab active" data-game="charade" data-action="switch-game-tab">🎭 Charade</button>
 
-        <button class="game-tab" data-game="cloze" onclick="switchGameTab('cloze')">📝 Cloze</button>
+        <button class="game-tab" data-game="cloze" data-action="switch-game-tab">📝 Cloze</button>
 
-        <button class="game-tab" data-game="wordle" onclick="switchGameTab('wordle')">🟩 Wordle</button>
+        <button class="game-tab" data-game="wordle" data-action="switch-game-tab">🟩 Wordle</button>
 
       </div>
 
@@ -526,13 +571,13 @@
 
           <span style="font-size:13px;font-weight:600">🎭 Charade — 你描述，AI 猜</span>
 
-          <button class="toggle-btn" onclick="charadeSource('bank')" id="chBankBtn" style="font-size:12px">📚 题库</button>
+          <button class="toggle-btn" id="chBankBtn" data-action="charade-source" data-arg1="bank" style="font-size:12px">📚 题库</button>
 
-          <button class="toggle-btn" onclick="charadeSource('ai')" id="chAiBtn" style="font-size:12px">🤖 AI 出词</button>
+          <button class="toggle-btn ai-btn" id="chAiBtn" data-action="charade-source" data-arg1="ai" style="font-size:12px">🤖 AI 出词</button>
 
           <span id="chScore" style="font-size:12px;font-weight:700;color:var(--green);margin-left:auto">✅ 0/0</span>
 
-          <button class="dict-btn" onclick="charadeNext()" style="font-size:12px">跳过 →</button>
+          <button class="dict-btn" data-action="charade-next" style="font-size:12px">跳过 →</button>
 
         </div>
 
@@ -540,7 +585,7 @@
 
           <div style="font-size:14px;color:var(--text2);margin-bottom:8px">只有你能看到这个词，描述它让 AI 猜</div>
 
-          <button class="send-btn" onclick="charadeReveal()" style="padding:8px 24px;font-size:16px">🎯 显示单词</button>
+          <button class="send-btn" data-action="charade-reveal" style="padding:8px 24px;font-size:16px">🎯 显示单词</button>
 
         </div>
 
@@ -555,11 +600,11 @@
       </div>
 
       <div class="charade-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
-          <button class="send-btn" id="chSubmitBtn" onclick="submitCharade()" style="padding:6px 18px;font-size:14px">🤔 让 AI 猜</button>
+          <button class="send-btn" id="chSubmitBtn" data-action="submit-charade" style="padding:6px 18px;font-size:14px">🤔 让 AI 猜</button>
 
-          <button class="dict-btn" id="chHintBtn" onclick="charadeShowHint()" style="font-size:12px;display:none">💡 提示</button>
+          <button class="dict-btn" id="chHintBtn" data-action="charade-hint" style="font-size:12px;display:none">💡 提示</button>
 
-          <button class="dict-btn" onclick="charadeNext()" style="font-size:12px">跳过 →</button>
+          <button class="dict-btn" data-action="charade-next" style="font-size:12px">跳过 →</button>
 
         </div>
 
@@ -575,13 +620,13 @@
 
           <span style="font-size:13px;font-weight:600">📝 Cloze · 11选10</span>
 
-          <button class="toggle-btn" onclick="clozeSource('vocab')" id="clozeVocabBtn" style="font-size:12px">📚 生词本</button>
+          <button class="toggle-btn" id="clozeVocabBtn" data-action="cloze-source" data-arg1="vocab" style="font-size:12px">📚 生词本</button>
 
-          <button class="toggle-btn" onclick="clozeSource('ai')" id="clozeAiBtn" style="font-size:12px">🤖 AI 出题</button>
+          <button class="toggle-btn ai-btn" id="clozeAiBtn" data-action="cloze-source" data-arg1="ai" style="font-size:12px">🤖 AI 出题</button>
 
           <span id="clozeScore" style="font-size:12px;font-weight:700;color:var(--green);margin-left:auto">✅ 0/0</span>
 
-          <button class="dict-btn" onclick="clozeNext()" style="font-size:12px">新一组 →</button>
+          <button class="dict-btn" data-action="cloze-next" style="font-size:12px">新一组 →</button>
 
         </div>
 
@@ -591,9 +636,9 @@
 
         <div class="cloze-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--surface)">
 
-          <button class="send-btn" onclick="submitCloze()" style="padding:6px 18px;font-size:14px">✅ 提交答案</button>
+          <button class="send-btn" data-action="submit-cloze" style="padding:6px 18px;font-size:14px">✅ 提交答案</button>
 
-          <button class="dict-btn" onclick="clozeShowAnswers()" style="font-size:12px">显示答案</button>
+          <button class="dict-btn" data-action="cloze-answers" style="font-size:12px">显示答案</button>
 
         </div>
 
@@ -609,13 +654,13 @@
 
           <span style="font-size:13px;font-weight:600">🟩 Wordle</span>
 
-          <button class="toggle-btn" onclick="wordleSource('ai')" id="wlAiBtn" style="font-size:12px">🤖 AI 出词</button>
+          <button class="toggle-btn ai-btn" id="wlAiBtn" data-action="wordle-source" data-arg1="ai" style="font-size:12px">🤖 AI 出词</button>
 
-          <button class="toggle-btn" onclick="wordleSource('custom')" id="wlCustomBtn" style="font-size:12px">✏️ 自定义</button>
+          <button class="toggle-btn" id="wlCustomBtn" data-action="wordle-source" data-arg1="custom" style="font-size:12px">✏️ 自定义</button>
 
           <span id="wordleStatus" style="font-size:12px;color:var(--text2);margin-left:auto">猜词中...</span>
 
-          <button class="dict-btn" onclick="wordleNew()" style="font-size:12px">新词 →</button>
+          <button class="dict-btn" data-action="wordle-new" style="font-size:12px">新词 →</button>
 
         </div>
 
@@ -637,7 +682,7 @@
 
      <div class="panel-drag-handle" id="panelDragHandle" title="拖动移动小窗"></div>
 
-     <div class="panel-mode-controls" aria-label="反馈面板模式"><button onclick="setFeedbackPanelMode('collapsed')" title="关闭反馈面板" aria-label="关闭反馈面板">×</button><button onclick="setFeedbackPanelMode('mini')" title="浮动显示" aria-label="浮动显示">□</button><button onclick="setFeedbackPanelMode('expanded')" title="固定显示" aria-label="固定显示">▣</button></div>
+     <div class="panel-mode-controls" aria-label="反馈面板模式"><button data-action="panel-mode" data-arg1="collapsed" title="关闭反馈面板" aria-label="关闭反馈面板">×</button><button data-action="panel-mode" data-arg1="mini" title="浮动显示" aria-label="浮动显示">□</button><button data-action="panel-mode" data-arg1="expanded" title="固定显示" aria-label="固定显示">▣</button></div>
 
      <div class="resize-handle resize-handle-left" id="panelResize"></div>
 
@@ -645,11 +690,11 @@
 
     <div class="right-tabs">
 
-      <button class="right-tab active" data-tab="feedback" onclick="switchRightTab('feedback')">📊 反馈</button>
+      <button class="right-tab active" data-tab="feedback" data-action="switch-right-tab">📊 反馈</button>
 
-      <button class="right-tab" data-tab="dict" onclick="switchRightTab('dict')">🔤 词典翻译</button>
+      <button class="right-tab" data-tab="dict" data-action="switch-right-tab">🔤 词典翻译</button>
 
-      <button class="right-tab" data-tab="gaokao" onclick="switchRightTab('gaokao')">📚 题库</button>
+      <button class="right-tab" data-tab="gaokao" data-action="switch-right-tab">📚 题库</button>
 
     </div>
 
@@ -657,11 +702,11 @@
 
       <div class="right-tabs inner-tabs" id="feedbackTabs">
 
-        <button class="right-tab active" data-ftab="current" onclick="switchFeedbackTab('current')">📊 本次反馈</button>
+        <button class="right-tab active" data-ftab="current" data-action="switch-feedback-tab">📊 本次反馈</button>
 
-        <button class="right-tab" data-ftab="vocab" onclick="switchFeedbackTab('vocab')">📖 生词本<span class="badge" id="wordCount">0</span></button>
+        <button class="right-tab" data-ftab="vocab" data-action="switch-feedback-tab">📖 生词本<span class="badge" id="wordCount">0</span></button>
 
-        <button class="right-tab" data-ftab="weak" onclick="switchFeedbackTab('weak')">🎯 知识薄弱点</button>
+        <button class="right-tab" data-ftab="weak" data-action="switch-feedback-tab">🎯 知识薄弱点</button>
 
       </div>
 
@@ -705,7 +750,7 @@
 
         <textarea id="dictInput" rows="3" placeholder="输入中文或英文单词/句子，或直接提问（如：如何用英语表达'我很期待'？）..."></textarea>
 
-        <button class="dict-btn" id="dictBtn" onclick="queryDict()">查询</button>
+        <button class="dict-btn" id="dictBtn" data-action="query-dict">查询</button>
 
       </div>
 
@@ -719,7 +764,7 @@
 
       <div class="gaokao-toolbar" style="display:flex;gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap">
 
-        <select id="bankModeSel" onchange="renderTrBankPanel()" style="font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:#fff">
+        <select id="bankModeSel" data-action="bank-render" style="font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:#fff">
 
           <option value="translate">🌐 翻译题库</option>
 
@@ -727,9 +772,9 @@
 
         </select>
 
-        <select id="bankCatSel" onchange="renderTrBankPanel()" style="font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:#fff;flex:1;min-width:80px"></select>
+        <select id="bankCatSel" data-action="bank-render" style="font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:#fff;flex:1;min-width:80px"></select>
 
-        <select id="bankStatusSel" onchange="renderTrBankPanel()" title="筛选作答状态" style="font-size:12px;padding:4px 4px;border-radius:6px;border:1px solid var(--border);background:#fff">
+        <select id="bankStatusSel" data-action="bank-render" title="筛选作答状态" style="font-size:12px;padding:4px 4px;border-radius:6px;border:1px solid var(--border);background:#fff">
 
           <option value="all">全部</option>
 
@@ -739,7 +784,7 @@
 
         </select>
 
-        <input id="bankSearch" type="text" placeholder="🔍 搜索题目..." oninput="renderTrBankPanel()" style="flex:1;min-width:100px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+        <input id="bankSearch" type="text" placeholder="🔍 搜索题目..." data-action="bank-render" style="flex:1;min-width:100px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none">
 
       </div>
 
@@ -751,7 +796,7 @@
 
   </div>
 
-  <button class="side-panel-toggle" onclick="toggleMobilePanel()" title="侧栏">📊</button>
+  <button class="side-panel-toggle" data-action="toggle-mobile-panel" title="侧栏">📊</button>
 
 </div>
 
@@ -775,9 +820,9 @@
 
     <div class="tip-actions">
 
-      <button class="tip-add" id="tipAdd" onclick="addFromTip()">加入生词本</button>
+      <button class="tip-add" id="tipAdd" data-action="add-from-tip">加入生词本</button>
 
-      <button class="tip-close" onclick="hideTip()">关闭</button>
+      <button class="tip-close" data-action="hide-tip">关闭</button>
 
     </div>
 
@@ -797,7 +842,29 @@
 
 <script src="js/storage.js?v=20260828b"></script>
 
-<script src="js/app.js?v=20260828c"></script>
+<!-- app.js 已按领域拆分到 js/app/。
+     顺序不可调整：存在顶层 IIFE、事件绑定与 const 声明的执行顺序依赖。
+     校验见 test/app-split.test.js（文件齐全 / 无重复顶层声明 / 拼接可解析）。 -->
+<script src="js/app/01-core.js?v=20260828f"></script>
+<script src="js/app/02-agents.js?v=20260828f"></script>
+<script src="js/app/03-parse.js?v=20260828f"></script>
+<script src="js/app/04-chat-tree.js?v=20260828f"></script>
+<script src="js/app/05-chat-view.js?v=20260828f"></script>
+<script src="js/app/06-anki.js?v=20260828f"></script>
+<script src="js/app/07-chat-actions.js?v=20260828f"></script>
+<script src="js/app/08-selection.js?v=20260828f"></script>
+<script src="js/app/09-gaokao.js?v=20260828f"></script>
+<script src="js/app/10-dictionary.js?v=20260828f"></script>
+<script src="js/app/11-ui-panels.js?v=20260828f"></script>
+<script src="js/app/12-settings.js?v=20260828f"></script>
+<script src="js/app/13-banks.js?v=20260828f"></script>
+<script src="js/app/14-music.js?v=20260828f"></script>
+<script src="js/app/15-modes.js?v=20260828f"></script>
+<script src="js/app/16-reading.js?v=20260828f"></script>
+<script src="js/app/17-practice.js?v=20260828f"></script>
+<script src="js/app/18-games.js?v=20260828f"></script>
+<script src="js/app/19-init.js?v=20260828f"></script>
+<script src="js/app/20-progress.js?v=20260830a"></script>
 
 
 
@@ -847,7 +914,7 @@
 
     <div id="topicList" class="topic-list"></div>
 
-    <button class="topic-cancel" onclick="closeTopicModal()">取消</button>
+    <button class="topic-cancel" data-action="close-topic-modal">取消</button>
 
   </div>
 
@@ -864,6 +931,20 @@
 <!-- 高亮颜色选择器-->
 
 <div id="hlPicker" class="hl-picker" role="dialog" aria-label="高亮颜色" style="display:none"></div>
+
+
+
+<!-- ============ 移动端底部导航（≤767px 显示，桌面隐藏） ============ -->
+<nav class="bottom-nav" id="bottomNav" aria-label="功能模块切换">
+  <button class="mode-btn bn-tab" data-mode="chat" data-action="switch-mode" type="button"><span class="bn-ico">💬</span><span class="bn-label">Chat</span></button>
+  <button class="mode-btn bn-tab" data-mode="reading" data-action="switch-mode" type="button"><span class="bn-ico">📖</span><span class="bn-label">Reading</span></button>
+  <button class="mode-btn bn-tab" data-mode="practice" data-action="switch-mode" type="button"><span class="bn-ico">📝</span><span class="bn-label">Practice</span></button>
+  <button class="mode-btn bn-tab" data-mode="writing" data-action="switch-mode" type="button"><span class="bn-ico">✍️</span><span class="bn-label">Writing</span></button>
+  <button class="mode-btn bn-tab" data-mode="translation" data-action="switch-mode" type="button"><span class="bn-ico">🌐</span><span class="bn-label">翻译</span></button>
+  <button class="mode-btn bn-tab" data-mode="game" data-action="switch-mode" type="button"><span class="bn-ico">🎮</span><span class="bn-label">Game</span></button>
+</nav>
+
+</body>
 
 
 
