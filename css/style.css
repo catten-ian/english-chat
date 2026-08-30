@@ -631,7 +631,7 @@ body {
 
   /* Header: compact, scrollable */
   .header {
-    padding: 8px 10px; gap: 6px; flex-wrap: nowrap; overflow-x: auto;
+    padding: 8px 10px; gap: 6px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
     position: fixed; top: 0; left: 0; right: 0; z-index: 30; height: 56px;
   }
   .logo h1 { font-size: 15px; }
@@ -1567,7 +1567,7 @@ button.a-btn {
 .cc-row-fill { height: 100%; background: var(--primary); border-radius: 4px; }
 .cc-row-val { flex: 0 0 auto; font-weight: 700; color: var(--text); white-space: nowrap; }
 
-.cc-trend { display: flex; align-items: flex-end; gap: 2px; height: 88px; padding: 4px 0; overflow-x: auto; }
+.cc-trend { display: flex; align-items: flex-end; gap: 2px; height: 88px; padding: 4px 0; overflow-x: auto; overflow-y: hidden; }
 .cc-trend-bar { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; flex: 1 0 14px; min-width: 14px; }
 .cc-trend-bar div { width: 100%; max-width: 22px; background: var(--primary); border-radius: 3px 3px 0 0; min-height: 3px; }
 .cc-trend-bar span { font-size: 8px; color: var(--text3); white-space: nowrap; transform: rotate(-45deg); transform-origin: center; }
@@ -1601,7 +1601,7 @@ button.a-btn {
 .pm-head-text p { margin: 0; color: var(--text2); font-size: 13px; }
 .pm-head .a-btn { margin-left: auto; flex-shrink: 0; }
 
-.pm-tabs { display: flex; gap: 4px; padding: 4px; background: var(--bg); border-radius: 12px; margin-bottom: 16px; width: fit-content; max-width: 100%; overflow-x: auto; }
+.pm-tabs { display: flex; gap: 4px; padding: 4px; background: var(--bg); border-radius: 12px; margin-bottom: 16px; width: fit-content; max-width: 100%; overflow-x: auto; overflow-y: hidden; }
 .pm-tab {
   border: none; background: transparent; padding: 7px 16px; border-radius: 9px;
   font-size: 13px; font-weight: 600; color: var(--text2); cursor: pointer; transition: all .15s; white-space: nowrap; font-family: inherit;

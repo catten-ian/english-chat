@@ -137,7 +137,7 @@ const ANKI_READONLY_ACTIONS = new Set([
   'getNumCardsReviewedToday', 'getNumCardsReviewedByDay'
 ]);
 // GUI 复习动作：作用于 Anki 当前复习会话，无牌组参数
-const ANKI_GUI_ACTIONS = new Set(['guiCurrentCard', 'guiShowAnswer', 'guiAnswerCard']);
+const ANKI_GUI_ACTIONS = new Set(['guiCurrentCard', 'guiShowAnswer', 'guiAnswerCard', 'guiUndo']);
 // 需要逐项校验参数的动作
 const ANKI_GUARDED_ACTIONS = new Set([
   'addNote', 'addNotes', 'canAddNotes', 'createDeck', 'changeDeck',

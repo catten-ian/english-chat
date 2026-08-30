@@ -346,7 +346,11 @@ Requirements:
 ${multiWp ? '- One question should test AS MANY weak points as possible (ideally 2-3 at a time), as long as it stays natural.' : '- Each question should test exactly ONE weak point.'}
 - Cover ALL given weak points across the questions.
 - Generate ${Math.max(1, Math.ceil(wpList.length * (parseInt(getSetting('ankiQuizPerWp', 2)) || 2) / 1.6))} questions.
-- Question types: multiple_choice (4 options A/B/C/D), fill_blank (English sentence with ___), or error_correction.
+- Question types: multiple_choice (4 options A/B/C/D), fill_blank (English sentence with one or more
+  blanks, each blank written as ___ at the exact spot), or error_correction.
+- A fill_blank sentence may contain MORE THAN ONE blank. Put one ___ at each exact spot (so any
+  comma/semicolon/word between blanks stays in the sentence). For multiple blanks, write the
+  "answer" as the English answers separated by ", " in blank order (e.g. "word1, word2").
 - ALL question stems, options and answers MUST be in ENGLISH. The learner is Chinese, but
   they are learning ENGLISH — never write questions in Chinese and never ask them to choose
   between Chinese characters/words (e.g. do NOT write "Which sentence uses 方位 correctly?"

@@ -595,7 +595,7 @@ input.addEventListener('keydown', function(e) {
       if (typeof renderAnkiTaskCenter === 'function') renderAnkiTaskCenter();
       if (typeof processAnkiQueue === 'function' && authToken) processAnkiQueue().catch(() => {});
       // 学习中心：若上次停留在复习/成本子页，登录后立即渲染对应内容
-      if (currentMode === 'practice' && typeof switchPracticeTab === 'function') switchPracticeTab(currentPracticeTab || 'overview', true);
+      if (currentMode === 'practice' && typeof switchPracticeTab === 'function') switchPracticeTab(currentPracticeTab || 'review', true);
 
       const currentId = getCurrentConvId();
       const convs = getAllConversations();

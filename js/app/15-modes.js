@@ -10,8 +10,8 @@ let trSource = 'bank';    // bank | ai
 let chSource = 'bank';    // bank | ai
 let currentTranslation = null;
 let trHistoryExpanded = false;
-// 学习中心（practice）当前子页：overview | review | cost
-let currentPracticeTab = 'overview';
+// 学习中心（practice）当前子页：review | overview | cost
+let currentPracticeTab = 'review';
 
 // ---- 首页 / 模式切换 ----
 function showHome() {
@@ -44,11 +44,11 @@ function switchGameTab(game) {
 }
 
 /* 在「学习中心」内切换子页。
-   overview = 学习者模型仪表盘；review = 复习与 Anki；cost = 成本与隐私。
+   review = 复习与 Anki；overview = 学习者模型仪表盘；cost = 成本与隐私。
    各子页数据都是懒加载：切到才渲染，避免进模块就打三份请求。 */
-const PRACTICE_TABS = ['overview', 'review', 'cost'];
+const PRACTICE_TABS = ['review', 'overview', 'cost'];
 function switchPracticeTab(tab, force) {
-  if (!PRACTICE_TABS.includes(tab)) tab = 'overview';
+  if (!PRACTICE_TABS.includes(tab)) tab = 'review';
   if (currentPracticeTab === tab && !force) return;
   currentPracticeTab = tab;
   localStorage.setItem('ai_en_practice_tab', tab);
@@ -109,7 +109,7 @@ function switchMode(mode, force) {
 
   // 模块初始化
   // practice 现在是「学习中心」：进入时只渲染当前子页（懒加载）
-  if (mode === 'practice') { switchPracticeTab(currentPracticeTab || 'overview', true); }
+  if (mode === 'practice') { switchPracticeTab(currentPracticeTab || 'review', true); }
   if (mode === 'writing') { renderTopicSuggest(); }
   if (mode === 'translation' && !currentTranslation) { nextTranslate(); }
   if (mode === 'translation') { renderTranslateHistory(); trPopulateCategories(); }
