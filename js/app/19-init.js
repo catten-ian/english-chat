@@ -167,6 +167,10 @@ registerAction('anki-queue-retry-all', function () { retryAllFailedAnkiTasks(); 
 registerAction('anki-queue-clear-done', function () { clearFinishedAnkiTasks(); });
 registerAction('anki-task-retry', function () { retryAnkiTask(this.getAttribute('data-arg1')); });
 registerAction('anki-task-delete', function () { deleteAnkiTask(this.getAttribute('data-arg1')); });
+// 成本与隐私中心（22-cost.js）
+registerAction('cost-range', function () { setCostRange(this.getAttribute('data-arg1')); });
+registerAction('cost-set-price', function () { setCostPrice(this.getAttribute('data-arg1'), this.value); });
+registerAction('cost-clear-usage', function () { clearUsageRecords(); });
 // 对话/版本树（07-chat-actions.js）
 registerAction('save-edit', function () { saveEdit(this.getAttribute('data-arg1')); });
 registerAction('cancel-edit', function () { cancelEdit(this.getAttribute('data-arg1')); });

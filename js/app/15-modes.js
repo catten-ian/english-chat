@@ -68,7 +68,7 @@ function switchMode(mode, force) {
 
   // 模块初始化
   if (mode === 'practice') { renderPracticeStats(); }
-  if (mode === 'progress') { renderProgressDashboard(); }
+  if (mode === 'progress') { renderProgressDashboard(); if (typeof renderCostCenter === 'function') renderCostCenter(); }
   if (mode === 'writing') { renderTopicSuggest(); }
   if (mode === 'translation' && !currentTranslation) { nextTranslate(); }
   if (mode === 'translation') { renderTranslateHistory(); trPopulateCategories(); }

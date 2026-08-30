@@ -17,11 +17,19 @@ const { proxyRequest } = require('../services/proxy');
 const { ankiCall, ankiCache, parseAnkiBody } = require('../services/anki');
 const { ankiGuard } = require('../validation');
 const logger = require('../services/logger');
+const { recordUsage, parseChatUsage, parseStreamUsage } = require('../services/usage');
 
 // MiniMax chat（非流式）
 async function chat(req, res) {
   const body = await readBody(req);
   const r = await proxyRequest(MINIMAX_BASE + '/v1/chat/completions', body, { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + MINIMAX_KEY });
+  // 用量记账（只记数字，不记内容）
+  const u = parseChatUsage(r.data) || {};
+  recordUsage({
+    userId: req.uid, provider: 'minimax', kind: 'chat', model: u.model,
+    promptTokens: u.promptTokens, completionTokens: u.completionTokens, totalTokens: u.totalTokens,
+    status: r.status
+  });
   res.writeHead(r.status, { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders(req) });
   res.end(r.data);
 }
@@ -88,14 +96,20 @@ async function chatStream(req, res) {
   res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', 'Connection': 'close', ...corsHeaders(req) });
   const reader = upstream.body.getReader();
   bumpIdle();
+  // 只保留流的尾部用于抽取 usage 帧（MiniMax 在最后一个 data 帧给 usage）。
+  // 不累计整段回复：既省内存，也避免把生成内容留在服务端。
+  let tail = '';
+  const TAIL_MAX = 4096;
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       if (closed || res.writableEnded) break;
       bumpIdle();
+      const chunk = Buffer.from(value);
+      tail = (tail + chunk.toString('utf8')).slice(-TAIL_MAX);
       // 处理背压：write 返回 false 时等 drain，避免内存堆积
-      if (!res.write(Buffer.from(value))) {
+      if (!res.write(chunk)) {
         await new Promise((resolve) => {
           const onDrain = () => { res.removeListener('close', onDrain); resolve(); };
           res.once('drain', onDrain);
@@ -109,6 +123,13 @@ async function chatStream(req, res) {
   } finally {
     try { await reader.cancel(); } catch (e) {}
     cleanup();
+    // 记账：流被中止时上游可能没发 usage 帧，此时只记一次请求（tokens 未知）
+    const u = parseStreamUsage(tail) || {};
+    recordUsage({
+      userId: req.uid, provider: 'minimax', kind: 'chat_stream', model: u.model,
+      promptTokens: u.promptTokens, completionTokens: u.completionTokens, totalTokens: u.totalTokens,
+      status: 200
+    });
     if (!res.writableEnded) res.end();
   }
 }
@@ -117,6 +138,8 @@ async function chatStream(req, res) {
 async function websearch(req, res) {
   const body = await readBody(req);
   const r = await proxyRequest(MINIMAX_BASE + '/v1/coding_plan/search', body, { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + MINIMAX_KEY });
+  // 联网搜索按次计（不记搜索词）
+  recordUsage({ userId: req.uid, provider: 'minimax', kind: 'websearch', status: r.status });
   res.writeHead(r.status, { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders(req) });
   res.end(r.data);
 }
@@ -124,7 +147,16 @@ async function websearch(req, res) {
 // ElevenLabs TTS
 async function tts(req, res, voiceId) {
   const body = await readBody(req);
+  // TTS 按字符计费：从请求体里只取 text 长度（不留文本内容）
+  let chars = 0;
+  let ttsModel = null;
+  try {
+    const parsed = JSON.parse(body.toString('utf8'));
+    chars = (parsed && typeof parsed.text === 'string') ? parsed.text.length : 0;
+    ttsModel = parsed && parsed.model_id ? String(parsed.model_id) : null;
+  } catch (e) {}
   const r = await proxyRequest('https://api.elevenlabs.io/v1/text-to-speech/' + voiceId, body, { 'Content-Type': 'application/json', 'xi-api-key': ELEVEN_KEY }, 30000);
+  recordUsage({ userId: req.uid, provider: 'elevenlabs', kind: 'tts', model: ttsModel, chars, status: r.status });
   res.writeHead(r.status, { 'Content-Type': 'audio/mpeg', ...corsHeaders(req) });
   res.end(r.data);
 }

@@ -9,12 +9,13 @@
 
 const logger = require('./services/logger');
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /* 版本历史：
    0 → 1  初始 schema（users / sessions / user_data / gaokao_questions）
    1 → 2  gaokao_questions.q_words 列（旧库补列）
    2 → 3  sessions 改存 token 哈希（token_hash），并加 expires_at 索引
+   3 → 4  usage_log 表（外部 API 用量：token / 字符数，按用户与日期聚合）
 */
 
 /* 迁移定义需要 db 实例（up() 里直接执行 SQL），
@@ -101,6 +102,39 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 `);
         }
       }
+    },
+    {
+      version: 4,
+      name: 'usage_log（外部 API 用量记账）',
+      up() {
+        // 记录每次外部 API 调用的用量，用于「成本与隐私中心」。
+        // 只存聚合所需的数字与元信息，绝不存 prompt / 回复内容（隐私）。
+        //   provider: minimax | elevenlabs
+        //   kind:     chat | chat_stream | websearch | tts
+        //   day:      YYYY-MM-DD（本地日期，便于按天聚合）
+        //   prompt_tokens/completion_tokens/total_tokens: LLM 用量（TTS 为 0）
+        //   chars:    TTS 字符数（LLM 为 0）
+        db.exec(`
+CREATE TABLE IF NOT EXISTS usage_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  day TEXT NOT NULL,
+  ts TEXT DEFAULT (datetime('now')),
+  provider TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  model TEXT,
+  prompt_tokens INTEGER DEFAULT 0,
+  completion_tokens INTEGER DEFAULT 0,
+  total_tokens INTEGER DEFAULT 0,
+  chars INTEGER DEFAULT 0,
+  requests INTEGER DEFAULT 1,
+  status INTEGER DEFAULT 200,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_usage_user_day ON usage_log(user_id, day);
+CREATE INDEX IF NOT EXISTS idx_usage_day ON usage_log(day);
+`);
+      }
     }
   ];
 }
@@ -146,7 +180,8 @@ function runMigrations(db) {
     users: ['id', 'username', 'password_hash'],
     sessions: ['token_hash', 'user_id', 'expires_at'],
     user_data: ['user_id', 'key', 'value'],
-    gaokao_questions: ['id', 'exam', 'q_words']
+    gaokao_questions: ['id', 'exam', 'q_words'],
+    usage_log: ['user_id', 'day', 'provider', 'total_tokens']
   })) {
     for (const c of cols) {
       if (!columnExists(t, c)) {

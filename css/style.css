@@ -1502,3 +1502,54 @@ button.a-btn {
   .at-item { grid-template-columns: 72px 1fr auto; }
   .at-time { display: none; }
 }
+
+
+/* ==================== 成本与隐私中心 ==================== */
+.cost-center { }
+.cc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.cc-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.cc-actions { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.cc-note { font-size: 11px; color: var(--text3); margin-bottom: 10px; line-height: 1.6; }
+.cc-loading, .cc-empty { font-size: 13px; color: var(--text2); padding: 16px 0; text-align: center; }
+
+.cc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.cc-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; }
+.cc-stat-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+.cc-stat-value { font-size: 23px; font-weight: 800; color: var(--text); line-height: 1.2; }
+.cc-stat-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+.cc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; align-items: start; margin-bottom: 12px; }
+.cc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.cc-card-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+
+.cc-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; font-size: 12px; }
+.cc-row-label { flex: 0 0 auto; max-width: 46%; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-row-bar { flex: 1; height: 7px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.cc-row-fill { height: 100%; background: var(--primary); border-radius: 4px; }
+.cc-row-val { flex: 0 0 auto; font-weight: 700; color: var(--text); white-space: nowrap; }
+
+.cc-trend { display: flex; align-items: flex-end; gap: 2px; height: 88px; padding: 4px 0; overflow-x: auto; }
+.cc-trend-bar { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; flex: 1 0 14px; min-width: 14px; }
+.cc-trend-bar div { width: 100%; max-width: 22px; background: var(--primary); border-radius: 3px 3px 0 0; min-height: 3px; }
+.cc-trend-bar span { font-size: 8px; color: var(--text3); white-space: nowrap; transform: rotate(-45deg); transform-origin: center; }
+
+.cc-price { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+.cc-price label { flex: 1; color: var(--text2); }
+.cc-price input { width: 92px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; text-align: right; outline: none; }
+.cc-price input:focus { border-color: var(--primary); box-shadow: var(--focus-shadow); }
+
+.cc-privacy { margin-top: 0; }
+.cc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cc-table th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--text2); font-weight: 600; }
+.cc-table td { padding: 8px; border-bottom: 1px dashed var(--border); vertical-align: top; line-height: 1.6; }
+.cc-sub { font-size: 11px; color: var(--text3); }
+.cc-ok { color: var(--green); font-weight: 700; }
+.cc-off { color: var(--text3); }
+.cc-list { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.8; color: var(--text); }
+.cc-danger { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+@media (max-width: 767px) {
+  .cc-grid { grid-template-columns: 1fr; }
+  .cc-row-label { max-width: 40%; }
+  .cc-table { font-size: 11px; }
+}

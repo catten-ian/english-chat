@@ -206,6 +206,29 @@ async function apiGaokaoPushToAnki(ids) {
   } catch (e) { return { ok: false, error: e.message }; }
 }
 
+/* ---------- 用量与隐私中心 API ---------- */
+async function apiUsage(days) {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/usage?days=' + (days || 30), { headers: authHeaders() });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) { console.warn('apiUsage failed:', e.message); return null; }
+}
+async function apiUsageClear() {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/usage', { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) { console.warn('apiUsageClear failed:', e.message); return null; }
+}
+async function apiPrivacy() {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/privacy', { headers: authHeaders() });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) { console.warn('apiPrivacy failed:', e.message); return null; }
+}
+
 /* ---------- 本地缓存归属（防止 A 账户缓存被 B 账户读到/回写） ----------
    localStorage 是浏览器级共享的，而账户数据在服务端按 user_id 隔离。
    这里用 owner 标记登记「当前缓存属于谁」：

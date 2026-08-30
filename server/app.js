@@ -21,6 +21,7 @@ const authRoutes = require('./routes/auth');
 const userDataRoutes = require('./routes/user-data');
 const gaokaoRoutes = require('./routes/gaokao');
 const backupRoutes = require('./routes/backup');
+const usageRoutes = require('./routes/usage');
 const proxyRoutes = require('./routes/proxy');
 const { serveStatic } = require('./routes/static');
 
@@ -110,6 +111,11 @@ const server = http.createServer(async (req, res) => {
 
     // 备份（VACUUM INTO）
     if (method === 'POST' && pathname === '/api/backup') return backupRoutes.backup(req, res);
+
+    // 用量与隐私中心
+    if (method === 'GET' && pathname === '/api/usage') return usageRoutes.usageGet(req, res);
+    if (method === 'DELETE' && pathname === '/api/usage') return usageRoutes.usageClear(req, res);
+    if (method === 'GET' && pathname === '/api/privacy') return usageRoutes.privacyGet(req, res);
 
     // MiniMax chat（非流式）
     if (method === 'POST' && pathname === '/api/proxy/chat') return await proxyRoutes.chat(req, res);

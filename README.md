@@ -32,6 +32,7 @@
 - **版本树对话**：编辑消息保留旧版本，可切换查看
 - **数据备份**：SQLite `VACUUM INTO` 快照，浏览器每 2 分钟触发 + **服务端常驻定时备份**（默认每小时）；每份快照生成后做只读完整性校验（`integrity_check`），坏文件直接删除；按 2分钟/5分钟/10分钟/1小时/1天/2天/3天/7天/30天节点分层保留；支持**异盘副本**与**恢复 CLI**（见下）
 - **Progress 学习者仪表盘**：第 7 模块（顶栏 + 首页 + 移动端底栏均有入口）。聚合生词本/薄弱点/对话/翻译历史 + Anki 连续天数：4 张统计卡 + Chat 四维均分（语法/表达/搭配/文采，0–10 横向条）+ 翻译得分趋势（最近 20 次纯 CSS 柱状图）+ 薄弱点分类分布 + 最近 5 条对话。纯本地聚合，无外部依赖
+- **成本与隐私中心**（Progress 页下方）：外部 API 用量记账（MiniMax token / ElevenLabs 字符 / 联网次数），按天、按用途、按模型聚合 + 可编辑单价的花费估算；隐私面板列清「哪些数据发给了谁、本地存在哪」，并提供「清除用量记录」。**记账只存数字与元信息，绝不存 prompt、回复、音频或搜索词**（有测试断言 `usage_log` 不含任何文本列）
 
 ## 技术栈
 
@@ -83,6 +84,7 @@ npm run check           # 语法检查（server.js + server/**/*.js + js/**/*.js
 | `test/backup-service.test.js` | 备份产物完整性校验、损坏/伪造备份被拒、异盘副本落盘且可校验、定时调度器触发与关闭开关 |
 | `test/logger.test.js` | request id 格式、JSONL 落盘（级别/消息/元数据）、Error 序列化、debug 级过滤、大小轮转与保留数、真实进程请求日志（id/路径/状态/耗时） |
 | `test/anki-tasks.test.js` | Anki 任务队列：入队与持久化、Anki 离线保 pending（不消耗重试）、重试上限进 dead、quiz 薄弱点已删/AI 失败、未知类型不崩、手动重试/删除/清理、容量裁剪保留 pending |
+| `test/usage.test.js` | 用量记账：schema v4 建表、**usage_log 无任何文本列（隐私约束）**、totalTokens 兜底、负数规整、未登录不写库、非流式/SSE usage 解析（含截断流返回 null）、按 provider/kind/model 聚合、账户隔离、days 参数规整、`/api/usage` 与 `/api/privacy` 端到端（含密钥不外泄断言） |
 | `test/render-security.test.js` | `renderMD()` XSS corpus（fenced code / 正文 / inline code / 链接 / 数学）、Cloze 句子转义 |
 | `test/api-contract.test.js` | 前端调用的每个 `/api/*` 都有后端路由、Anki action 与模型白名单前后端一致、user_data key 一致、无残留的旧 Python 入口引用、前端配置不含 key |
 | `test/app-split.test.js` | app.js 拆分完整性：切片齐全/命名规范、index.html 顺序加载、无重复顶层声明、拼接可解析、关键函数齐全 |
@@ -143,7 +145,8 @@ ai-english-chat/
 │   │   ├── 18-games.js       # Charade / Cloze / Wordle
 │   │   ├── 19-init.js        # DOMContentLoaded 初始化、登录引导、定时备份
 │   │   ├── 20-progress.js    # Progress 学习者模型仪表盘（纯本地聚合）
-│   │   └── 21-anki-tasks.js  # Anki 任务中心（持久化队列 + 重试）
+│   │   ├── 21-anki-tasks.js  # Anki 任务中心（持久化队列 + 重试）
+│   │   └── 22-cost.js        # 成本与隐私中心（用量图表 + 隐私面板）
 │   ├── config.js        # 角色卡、配置常量（不含密钥）
 │   └── storage.js       # 存储层（登录 + SQLite 读写 + 本地缓存隔离）
 ├── scripts/
@@ -185,7 +188,7 @@ python scripts\manage_users.py list
 
 ## 前端结构说明
 
-`js/app.js` 已拆分为 `js/app/01-core.js … 21-anki-tasks.js` 共 **21 个顺序切片**，由 `index.html` 按序加载（01–19 为原单体拆分，20/21 为新增功能切片）。这是「顺序切片」而非模块化重构，原因：原文件含顶层 IIFE、事件绑定与 `const/let` 声明，重排会改变执行顺序与 TDZ 行为。切片本身没有 `import/export`，函数仍声明在全局作用域，跨切片调用靠加载顺序保证。
+`js/app.js` 已拆分为 `js/app/01-core.js … 22-cost.js` 共 **22 个顺序切片**，由 `index.html` 按序加载（01–19 为原单体拆分，20–22 为新增功能切片）。这是「顺序切片」而非模块化重构，原因：原文件含顶层 IIFE、事件绑定与 `const/let` 声明，重排会改变执行顺序与 TDZ 行为。切片本身没有 `import/export`，函数仍声明在全局作用域，跨切片调用靠加载顺序保证。
 
 拆分由 `_archive/ai-english-chat-legacy-20260828/split-app.js`（gitignored，不在仓库内运行）生成，校验约束：
 
