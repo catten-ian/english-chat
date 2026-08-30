@@ -44,7 +44,11 @@ node server.js          # 或 npm start
 
 浏览器打开 [http://localhost:8091](http://localhost:8091)。
 
-> 🗂 **前端结构**：`js/app.js`（单体）已拆分为 `js/app/01-core.js … 19-init.js` 共 19 个按领域划分的顺序切片，由 `index.html` 按序加载，运行效果与原单体完全一致。**不要调整脚本顺序**，也不要改动 `index.html` 里这些 `<script>` 的先后关系。`npm test` 会校验切片完整性与加载顺序。改动前端代码后记得提升 `index.html` 中对应 `<script src>` 的 `?v=` 版本号以刷新缓存。
+也可以双击 `start.bat`：它会依次检查 Node 是否存在、版本是否 ≥22.5、`node:sqlite` 能否加载、端口是否被占用（若已是本应用则直接开浏览器），然后启动后端并轮询 `/api/health` 最多 20 秒，就绪后才打开浏览器。
+
+> ⚠️ **改 `.bat` 时注意换行符**：批处理必须是 CRLF。若被保存成 LF，`cmd.exe` 会错位解析整个文件，典型报错是 `'xxx' 不是内部或外部命令` 且服务起不来。仓库已通过 `.gitattributes`（`*.bat text eol=crlf`）在 checkout 时强制 CRLF，但用编辑器另存时仍要留意。另外脚本里的延时统一用 `ping -n N 127.0.0.1 >nul` 而不是 `timeout /t N`——`timeout` 需要控制台输入句柄，输出被重定向或由其它程序调起时会直接报 `Input redirection is not supported`。
+
+> 🗂 **前端结构**：`js/app.js`（单体）已拆分为 `js/app/01-core.js … 19-init.js` 共 19 个按领域划分的顺序切片（另有 `20-progress.js`、`21-anki-tasks.js` 为新增功能切片），由 `index.html` 按序加载，运行效果与原单体完全一致。**不要调整脚本顺序**，也不要改动 `index.html` 里这些 `<script>` 的先后关系。`npm test` 会校验切片完整性与加载顺序。改动前端代码后记得提升 `index.html` 中对应 `<script src>` 的 `?v=` 版本号以刷新缓存。
 
 ### 登录
 

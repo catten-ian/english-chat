@@ -51,7 +51,7 @@ if "!HEALTH!"=="0" (
   start "" %URL%
   echo.
   echo  地址: %URL%
-  timeout /t 3 >nul
+  ping -n 4 127.0.0.1 >nul
   exit /b 0
 )
 if "!HEALTH!"=="2" (
@@ -67,10 +67,14 @@ echo  正在启动后端服务...
 start "AI English Backend" node server.js %PORT%
 
 REM ---- 6. 轮询 /api/health，最多等 20 秒 ----
+REM NOTE: use "ping -n" for delays instead of "timeout".
+REM "timeout" needs a console input handle and fails with
+REM "Input redirection is not supported" when stdout is redirected
+REM or when start.bat is launched by another process.
 set READY=0
 for /l %%i in (1,1,40) do (
   if "!READY!"=="0" (
-    timeout /t 1 >nul
+    ping -n 2 127.0.0.1 >nul
     node -e "const http=require('node:http');const r=http.get({host:'127.0.0.1',port:%PORT%,path:'/api/health',timeout:1000},res=>process.exit(res.statusCode===200?0:1));r.on('error',()=>process.exit(1));r.on('timeout',()=>{r.destroy();process.exit(1)})" >nul 2>nul
     if not errorlevel 1 set READY=1
   )
@@ -93,5 +97,5 @@ echo  地址: %URL%
 echo  关闭此窗口不会停止后端；如需停止，请在 "AI English Backend" 窗口按 Ctrl+C
 echo  （Ctrl+C 会触发优雅关闭：等待在途请求 + WAL 并回主库）
 echo.
-timeout /t 5 >nul
+ping -n 6 127.0.0.1 >nul
 exit /b 0

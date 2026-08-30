@@ -55,6 +55,8 @@ npm start               # 等价于 node server.js，http://localhost:8091
 
 或双击 `ai-english-chat/start.bat`（会检查 Node 版本、端口占用，并轮询 `/api/health` 确认就绪后再打开浏览器）。
 
+> ⚠️ `.bat` 文件必须是 **CRLF** 换行。仓库根已加 `.gitattributes`（`*.bat text eol=crlf`）强制 checkout 为 CRLF——LF 换行的 bat 会被 `cmd.exe` 误解析，表现为 `'xxx' 不是内部或外部命令`。脚本内部用 `ping -n` 而非 `timeout` 做延时，因为 `timeout` 需要控制台输入句柄，被重定向或由其它进程调起时会报 `Input redirection is not supported`。
+
 > 需要 **Node 22.5+**（使用内置 `node:sqlite`）。需要在 `ai-english-chat/.env` 中配置 `MINIMAX_API_KEY` 和 `ELEVEN_API_KEY` 才能使用 AI 对话和语音朗读功能。
 
 停止服务请在后端窗口按 `Ctrl+C`：会触发优雅关闭（停止接收新连接 → 等待在途请求 → WAL 并回主库 → 关闭数据库）。
@@ -145,8 +147,7 @@ ai-english-chat/
 │   ├── config.js        # 角色卡、配置常量（不含密钥）
 │   └── storage.js       # 存储层（登录 + SQLite 读写 + 本地缓存隔离）
 ├── scripts/
-│   └── check-syntax.js  # npm run check 实际执行：枚举 js/** 逐个 node --check
-├── test/                # node:test 测试（临时 DB，不碰真实数据）
+│   └── check-syntax.js  # npm run check 实际执行：枚举 js/** 逐个 node --check├── test/                # node:test 测试（临时 DB，不碰真实数据）
 │   ├── helpers.js       # 启动隔离服务进程 / HTTP 工具
 │   ├── static-security.test.js
 │   ├── auth.test.js

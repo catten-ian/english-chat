@@ -1,0 +1,25 @@
+# 默认按文本处理，仓库内统一存 LF
+* text=auto eol=lf
+
+# Windows 批处理必须是 CRLF：
+# LF 换行的 .bat 会被 cmd.exe 逐字节误解析（中文行尾被吞、命令被截断），
+# 表现为 "'xxx' 不是内部或外部命令"。强制 checkout 为 CRLF。
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制资源不做换行转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.mp3 binary
+*.m4a binary
+*.ogg binary
+*.wav binary
+*.flac binary
+*.opus binary
+*.aac binary
+*.db binary
+*.zip binary
