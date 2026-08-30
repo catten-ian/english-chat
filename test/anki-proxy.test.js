@@ -185,6 +185,24 @@ describe('Anki 代理：白名单与归属', () => {
     assertDenied(await call({ action: 'storeMediaFile', version: 6, params: { filename: 'ai_en_1.mp3' } }), 'storeMediaFile 缺 data');
   });
 
+  test('乱码/问号牌组名一律拒绝（编码事故兜底）', async () => {
+    // 事故回放：中文被按 ASCII 编码后「英语学习::catten::薄弱点」→「????::catten::???」
+    const mkNote = (deckName) => ({
+      action: 'addNote', version: 6,
+      params: { note: { deckName, modelName: 'Basic', fields: { Front: 'a', Back: 'b' }, tags: [] } }
+    });
+    assertDenied(await call({ action: 'createDeck', version: 6, params: { deck: '????::test::???' } }), 'createDeck 问号牌组');
+    assertDenied(await call(mkNote('????::test::???')), 'addNote 问号牌组');
+    assertDenied(await call({ action: 'addNotes', version: 6, params: { notes: [mkNote('英语学习::test::词汇'), mkNote('????::test::???')] } }), 'addNotes 混入问号牌组');
+    assertDenied(await call({ action: 'guiDeckReview', version: 6, params: { name: '????::test' } }), 'guiDeckReview 问号牌组');
+    assertDenied(await call({ action: 'getDeckStats', version: 6, params: { decks: [OWNED, '????::test::???'] } }), 'getDeckStats 混入问号');
+    assertDenied(await call({ action: 'changeDeck', version: 6, params: { deck: '????::test::???', cards: [1] } }), 'changeDeck 问号牌组');
+    // U+FFFD：UTF-8 双重解码事故的替换字符
+    assertDenied(await call(mkNote('英语学习::test::薄\uFFFD点')), 'addNote 含 U+FFFD');
+    // 正常牌组不受影响
+    assertPassedGuard(await call({ action: 'createDeck', version: 6, params: { deck: OWNED } }), 'createDeck 正常中文牌组');
+  });
+
   test('不同用户的牌组根不同（catten 不能操作 test 的牌组）', async () => {
     const cattenToken = await login(srv.port, 'catten', 'catten');
     const r = await request({

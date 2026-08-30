@@ -11,6 +11,7 @@
 const { sendJson, readBody } = require('../helpers');
 const { db, parseWords } = require('../db');
 const { ankiCall, parseAnkiBody } = require('../services/anki');
+const { isOwnedDeck, isSaneDeckName } = require('../validation');
 const logger = require('../services/logger');
 
 function gaokaoExams(req, res) {
@@ -84,6 +85,11 @@ async function gaokaoPushToAnki(req, res) {
     const rows = db.prepare(`SELECT id, q_text, a_text, q_words, exam FROM gaokao_questions WHERE id IN (${placeholders})`).all(...ids);
     if (!rows.length) { sendJson(res, 404, { error: 'no questions found' }, req); return; }
     const deckName = `英语学习::${req.username}::翻译题`;
+    // 直连 AnkiConnect 路径（不走代理白名单），服务端自构牌组名后仍做双重兜底：
+    // 形状异常（如编码丢失产生的 ????）或归属不符时直接中止，防止在 Anki 里建出垃圾牌组
+    if (!isSaneDeckName(deckName) || !isOwnedDeck(deckName, req.username)) {
+      sendJson(res, 500, { error: 'deck name rejected by server guard' }, req); return;
+    }
     // 确保目标牌组存在
     try {
       const decks = await ankiCall(8765, 'deckNames', Buffer.from(JSON.stringify({ action: 'deckNames', version: 6 })));

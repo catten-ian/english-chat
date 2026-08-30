@@ -28,6 +28,20 @@ function isOwnedDeck(deck, username) {
   const root = ankiUserDeckRoot(username);
   return deck === root || deck.startsWith(root + '::');
 }
+/* 牌组名形状校验：本应用所有牌组名都是「中文前缀::用户名::中文叶子」。
+   历史事故：某次外部直连 AnkiConnect 的调用把中文按 ASCII 编码，
+   「英语学习::catten::薄弱点」变成「????::catten::???」并在 Anki 里建出垃圾牌组。
+   这里对经过本服务的牌组名做兜底：
+   - 不得含 U+FFFD（UTF-8 解码失败的替换字符，双重编码事故的标志）
+   - 不得含 '?'（本应用牌组名永远不用问号；ASCII 编码丢失中文的标志就是 ?）
+   - 不得含控制字符 */
+function isSaneDeckName(deck) {
+  if (typeof deck !== 'string' || !deck) return false;
+  if (deck.includes('\uFFFD') || deck.includes('?')) return false;
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f\x7f]/.test(deck)) return false;
+  return true;
+}
 function isSafeMediaName(name) {
   // 只允许应用自己生成的音频文件名，禁止路径分隔符与父级引用
   return typeof name === 'string' && /^ai_en_[A-Za-z0-9_-]{1,64}\.(mp3|m4a|ogg|wav)$/.test(name);
@@ -46,12 +60,14 @@ function ankiGuard(payload, username) {
   const p = payload.params && typeof payload.params === 'object' ? payload.params : {};
   const root = ankiUserDeckRoot(username);
   const denyDeck = (d) => ({ status: 403, error: 'deck not owned: ' + String(d).slice(0, 60) + '（仅允许 ' + root + ' 子树）' });
+  // 牌组名必须同时满足：形状正常（无乱码/问号）+ 归属于当前用户
+  const badDeck = (d) => (!isSaneDeckName(d) || !isOwnedDeck(d, username)) ? denyDeck(d) : null;
 
   switch (action) {
     case 'addNote': {
       const note = p.note;
       if (!note || typeof note !== 'object') return { status: 400, error: 'note required' };
-      if (!isOwnedDeck(note.deckName, username)) return denyDeck(note.deckName);
+      { const d = badDeck(note.deckName); if (d) return d; }
       if (note.modelName !== undefined && !ANKI_ALLOWED_MODELS.has(note.modelName)) {
         return { status: 403, error: 'model not allowed: ' + String(note.modelName).slice(0, 40) };
       }
@@ -64,7 +80,7 @@ function ankiGuard(payload, username) {
       if (notes.length > ANKI_MAX_NOTES) return { status: 400, error: 'too many notes (max ' + ANKI_MAX_NOTES + ')' };
       for (const n of notes) {
         if (!n || typeof n !== 'object') return { status: 400, error: 'invalid note entry' };
-        if (!isOwnedDeck(n.deckName, username)) return denyDeck(n.deckName);
+        { const d = badDeck(n.deckName); if (d) return d; }
         if (n.modelName !== undefined && !ANKI_ALLOWED_MODELS.has(n.modelName)) {
           return { status: 403, error: 'model not allowed: ' + String(n.modelName).slice(0, 40) };
         }
@@ -72,24 +88,22 @@ function ankiGuard(payload, username) {
       return null;
     }
     case 'createDeck': {
-      if (!isOwnedDeck(p.deck, username)) return denyDeck(p.deck);
-      return null;
+      return badDeck(p.deck);
     }
     case 'changeDeck': {
-      if (!isOwnedDeck(p.deck, username)) return denyDeck(p.deck);
+      { const d = badDeck(p.deck); if (d) return d; }
       if (!Array.isArray(p.cards) || !p.cards.length) return { status: 400, error: 'cards required' };
       if (p.cards.length > ANKI_MAX_CARDS) return { status: 400, error: 'too many cards (max ' + ANKI_MAX_CARDS + ')' };
       if (!p.cards.every(c => Number.isSafeInteger(c) && c > 0)) return { status: 400, error: 'invalid card id' };
       return null;
     }
     case 'guiDeckReview': {
-      if (!isOwnedDeck(p.name, username)) return denyDeck(p.name);
-      return null;
+      return badDeck(p.name);
     }
     case 'getDeckStats': {
       const decks = p.decks;
       if (!Array.isArray(decks) || !decks.length) return { status: 400, error: 'decks required' };
-      for (const d of decks) { if (!isOwnedDeck(d, username)) return denyDeck(d); }
+      for (const d of decks) { const bad = badDeck(d); if (bad) return bad; }
       return null;
     }
     case 'findCards': {
@@ -151,4 +165,4 @@ function ankiGuard(payload, username) {
   }
 }
 
-module.exports = { matchesType, ankiGuard, ankiUserDeckRoot, isOwnedDeck, isSafeMediaName };
+module.exports = { matchesType, ankiGuard, ankiUserDeckRoot, isOwnedDeck, isSaneDeckName, isSafeMediaName };
