@@ -10,6 +10,8 @@ let trSource = 'bank';    // bank | ai
 let chSource = 'bank';    // bank | ai
 let currentTranslation = null;
 let trHistoryExpanded = false;
+// 学习中心（practice）当前子页：overview | review | cost
+let currentPracticeTab = 'overview';
 
 // ---- 首页 / 模式切换 ----
 function showHome() {
@@ -41,6 +43,45 @@ function switchGameTab(game) {
   if (game === 'wordle' && !wlState) wlGenerate();
 }
 
+/* 在「学习中心」内切换子页。
+   overview = 学习者模型仪表盘；review = 复习与 Anki；cost = 成本与隐私。
+   各子页数据都是懒加载：切到才渲染，避免进模块就打三份请求。 */
+const PRACTICE_TABS = ['overview', 'review', 'cost'];
+function switchPracticeTab(tab, force) {
+  if (!PRACTICE_TABS.includes(tab)) tab = 'overview';
+  if (currentPracticeTab === tab && !force) return;
+  currentPracticeTab = tab;
+  localStorage.setItem('ai_en_practice_tab', tab);
+  document.querySelectorAll('.pm-tab').forEach(t => {
+    const on = t.dataset.ptab === tab;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  const paneIds = { overview: 'pmPaneOverview', review: 'pmPaneReview', cost: 'pmPaneCost' };
+  for (const [k, id] of Object.entries(paneIds)) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = k === tab ? '' : 'none';
+  }
+  renderPracticeTab(tab);
+}
+
+/* 渲染指定子页（也用于「刷新」按钮） */
+function renderPracticeTab(tab) {
+  if (tab === 'overview') {
+    if (typeof renderProgressDashboard === 'function') renderProgressDashboard();
+  } else if (tab === 'review') {
+    if (typeof renderPracticeStats === 'function') renderPracticeStats();
+    if (typeof renderAnkiTaskCenter === 'function') renderAnkiTaskCenter();
+  } else if (tab === 'cost') {
+    if (typeof renderCostCenter === 'function') renderCostCenter();
+  }
+}
+
+function refreshPracticeTab() {
+  renderPracticeTab(currentPracticeTab);
+  toastMsg('🔄 已刷新');
+}
+
 function switchMode(mode, force) {
   if (currentMode === mode && !force) return;
   // 自动保存当前模式的作答草稿（不弹窗）
@@ -67,8 +108,8 @@ function switchMode(mode, force) {
   document.getElementById('difficultyCtl').style.display = mode === 'chat' ? '' : 'none';
 
   // 模块初始化
-  if (mode === 'practice') { renderPracticeStats(); }
-  if (mode === 'progress') { renderProgressDashboard(); if (typeof renderCostCenter === 'function') renderCostCenter(); }
+  // practice 现在是「学习中心」：进入时只渲染当前子页（懒加载）
+  if (mode === 'practice') { switchPracticeTab(currentPracticeTab || 'overview', true); }
   if (mode === 'writing') { renderTopicSuggest(); }
   if (mode === 'translation' && !currentTranslation) { nextTranslate(); }
   if (mode === 'translation') { renderTranslateHistory(); trPopulateCategories(); }
@@ -181,8 +222,7 @@ function resetAnalysisForMode(mode) {
     translation: '提交翻译后，这里会显示评分反馈与作答内联标注',
     game: '游戏过程中，这里会显示评分反馈',
     reading: '阅读模式下，可使用「🔤 词典翻译」划词查询',
-    practice: '复习模式：查看薄弱点与卡片统计',
-    progress: '📊 学习者模型仪表盘在主区域，这里不展示内容'
+    practice: '学习中心的内容都在主区域，这里不展示'
   };
   content.innerHTML = '<div class="empty" style="padding:24px 0">' + esc(placeholders[mode] || '') + '</div>';
   content.style.fontSize = '';

@@ -49,7 +49,8 @@ const DYNAMIC_ROUTES = [
   { prefix: '/api/db/', evidence: /\/api\\\/db\\\/\(\\w\+\)|\^\\\/api\\\/db\\\// },
   { prefix: '/api/gaokao/exam/', evidence: /\/api\\\/gaokao\\\/exam\\\// },
   { prefix: '/api/gaokao/question/', evidence: /\/api\\\/gaokao\\\/question\\\// },
-  { prefix: '/api/proxy/tts/', evidence: /\/api\\\/proxy\\\/tts\\\// }
+  { prefix: '/api/proxy/tts/', evidence: /\/api\\\/proxy\\\/tts\\\// },
+  { prefix: '/api/keys/test/', evidence: /\/api\\\/keys\\\/test\\\/\(\\w\+\)/ }
 ];
 
 function routeExists(apiPath) {

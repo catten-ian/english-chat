@@ -1,10 +1,10 @@
 # AI 英语对话教练
 
-一个多角色、多功能的 AI 英语沉浸式对话练习平台。**登录后进入首页，7 大功能模块独立选择**：Chat 对话、Reading 阅读、Practice 复习、Writing 写作、Translation 翻译、Game 猜词（含 Charade/Cloze/Wordle）、Progress 学习者模型仪表盘。支持智能评分反馈、划词翻译、生词本、薄弱点追踪、Anki 集成、语音朗读和多模态作文评分。
+一个多角色、多功能的 AI 英语沉浸式对话练习平台。**登录后进入首页，6 大功能模块独立选择**：Chat 对话、Reading 阅读、学习中心（学习者模型 + 复习 Anki + 成本隐私）、Writing 写作、Translation 翻译、Game 猜词（含 Charade/Cloze/Wordle）。支持智能评分反馈、划词翻译、生词本、薄弱点追踪、Anki 集成、语音朗读和多模态作文评分。
 
 ## 功能概要
 
-- **首页 + 7 大功能模块**：登录后显示首页，按需进入 Chat / Reading / Practice / Writing / Translation / Game（Game 内含 Charade / Cloze / Wordle）/ Progress 任意模块
+- **首页 + 6 大功能模块**：登录后显示首页，按需进入 Chat / Reading / 学习中心（Practice）/ Writing / Translation / Game（Game 内含 Charade / Cloze / Wordle）
 - **AI 角色对话**：4 个内置角色（Alex/Emma/Sakura/Mateo） + 自定义角色（Chat 模块）
 - **智能评分系统**：每次回复自动获取语法、表达、搭配、风格四维度评分
 - **多 Agent 架构**：策略师（风格分析）+ 执行者（联网搜索研究）
@@ -26,13 +26,12 @@
 - **阅读工具栏随文章显示**：未选择文章时隐藏高亮/笔记/朗读等工具栏，选中文章后才出现
 - **首页价值主张**：首页新增产品 tagline 与 CHAT 主推卡片（渐变高亮），突出「实时 AI 反馈 + 内联批注 + Anki 复习 + 多模态评分」
 - **猜词模块**：题库 + AI 出词（英文），用户用英文描述，AI 评分
-- **背景音乐**：顶部导航栏 🎵 按钮，单击播放/暂停、双击下一首、滚轮调音量；设置面板有独立音乐栏目（启用、自动下一首、曲目、音量、上下曲）；把音频放进 `music/` 即可；**多标签页互斥**（同一 profile 开多个页面不会音乐重叠，任一页开始播放会顶掉其它页）
+- **背景音乐**：顶部导航栏 🎵 按钮，单击播放/暂停、双击下一首、滚轮调音量（2% 步进）、**悬停展开迷你播放器**（进度拖动、模式切换、上下曲、音量）；三种播放模式（列表循环/单曲循环/随机）；支持系统媒体键、出错自动跳过、刷新后续播；设置面板有可折叠的独立音乐栏目（启用、自动下一首、播放模式、曲目、可拖动进度、音量 1% 精度滑块+数字输入框、上下曲）；把音频放进 `music/` 即可；**多标签页互斥**（同一 profile 开多个页面不会音乐重叠，任一页开始播放会顶掉其它页）
 - **语音朗读**：ElevenLabs TTS 朗读每条回复，支持自动朗读
 - **多用户登录**：PBKDF2 密码哈希，数据按账户隔离
 - **版本树对话**：编辑消息保留旧版本，可切换查看
 - **数据备份**：SQLite `VACUUM INTO` 快照，浏览器每 2 分钟触发 + **服务端常驻定时备份**（默认每小时）；每份快照生成后做只读完整性校验（`integrity_check`），坏文件直接删除；按 2分钟/5分钟/10分钟/1小时/1天/2天/3天/7天/30天节点分层保留；支持**异盘副本**与**恢复 CLI**（见下）
-- **Progress 学习者仪表盘**：第 7 模块（顶栏 + 首页 + 移动端底栏均有入口）。聚合生词本/薄弱点/对话/翻译历史 + Anki 连续天数：4 张统计卡 + Chat 四维均分（语法/表达/搭配/文采，0–10 横向条）+ 翻译得分趋势（最近 20 次纯 CSS 柱状图）+ 薄弱点分类分布 + 最近 5 条对话。纯本地聚合，无外部依赖
-- **成本与隐私中心**（Progress 页下方）：外部 API 用量记账（MiniMax token / ElevenLabs 字符 / 联网次数），按天、按用途、按模型聚合 + 可编辑单价的花费估算；隐私面板列清「哪些数据发给了谁、本地存在哪」，并提供「清除用量记录」。**记账只存数字与元信息，绝不存 prompt、回复、音频或搜索词**（有测试断言 `usage_log` 不含任何文本列）
+- **学习中心**（原 Practice + Progress 合并，三个子页懒加载）：**📈 学习概览**——聚合生词/薄弱点/对话/翻译历史 + Anki 连续天数：统计卡 + Chat 四维均分（0–10 横向条）+ 翻译得分趋势（纯 CSS 柱状图）+ 薄弱点分类分布 + 最近对话；**🎯 复习与 Anki**——本地薄弱点/待复习/生词统计卡 + Anki 牌组统计（近 14 天柱状图、未连接给引导提示）+ 网页复习/一键同步入口 + Anki 任务队列；**💰 成本与隐私**——外部 API 用量记账（MiniMax token / ElevenLabs 字符 / 联网次数）按天/用途/模型聚合 + 可编辑单价估算 + 隐私面板（数据发给了谁/本地存了什么）+ 清除用量。**记账只存数字与元信息，绝不存 prompt、回复、音频或搜索词**（有测试断言 `usage_log` 不含任何文本列）
 
 ## 技术栈
 
@@ -85,6 +84,7 @@ npm run check           # 语法检查（server.js + server/**/*.js + js/**/*.js
 | `test/logger.test.js` | request id 格式、JSONL 落盘（级别/消息/元数据）、Error 序列化、debug 级过滤、大小轮转与保留数、真实进程请求日志（id/路径/状态/耗时） |
 | `test/anki-tasks.test.js` | Anki 任务队列：入队与持久化、Anki 离线保 pending（不消耗重试）、重试上限进 dead、quiz 薄弱点已删/AI 失败、未知类型不崩、手动重试/删除/清理、容量裁剪保留 pending |
 | `test/usage.test.js` | 用量记账：schema v4 建表、**usage_log 无任何文本列（隐私约束）**、totalTokens 兜底、负数规整、未登录不写库、非流式/SSE usage 解析（含截断流返回 null）、按 provider/kind/model 聚合、账户隔离、days 参数规整、`/api/usage` 与 `/api/privacy` 端到端（含密钥不外泄断言） |
+| `test/keys.test.js` | 服务与密钥：掩码规则（长 key 前4后4/短 key 全遮）、`.env` 原子写入（原位替换/追加/新建文件，保留注释）、`GET /api/keys/status` 只回掩码**不含明文**、rotate 参数校验、rotate 端到端（写入 `AI_EN_ENV_FILE` 隔离文件 + 运行时立即生效）、rotate-base URL 校验、test 端点未配置时 ok:false |
 | `test/render-security.test.js` | `renderMD()` XSS corpus（fenced code / 正文 / inline code / 链接 / 数学）、Cloze 句子转义 |
 | `test/api-contract.test.js` | 前端调用的每个 `/api/*` 都有后端路由、Anki action 与模型白名单前后端一致、user_data key 一致、无残留的旧 Python 入口引用、前端配置不含 key |
 | `test/app-split.test.js` | app.js 拆分完整性：切片齐全/命名规范、index.html 顺序加载、无重复顶层声明、拼接可解析、关键函数齐全 |
@@ -100,6 +100,16 @@ npm run check           # 语法检查（server.js + server/**/*.js + js/**/*.js
 可用 `scripts/manage_users.py` 增删改查用户（从工作区根目录运行 `python scripts\manage_users.py ...`，即 `article-memorizing/` 下）。
 
 > 首次使用请尽快修改默认账户密码：设置面板 → 「🔑 修改密码」。
+
+### 服务与密钥（设置面板）
+
+设置面板新增「🔌 服务与密钥」分区，不用手动改 `.env` 再重启：
+
+- **MiniMax**（对话 / 评分 / 出题 / 联网搜索）：粘贴新 key → 保存即生效（进程内热更新，无需重启）；可修改上游地址（走反代/镜像时用）
+- **ElevenLabs**（语音朗读 / 卡片发音）：同上
+- **检测按钮**：用当前密钥对上游发一次最小成本请求（MiniMax `max_tokens=1`、ElevenLabs 只读账户端点），返回鉴权是否通过
+- **安全边界**：密钥只存在服务端 `.env`（gitignored），任何接口只返回掩码（前4…后4），**永不明文回传**；写入用原子替换（临时文件 + rename），失败不破坏原文件；`AI_EN_ENV_FILE` 环境变量可重定向 .env 位置（测试/多实例用）
+- 注意：若进程环境变量里也设置了同名 key，它的优先级高于 `.env`（面板会提示）
 
 ## 项目结构
 

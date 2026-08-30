@@ -22,6 +22,7 @@ const userDataRoutes = require('./routes/user-data');
 const gaokaoRoutes = require('./routes/gaokao');
 const backupRoutes = require('./routes/backup');
 const usageRoutes = require('./routes/usage');
+const keysRoutes = require('./routes/keys');
 const proxyRoutes = require('./routes/proxy');
 const { serveStatic } = require('./routes/static');
 
@@ -116,6 +117,13 @@ const server = http.createServer(async (req, res) => {
     if (method === 'GET' && pathname === '/api/usage') return usageRoutes.usageGet(req, res);
     if (method === 'DELETE' && pathname === '/api/usage') return usageRoutes.usageClear(req, res);
     if (method === 'GET' && pathname === '/api/privacy') return usageRoutes.privacyGet(req, res);
+
+    // 服务与密钥（设置面板；密钥只回传掩码）
+    if (method === 'GET' && pathname === '/api/keys/status') return keysRoutes.keysStatus(req, res);
+    if (method === 'POST' && pathname === '/api/keys/rotate') return await keysRoutes.keysRotate(req, res);
+    if (method === 'POST' && pathname === '/api/keys/rotate-base') return await keysRoutes.keysRotateBase(req, res);
+    const keyTestMatch = pathname.match(/^\/api\/keys\/test\/(\w+)$/);
+    if (method === 'POST' && keyTestMatch) return await keysRoutes.keysTest(req, res, keyTestMatch[1]);
 
     // MiniMax chat（非流式）
     if (method === 'POST' && pathname === '/api/proxy/chat') return await proxyRoutes.chat(req, res);
@@ -216,7 +224,7 @@ function main() {
   server.listen(PORT, '127.0.0.1', () => {
     logger.info(`Server: http://localhost:${PORT}  (127.0.0.1 only)`);
     logger.info(`DB: ${require('./config').DB_PATH}  (schema v${require('./migrations').SCHEMA_VERSION})`);
-    logger.info(`MiniMax key: ${MINIMAX_KEY ? 'set' : 'MISSING'} | ElevenLabs key: ${ELEVEN_KEY ? 'set' : 'MISSING'}`);
+    logger.info(`MiniMax key: ${MINIMAX_KEY() ? 'set' : 'MISSING'} | ElevenLabs key: ${ELEVEN_KEY() ? 'set' : 'MISSING'}`);
     logger.info('Press Ctrl+C to stop');
   });
   server.on('error', (e) => { logger.error('Server error: ' + e.message, { err: e }); process.exit(1); });

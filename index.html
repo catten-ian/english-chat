@@ -13,7 +13,7 @@
 <link rel="icon" type="image/jpeg" href="img/icons/favicon.jpg?v=20260829a">
 <link rel="apple-touch-icon" href="img/icons/favicon.jpg?v=20260829a">
 
-<link rel="stylesheet" href="css/style.css?v=20260828b">
+<link rel="stylesheet" href="css/style.css?v=20260830a">
 
 <link rel="stylesheet" href="vendor/katex/katex.min.css?v=20260828b">
 
@@ -44,15 +44,13 @@
 
       <button class="mode-btn" data-mode="reading" data-action="switch-mode">📖 Reading</button>
 
-      <button class="mode-btn" data-mode="practice" data-action="switch-mode">📝 Practice</button>
+      <button class="mode-btn" data-mode="practice" data-action="switch-mode">📊 学习中心</button>
 
       <button class="mode-btn" data-mode="writing" data-action="switch-mode">✍️ Writing</button>
 
       <button class="mode-btn" data-mode="translation" data-action="switch-mode">🌐 Translation</button>
 
       <button class="mode-btn" data-mode="game" data-action="switch-mode">🎮 Game</button>
-
-      <button class="mode-btn" data-mode="progress" data-action="switch-mode">📊 Progress</button>
 
     </div>
 
@@ -78,7 +76,7 @@
 
     <button class="toggle-btn" id="autoReadToggle" data-action="toggle-auto-read" title="自动朗读回复">🔊 Auto</button>
 
-    <button class="music-btn" id="musicToggle" data-action="toggle-music" title="背景音乐：单击播放/暂停，双击下一首，滚轮调音量">🎵<span class="music-bubble" id="musicBubble"></span></button>
+    <button class="music-btn" id="musicToggle" data-action="toggle-music" title="背景音乐：单击播放/暂停，双击下一首，滚轮调音量，悬停展开播放器">🎵<span class="music-bubble" id="musicBubble"></span></button>
 
     <button class="new-topic-btn" id="newConvBtn" data-action="prompt-new-conv">🔄 新对话</button>
 
@@ -147,9 +145,9 @@
 
         <div class="home-ico"><img class="home-ico-img" src="img/icons/practice.jpg" alt=""></div>
 
-        <div class="home-name">PRACTICE</div>
+        <div class="home-name">学习中心</div>
 
-        <div class="home-desc">Review weak points with smart flashcards generated from your chats.</div>
+        <div class="home-desc">学习者模型 · 薄弱点复习与 Anki 同步 · 用量与隐私</div>
 
       </button>
 
@@ -180,16 +178,6 @@
         <div class="home-name">GAME</div>
 
         <div class="home-desc">Charade (AI 猜词) · Cloze (11选10) · Wordle (猜单词).</div>
-
-      </button>
-
-      <button class="home-card" data-mode="progress" data-action="switch-mode" type="button">
-
-        <div class="home-ico">📊</div>
-
-        <div class="home-name">PROGRESS</div>
-
-        <div class="home-desc">Your learner model: vocab, weak points, scores and trends.</div>
 
       </button>
 
@@ -357,39 +345,57 @@
 
 
 
-    <!-- Practice -->
+    <!-- Practice：学习中心（学习概览 / 复习与 Anki / 成本与隐私 三个子页） -->
 
-    <div class="module-area" id="practiceArea" style="display:none;flex-direction:column;height:100%;padding:24px;overflow-y:auto">
+    <div class="module-area" id="practiceArea" style="display:none">
 
-      <h2 style="margin:0 0 8px">📝 Practice</h2>
-
-      <p style="color:var(--text2);margin:0 0 16px;font-size:14px">Review weak points and flashcards generated from your conversations.</p>
-
-      <div id="practiceStats" class="practice-stats" style="margin-bottom:16px"></div>
-
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-        <button class="send-btn" data-action="start-web-review" style="padding:10px 24px;font-size:15px">✅ 开始网页复习</button>
-        <button class="a-btn primary" data-action="push-all-anki" style="padding:10px 18px;font-size:14px">📚 一键同步到 Anki</button>
+      <div class="pm-head">
+        <div class="pm-head-text">
+          <h2>📊 学习中心</h2>
+          <p>学习者模型、Anki 复习与外部 API 成本，都在这里</p>
+        </div>
+        <button class="a-btn small" data-action="practice-refresh" title="重新聚合数据">🔄 刷新</button>
       </div>
-      <div style="margin-top:8px;font-size:13px;color:var(--text2)">Open Anki to review your flashcards. The app automatically creates cards from your weak points.</div>
-      <div style="margin-top:4px;font-size:12px;color:var(--text3)">「一键同步」把生词本所有词 + 薄弱点 AI 出题，全部推到对应 Anki 卡组</div>
 
-      <div id="ankiTaskCenter" class="anki-task-center" style="margin-top:20px"></div>
+      <div class="pm-tabs" role="tablist" aria-label="学习中心子页">
+        <button class="pm-tab active" data-ptab="overview" data-action="switch-practice-tab" role="tab" aria-selected="true">📈 学习概览</button>
+        <button class="pm-tab" data-ptab="review" data-action="switch-practice-tab" role="tab" aria-selected="false">🎯 复习与 Anki</button>
+        <button class="pm-tab" data-ptab="cost" data-action="switch-practice-tab" role="tab" aria-selected="false">💰 成本与隐私</button>
+      </div>
 
-    </div>
+      <div class="pm-body">
 
+        <!-- 子页 1：学习概览（学习者模型仪表盘） -->
+        <section class="pm-pane" id="pmPaneOverview" role="tabpanel">
+          <div id="progressDashboard"></div>
+        </section>
 
+        <!-- 子页 2：复习与 Anki -->
+        <section class="pm-pane" id="pmPaneReview" role="tabpanel" style="display:none">
 
-    <!-- Progress（学习者模型仪表盘） -->
-    <div class="module-area" id="progressArea" style="display:none;flex-direction:column;height:100%;padding:24px;overflow-y:auto">
+          <div id="practiceStats"></div>
 
-      <h2 style="margin:0 0 8px">📊 Progress</h2>
+          <div class="pm-actions">
+            <button class="a-btn primary" data-action="start-web-review">✅ 开始网页复习</button>
+            <button class="a-btn" data-action="push-all-anki">📚 一键同步到 Anki</button>
+            <button class="a-btn ghost" data-action="anki-sync">🔄 拉取复习数据</button>
+            <button class="a-btn ghost" data-action="toggle-anki">⚙️ 切换自动添加</button>
+          </div>
+          <div class="pm-hint">
+            「一键同步」把生词本所有词 + 薄弱点 AI 出题，全部推到对应 Anki 卡组。
+            推送任务会进入下方队列，Anki 没开也不会丢。
+          </div>
 
-      <p style="color:var(--text2);margin:0 0 16px;font-size:14px">Your learner model: vocabulary, weak points, chat scores and translation trends.</p>
+          <div id="ankiTaskCenter" class="anki-task-center"></div>
 
-      <div id="progressDashboard"></div>
+        </section>
 
-      <div id="costDashboard" class="cost-center" style="margin-top:24px"></div>
+        <!-- 子页 3：成本与隐私 -->
+        <section class="pm-pane" id="pmPaneCost" role="tabpanel" style="display:none">
+          <div id="costDashboard" class="cost-center"></div>
+        </section>
+
+      </div>
 
     </div>
 
@@ -748,7 +754,7 @@
 
     <div class="right-tab-content" id="tab-dict" style="display:none">
 
-      <div id="dictHistory" class="dict-history" style="margin-bottom:6px;max-height:100px;overflow-y:auto;font-size:11px"></div>
+      <div id="dictHistory" class="dict-history"></div>
 
       <div class="dict-input-wrap">
 
@@ -858,14 +864,14 @@
 <script src="js/app/07-chat-actions.js?v=20260828f"></script>
 <script src="js/app/08-selection.js?v=20260828f"></script>
 <script src="js/app/09-gaokao.js?v=20260828f"></script>
-<script src="js/app/10-dictionary.js?v=20260828f"></script>
+<script src="js/app/10-dictionary.js?v=20260830b"></script>
 <script src="js/app/11-ui-panels.js?v=20260828f"></script>
-<script src="js/app/12-settings.js?v=20260828f"></script>
+<script src="js/app/12-settings.js?v=20260830c"></script>
 <script src="js/app/13-banks.js?v=20260828f"></script>
-<script src="js/app/14-music.js?v=20260828f"></script>
-<script src="js/app/15-modes.js?v=20260830a"></script>
+<script src="js/app/14-music.js?v=20260830b"></script>
+<script src="js/app/15-modes.js?v=20260830b"></script>
 <script src="js/app/16-reading.js?v=20260828f"></script>
-<script src="js/app/17-practice.js?v=20260828f"></script>
+<script src="js/app/17-practice.js?v=20260830b"></script>
 <script src="js/app/18-games.js?v=20260828f"></script>
 <script src="js/app/19-init.js?v=20260830a"></script>
 <script src="js/app/20-progress.js?v=20260830a"></script>
@@ -944,7 +950,7 @@
 <nav class="bottom-nav" id="bottomNav" aria-label="功能模块切换">
   <button class="mode-btn bn-tab" data-mode="chat" data-action="switch-mode" type="button"><span class="bn-ico">💬</span><span class="bn-label">Chat</span></button>
   <button class="mode-btn bn-tab" data-mode="reading" data-action="switch-mode" type="button"><span class="bn-ico">📖</span><span class="bn-label">Reading</span></button>
-  <button class="mode-btn bn-tab" data-mode="practice" data-action="switch-mode" type="button"><span class="bn-ico">📝</span><span class="bn-label">Practice</span></button>
+  <button class="mode-btn bn-tab" data-mode="practice" data-action="switch-mode" type="button"><span class="bn-ico">📊</span><span class="bn-label">学习</span></button>
   <button class="mode-btn bn-tab" data-mode="writing" data-action="switch-mode" type="button"><span class="bn-ico">✍️</span><span class="bn-label">Writing</span></button>
   <button class="mode-btn bn-tab" data-mode="translation" data-action="switch-mode" type="button"><span class="bn-ico">🌐</span><span class="bn-label">翻译</span></button>
   <button class="mode-btn bn-tab" data-mode="game" data-action="switch-mode" type="button"><span class="bn-ico">🎮</span><span class="bn-label">Game</span></button>

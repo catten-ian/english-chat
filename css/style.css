@@ -1349,6 +1349,45 @@ button.a-btn {
 }
  .music-bubble.show { opacity: 1; transform: translateX(-50%) translateY(2px); }
 
+/* ============ èƒŒæ™¯éŸ³ä¹è¿·ä½ æ’­æ”¾å™¨ï¼ˆæ‚¬åœ ğŸµ æŒ‰é’®å±•å¼€ï¼‰ ============ */
+.music-pop {
+  position: fixed; z-index: 10020; width: 258px;
+  background: #0f172a; color: #e2e8f0; border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px; padding: 12px 14px;
+  box-shadow: 0 10px 32px rgba(0,0,0,0.4);
+  opacity: 0; transform: translateY(-4px); pointer-events: none;
+  transition: opacity .16s ease, transform .16s ease;
+  font-size: 12px; line-height: 1.4;
+}
+.music-pop.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.music-pop-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.music-pop-title #musicPopName {
+  font-weight: 600; color: #fff; font-size: 13px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.music-pop-idx { color: #94a3b8; font-size: 11px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.music-pop-seek { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.music-pop-seek input[type=range] { flex: 1; accent-color: #10b981; cursor: pointer; min-width: 0; }
+.music-pop-seek span { color: #94a3b8; font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.music-pop-ctrls { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 10px; }
+.music-pop-ctrls button {
+  border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: #fff;
+  border-radius: 8px; padding: 6px 10px; font-size: 13px; cursor: pointer; line-height: 1;
+  min-width: 34px; font-family: inherit; transition: background .15s;
+}
+.music-pop-ctrls button:hover { background: rgba(255,255,255,0.22); }
+.music-pop-ctrls #musicPopMode { font-size: 11px; min-width: 88px; padding: 6px 8px; }
+.music-pop-ctrls #musicPopPlay {
+  background: rgba(16,185,129,0.35); border-color: rgba(16,185,129,0.6);
+  min-width: 46px; font-size: 14px;
+}
+.music-pop-vol { display: flex; align-items: center; gap: 8px; color: #94a3b8; }
+.music-pop-vol input[type=range] { flex: 1; accent-color: #10b981; cursor: pointer; min-width: 0; }
+.music-pop-status {
+  margin-top: 8px; font-size: 11px; color: #fbbf24; min-height: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 .tr-q-hover:hover { border-color: var(--primary) !important; }
 
 
@@ -1435,7 +1474,7 @@ button.a-btn {
 }
 
 
-/* ==================== Progress Ñ§Ï°ÕßÄ£ĞÍÒÇ±íÅÌ ==================== */
+/* ==================== Progress Ñ§Ï°ï¿½ï¿½Ä£ï¿½ï¿½ï¿½Ç±ï¿½ï¿½ï¿½ ==================== */
 .pg-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .pg-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
 .pg-stat-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
@@ -1470,7 +1509,7 @@ button.a-btn {
 }
 
 
-/* ==================== Anki ÈÎÎñÖĞĞÄ ==================== */
+/* ==================== Anki ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ==================== */
 .anki-task-center { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--surface); }
 .at-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .at-title { font-size: 14px; font-weight: 700; color: var(--text); }
@@ -1504,7 +1543,7 @@ button.a-btn {
 }
 
 
-/* ==================== ³É±¾ÓëÒşË½ÖĞĞÄ ==================== */
+/* ==================== ï¿½É±ï¿½ï¿½ï¿½ï¿½ï¿½Ë½ï¿½ï¿½ï¿½ï¿½ ==================== */
 .cost-center { }
 .cc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
 .cc-title { font-size: 15px; font-weight: 700; color: var(--text); }
@@ -1553,3 +1592,78 @@ button.a-btn {
   .cc-row-label { max-width: 40%; }
   .cc-table { font-size: 11px; }
 }
+
+
+/* ==================== Ñ§Ï°ï¿½ï¿½ï¿½Ä£ï¿½Practice ï¿½Ï²ï¿½ Progressï¿½ï¿½ ==================== */
+#practiceArea { padding: 20px 24px; overflow-y: auto; }
+.pm-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.pm-head-text h2 { margin: 0 0 4px; font-size: 20px; }
+.pm-head-text p { margin: 0; color: var(--text2); font-size: 13px; }
+.pm-head .a-btn { margin-left: auto; flex-shrink: 0; }
+
+.pm-tabs { display: flex; gap: 4px; padding: 4px; background: var(--bg); border-radius: 12px; margin-bottom: 16px; width: fit-content; max-width: 100%; overflow-x: auto; }
+.pm-tab {
+  border: none; background: transparent; padding: 7px 16px; border-radius: 9px;
+  font-size: 13px; font-weight: 600; color: var(--text2); cursor: pointer; transition: all .15s; white-space: nowrap; font-family: inherit;
+}
+.pm-tab:hover { color: var(--text); background: rgba(0,0,0,0.04); }
+.pm-tab.active { background: var(--surface); color: var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+.pm-body { min-height: 0; }
+
+/* ï¿½ï¿½Ï°ï¿½ï¿½ Anki ï¿½ï¿½Ò³ */
+.pm-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.pm-hint { font-size: 12px; color: var(--text3); line-height: 1.7; margin-bottom: 16px; }
+
+.pm-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.pm-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.pm-card-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+.pm-card-value { font-size: 26px; font-weight: 800; color: var(--text); line-height: 1.2; }
+.pm-card-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+.pm-deck { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.pm-deck-loading { font-size: 12px; color: var(--text3); text-align: center; padding: 12px 0; }
+.pm-deck-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.pm-deck-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.pm-deck-meta { font-size: 11px; color: var(--text3); }
+.pm-deck-off { text-align: left; }
+.pm-deck-off-title { font-size: 13px; font-weight: 700; color: var(--text2); margin-bottom: 6px; }
+.pm-deck-off-body { font-size: 12px; color: var(--text3); line-height: 1.7; margin-bottom: 10px; }
+
+.pm-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.pm-chip { font-size: 11px; padding: 3px 10px; border-radius: 10px; font-weight: 600; }
+.pm-chip.due { background: #e0f2fe; color: #0369a1; }
+.pm-chip.new { background: #fef3c7; color: #92400e; }
+.pm-chip.learn { background: #fce7f3; color: #9d174d; }
+
+.pm-bars { display: flex; align-items: flex-end; gap: 3px; height: 76px; padding-top: 4px; }
+.pm-bar { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; flex: 1; min-width: 0; }
+.pm-bar div { width: 100%; max-width: 24px; background: var(--primary); border-radius: 3px 3px 0 0; min-height: 3px; }
+.pm-bar span { font-size: 9px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+@media (max-width: 767px) {
+  #practiceArea { padding: 14px 12px; }
+  .pm-tabs { width: 100%; }
+  .pm-tab { flex: 1; padding: 7px 8px; font-size: 12px; }
+}
+
+
+/* ==================== ï¿½Êµï¿½ï¿½Ñ¯ï¿½ï¿½Ê·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â²ï¿½Ñ¯ï¿½ï¿½ ==================== */
+.dict-history { margin-bottom: 6px; max-height: 168px; overflow-y: auto; font-size: 12px; }
+.dh-head {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+  font-size: 10px; color: var(--text2);
+}
+.dh-sub { flex: 1; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dh-clear { cursor: pointer; color: var(--text3); flex-shrink: 0; }
+.dh-clear:hover { color: var(--red); }
+.dh-list { display: flex; flex-direction: column; gap: 2px; }
+.dh-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px; border-radius: 6px; cursor: pointer; transition: background .12s;
+  border: 1px solid transparent;
+}
+.dh-item:hover { background: var(--bg); border-color: var(--border); }
+.dh-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: none; color: var(--text); }
+.dh-fb-badge { flex-shrink: 0; font-size: 10px; }
+.dh-time { flex-shrink: 0; color: var(--text3); font-size: 10px; }

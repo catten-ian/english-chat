@@ -10,7 +10,7 @@ const { MINIMAX_KEY, ELEVEN_KEY } = require('../config');
 const { ankiCache } = require('../services/anki');
 
 function healthGet(req, res) {
-  sendJson(res, 200, { status: 'ok', minimax: !!MINIMAX_KEY, eleven: !!ELEVEN_KEY }, req);
+  sendJson(res, 200, { status: 'ok', minimax: !!MINIMAX_KEY(), eleven: !!ELEVEN_KEY() }, req);
 }
 
 function healthAnki(req, res) {

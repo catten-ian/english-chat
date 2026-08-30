@@ -138,13 +138,23 @@ function openSettings() {
         <input type="checkbox" id="setMusicAutoNext" ${isMusicAutoNext ? 'checked' : ''} style="width:16px;height:16px"> 播放结束自动切换下一首
       </label>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:12px;white-space:nowrap">播放模式</span>
+        <button type="button" class="a-btn small" id="setMusicModeBtn" data-action="music-cycle-mode" style="flex:1" title="循环切换：列表循环 / 单曲循环 / 随机播放">${musicModeLabel()}</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <span style="font-size:12px;white-space:nowrap">当前曲目</span>
         <select id="setMusicTrack" data-action="settings-music-select" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;outline:none">${musicSettingsOptions()}</select>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span id="setMusicTime" style="font-size:11px;color:var(--text2);width:34px;text-align:right;font-variant-numeric:tabular-nums">0:00</span>
+        <input type="range" id="setMusicSeek" min="0" max="100" step="0.1" value="0" data-action="music-seek" style="flex:1;accent-color:var(--primary)" aria-label="播放进度" title="拖动跳转">
+        <span id="setMusicDur" style="font-size:11px;color:var(--text2);width:34px;font-variant-numeric:tabular-nums">--:--</span>
+      </div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <span style="font-size:12px;white-space:nowrap">音量</span>
-        <input type="range" id="setMusicVol" min="0" max="100" step="5" value="${musicVol}" data-action="set-music-vol" style="flex:1;accent-color:var(--primary)">
-        <span id="setMusicVolValue" style="width:36px;text-align:right;font-size:12px;color:var(--text2)">${musicVol}%</span>
+        <input type="range" id="setMusicVol" min="0" max="100" step="1" value="${musicVol}" data-action="set-music-vol" style="flex:1;accent-color:var(--primary)" aria-label="音量滑块">
+        <input type="number" id="setMusicVolNum" min="0" max="100" step="1" value="${musicVol}" data-action="set-music-vol" style="width:48px;box-sizing:border-box;padding:4px 4px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none;text-align:center;font-variant-numeric:tabular-nums" aria-label="音量百分比（0-100）">
+        <span style="font-size:12px;color:var(--text2)">%</span>
       </div>
       <div style="border-top:1px dashed var(--border);margin:2px 0 10px;padding-top:10px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-bottom:8px">
@@ -158,10 +168,11 @@ function openSettings() {
         <div style="font-size:11px;color:var(--text3)">朗读期间背景音乐压到该音量，结束后自动恢复；0 = 朗读时完全暂停音乐。</div>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="a-btn small" data-action="music-prev">⏮ 上一首</button>
-        <button class="a-btn primary small" data-action="settings-music-toggle">播放 / 暂停</button>
-        <button class="a-btn small" data-action="music-next">下一首 ⏭</button>
+        <button type="button" class="a-btn small" data-action="music-prev">⏮ 上一首</button>
+        <button type="button" class="a-btn primary small" id="setMusicPlayBtn" data-action="settings-music-toggle">${(typeof musicAudio !== 'undefined' && musicAudio && !musicAudio.paused) ? '⏸ 暂停' : '▶ 播放'}</button>
+        <button type="button" class="a-btn small" data-action="music-next">下一首 ⏭</button>
       </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.6">顶部 🎵 按钮：单击播放/暂停，双击下一首，滚轮调音量，<b>悬停展开迷你播放器</b>（可拖动进度）。</div>
     </div>
 
     <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
@@ -266,6 +277,43 @@ function openSettings() {
       ${strategistHTML}
     </div>
 
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" id="keysSection">
+      <div style="font-size:14px;font-weight:600;margin-bottom:6px">🔌 服务与密钥</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">密钥保存在服务端 <code>.env</code>（gitignored），页面只显示掩码，永不明文回传。保存后立即生效，无需重启。</div>
+      <div id="keysStatusBox" style="font-size:12px;color:var(--text2)">⏳ 正在读取密钥状态…</div>
+      <div id="keysEditor" style="display:none;margin-top:10px">
+        <div style="margin-bottom:10px">
+          <div style="font-size:12px;margin-bottom:4px">MiniMax（对话 / 评分 / 出题 / 联网搜索）</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <input id="setKeyMinimax" type="password" placeholder="粘贴新 key（留空不修改）" autocomplete="new-password"
+              style="flex:1;min-width:180px;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;outline:none">
+            <button class="a-btn small" data-action="keys-rotate" data-arg1="minimax">保存</button>
+            <button class="a-btn small ghost" data-action="keys-test" data-arg1="minimax">检测</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">上游地址：<span id="setMinimaxBaseTxt"></span>
+            <span data-action="keys-edit-base" style="color:var(--primary);cursor:pointer">修改</span></div>
+          <div id="setMinimaxBaseEdit" style="display:none;margin-top:6px">
+            <div style="display:flex;gap:6px">
+              <input id="setMinimaxBase" type="text" placeholder="https://api.minimaxi.com"
+                style="flex:1;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;outline:none">
+              <button class="a-btn small" data-action="keys-save-base">保存</button>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px">一般不用改；走反代/镜像时才需要。</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;margin-bottom:4px">ElevenLabs（语音朗读 / 卡片发音）</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <input id="setKeyEleven" type="password" placeholder="粘贴新 key（留空不修改）" autocomplete="new-password"
+              style="flex:1;min-width:180px;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;outline:none">
+            <button class="a-btn small" data-action="keys-rotate" data-arg1="eleven">保存</button>
+            <button class="a-btn small ghost" data-action="keys-test" data-arg1="eleven">检测</button>
+          </div>
+        </div>
+        <div id="keysMsg" style="font-size:12px;margin-top:8px;min-height:16px;line-height:1.6"></div>
+      </div>
+    </div>
+
     <div style="padding:8px 0;font-size:14px;display:flex;align-items:center;gap:10px;margin-bottom:8px">
       <span>📚 AnkiConnect</span>
       <button data-action="check-anki-connect" style="padding:5px 14px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:12px;cursor:pointer">🔄 检测连接</button>
@@ -306,6 +354,8 @@ function openSettings() {
   }).catch(() => {
     document.getElementById('backendStatus').textContent = '❌ 离线 (需运行 node server.js)';
   });
+  // 服务与密钥：读取当前状态（掩码 + 来源）
+  loadKeysStatus();
   // Auto-check AnkiConnect on settings open
   checkAnkiConnect(false);
   // Anki master toggle → 显示/隐藏细分选项
@@ -350,6 +400,7 @@ function restructureSettingsModal(modal) {
       { title: '🎭 角色卡', matchText: '新建角色' },
       { title: '🌐 翻译规则', matchText: '翻译规则版本' },
       { title: '💬 聊天偏好', matchText: '自动添加到 Anki' },
+      { title: '🎵 背景音乐', matchText: '背景音乐' },
       { title: '🃏 薄弱点出题策略', matchText: '薄弱点出题策略' },
       { title: '🎯 主题与长度', matchText: '你想谈论的主题' },
       { title: '🤖 策略师指令', matchText: '策略师指令' },
@@ -448,6 +499,106 @@ async function ankiProbeAndEnsureDeck() {
   return ankiModelCache;
 }
 
+/* ---------- 服务与密钥（设置面板「🔌 服务与密钥」） ----------
+   后端 /api/keys/*：状态只回掩码；rotate 写 .env 并立即生效。 */
+const SOURCE_LABELS = { env: '进程环境变量', file: '.env 文件', none: '未配置' };
+
+async function loadKeysStatus() {
+  const box = document.getElementById('keysStatusBox');
+  const editor = document.getElementById('keysEditor');
+  if (!box) return;
+  try {
+    const r = await fetch(BACKEND_URL + '/api/keys/status', { headers: authHeaders() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const row = (name, s) =>
+      `<div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+        <span style="width:78px;flex-shrink:0">${name}</span>
+        <span>${s.configured ? '✅ 已配置' : '❌ 未配置'}</span>
+        <span style="color:var(--text2);font-variant-numeric:tabular-nums">${esc(s.masked || '—')}</span>
+        <span style="font-size:11px;color:var(--text3)">来源: ${esc(SOURCE_LABELS[s.source] || s.source)}</span>
+      </div>`;
+    box.innerHTML = row('MiniMax', d.minimax) + row('ElevenLabs', d.eleven);
+    const baseTxt = document.getElementById('setMinimaxBaseTxt');
+    if (baseTxt) baseTxt.textContent = d.minimax.base || 'https://api.minimaxi.com';
+    if (editor) editor.style.display = '';
+  } catch (e) {
+    box.innerHTML = '❌ 无法读取密钥状态（后端离线？）';
+    if (editor) editor.style.display = 'none';
+  }
+}
+
+async function rotateKey(service) {
+  const msg = document.getElementById('keysMsg');
+  const input = document.getElementById(service === 'minimax' ? 'setKeyMinimax' : 'setKeyEleven');
+  if (!input || !msg) return;
+  const key = input.value.trim();
+  if (!key) { msg.textContent = '⚠️ 请先粘贴新 key（留空表示不修改）'; msg.style.color = 'var(--amber)'; return; }
+  msg.textContent = '⏳ 保存中…'; msg.style.color = 'var(--text2)';
+  try {
+    const r = await fetch(BACKEND_URL + '/api/keys/rotate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ service, key })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    input.value = '';
+    msg.innerHTML = '✅ 已保存并立即生效（新掩码 ' + esc(d.masked) + '）' +
+      (d.sourceWarning ? '<br><span style="color:var(--amber)">' + esc(d.sourceWarning) + '</span>' : '');
+    msg.style.color = 'var(--green)';
+    loadKeysStatus();
+  } catch (e) {
+    msg.textContent = '❌ 保存失败: ' + (e.message || e);
+    msg.style.color = 'var(--red)';
+  }
+}
+
+async function testKeyConn(service) {
+  const msg = document.getElementById('keysMsg');
+  if (!msg) return;
+  msg.textContent = '⏳ 正在用当前密钥请求上游（最小成本）…';
+  msg.style.color = 'var(--text2)';
+  try {
+    const r = await fetch(BACKEND_URL + '/api/keys/test/' + service, { method: 'POST', headers: authHeaders() });
+    const d = await r.json();
+    msg.textContent = (d.ok ? '✅ ' : '❌ ') + (d.detail || '');
+    msg.style.color = d.ok ? 'var(--green)' : 'var(--red)';
+  } catch (e) {
+    msg.textContent = '❌ 检测失败: ' + (e.message || e);
+    msg.style.color = 'var(--red)';
+  }
+}
+
+function toggleBaseEditor() {
+  const el = document.getElementById('setMinimaxBaseEdit');
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function saveMinimaxBase() {
+  const msg = document.getElementById('keysMsg');
+  const input = document.getElementById('setMinimaxBase');
+  if (!input || !msg) return;
+  const base = input.value.trim();
+  if (!base) { msg.textContent = '⚠️ 请输入上游地址'; msg.style.color = 'var(--amber)'; return; }
+  try {
+    const r = await fetch(BACKEND_URL + '/api/keys/rotate-base', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ base })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    msg.textContent = '✅ 上游地址已更新: ' + d.base;
+    msg.style.color = 'var(--green)';
+    toggleBaseEditor();
+    loadKeysStatus();
+  } catch (e) {
+    msg.textContent = '❌ 保存失败: ' + (e.message || e);
+    msg.style.color = 'var(--red)';
+  }
+}
+
 async function checkAnkiConnect(manual) {
   const statusEl = document.getElementById('ankiStatus');
   const reconnectBtn = document.getElementById('reconnectAnkiBtn');
@@ -475,8 +626,7 @@ async function checkAnkiConnect(manual) {
 }
 
 async function reconnectAnkiConnect() {
-  ankiModelCache = null; ankiDeckEnsured = false;   // 强制重新探测
-  const ok = await checkAnkiConnect(true);
+  ankiModelCache = null; ankiDeckEnsured = false;   // 强制重新探测  const ok = await checkAnkiConnect(true);
   if (!ok) toastMsg('请确认 Anki 已运行、AnkiConnect 插件已安装（默认 8765 端口），然后重新点击「重连」。');
 }
 
@@ -586,6 +736,7 @@ function saveSettings() {
     executorEnabled: executor,
     musicEnabled: musicEnabledSetting,
     musicAutoNext: musicAutoNextSetting,
+    musicMode: musicMode(),
     musicVolume: musicVolumeSetting,
     musicTrack: Number.isInteger(musicTrackSetting) ? musicTrackSetting : 0,
     ttsDuckMusic: ttsDuckSetting,

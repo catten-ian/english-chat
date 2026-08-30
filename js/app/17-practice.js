@@ -4,18 +4,96 @@
    注意：这些脚本按 index.html 中的顺序加载，顺序不可调整
    （存在顶层 IIFE / 事件绑定 / const 声明的执行顺序依赖）。
 ============================================================ */
-// ---- Practice ----
-function renderPracticeStats() {
+// ---- 学习中心 · 复习与 Anki 子页 ----
+/* 此前这里是 `el.innerHTML = ankiSidebar.innerHTML`——直接拷侧边栏的 DOM，
+   导致主区域出现一份为窄侧栏设计的迷你面板，且侧栏未渲染时主区域就空白。
+   现在自己取数、自己排版：本地统计（离线可用）+ Anki 牌组统计（连上才有）。 */
+async function renderPracticeStats() {
   const el = document.getElementById('practiceStats');
   if (!el) return;
-  const ankiSidebar = document.getElementById('ankiSidebar');
-  el.innerHTML = ankiSidebar ? ankiSidebar.innerHTML : '<div style="color:var(--text2)">No Anki data available. Start chatting to build weak points.</div>';
-  // 追加复习按钮
-  el.innerHTML += '<div style="margin-top:12px;display:flex;gap:8px">' +
-    '<button class="send-btn" data-action="start-web-review" style="padding:8px 20px;font-size:14px">✅ 开始网页复习</button>' +
-    '<button class="toggle-btn" data-action="toggle-anki" style="font-size:13px">📚 切换自动添加</button></div>';
-  // Anki 任务中心（持久化队列：排队 / 失败重试 / 清理）
-  if (typeof renderAnkiTaskCenter === 'function') renderAnkiTaskCenter();
+
+  // 1) 本地数据：不依赖 Anki，任何时候都能显示
+  const weak = (typeof getAllWeakPoints === 'function') ? getAllWeakPoints() : [];
+  const active = weak.filter(w => !w.archived);
+  const archived = weak.filter(w => w.archived);
+  const vocab = (typeof getVocab === 'function') ? getVocab() : [];
+  const due = active.filter(w => {
+    if (!w.last_quizzed) return true;   // 从没考过 → 待出题
+    const days = (Date.now() - new Date(w.last_quizzed).getTime()) / 86400000;
+    return days >= (w.interval || 1);
+  });
+
+  const localCards = [
+    { icon: '🎯', label: '活跃薄弱点', value: active.length, sub: archived.length ? `已归档 ${archived.length}` : '尚无归档' },
+    { icon: '⏰', label: '待复习薄弱点', value: due.length, sub: '按间隔估算' },
+    { icon: '📚', label: '生词本', value: vocab.length, sub: '可一键推送' }
+  ];
+
+  el.innerHTML = '<div class="pm-cards">' + localCards.map(c => `
+    <div class="pm-card">
+      <div class="pm-card-label">${esc(c.icon)} ${esc(c.label)}</div>
+      <div class="pm-card-value">${esc(String(c.value))}</div>
+      <div class="pm-card-sub">${esc(c.sub)}</div>
+    </div>`).join('') + '</div>' +
+    '<div id="pmAnkiDeck" class="pm-deck"><div class="pm-deck-loading">⏳ 正在读取 Anki 牌组统计…</div></div>';
+
+  renderPracticeAnkiDeck();
+}
+
+/* Anki 牌组统计（异步，失败/未连接给出可操作提示而不是一句「未连接」） */
+async function renderPracticeAnkiDeck() {
+  const box = document.getElementById('pmAnkiDeck');
+  if (!box) return;
+  let ver = null;
+  try {
+    ver = await ankiPostCall({ action: 'version', version: 6 }).then(d => d.result && d.result.result).catch(() => null);
+  } catch (e) { ver = null; }
+
+  if (!ver) {
+    box.innerHTML = `<div class="pm-deck-off">
+      <div class="pm-deck-off-title">📴 Anki 未连接</div>
+      <div class="pm-deck-off-body">打开 Anki 桌面端（可最小化）并确认已安装 AnkiConnect 插件。
+        期间产生的卡片会留在下方任务队列里，连上后点「立即推送」即可补发。</div>
+      <button class="a-btn small" data-action="check-anki-connect">🔌 重新检测连接</button>
+    </div>`;
+    return;
+  }
+
+  const [stats, today, byDay] = await Promise.all([
+    ankiPostCall({ action: 'getDeckStats', version: 6, params: { decks: [ankiWeakDeck()] } }).then(d => d.result && d.result.result).catch(() => null),
+    ankiPostCall({ action: 'getNumCardsReviewedToday', version: 6 }).then(d => d.result && d.result.result).catch(() => 0),
+    ankiPostCall({ action: 'getNumCardsReviewedByDay', version: 6 }).then(d => d.result && d.result.result).catch(() => [])
+  ]);
+  const d0 = (stats && Object.values(stats)[0]) || {};
+  const reviewCount = d0.review_count || 0;
+  const newCount = d0.new_count || 0;
+  const learnCount = d0.learn_count || 0;
+  const total = d0.total_in_deck || 0;
+  const streak = parseInt(getSetting('ankiStreak', 0)) || 0;
+
+  // 近 14 天复习柱状图
+  let bars = '';
+  if (Array.isArray(byDay) && byDay.length) {
+    const recent = byDay.slice(-14);
+    const max = Math.max(1, ...recent.map(d => d[1]));
+    bars = '<div class="pm-bars">' + recent.map(d => {
+      const parts = String(d[0] || '').split('-');
+      const label = parts.length >= 3 ? `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}` : String(d[0]);
+      const h = Math.max(3, Math.round(d[1] / max * 56));
+      return `<div class="pm-bar" title="${esc(label)}: ${d[1]} 张"><div style="height:${h}px"></div><span>${esc(label)}</span></div>`;
+    }).join('') + '</div>';
+  }
+
+  box.innerHTML = `<div class="pm-deck-head">
+      <span class="pm-deck-title">🗂️ 薄弱点牌组</span>
+      <span class="pm-deck-meta">共 ${total} 张 · 今日已复习 ${today || 0} 张 · 🔥 连续 ${streak} 天</span>
+    </div>
+    <div class="pm-chips">
+      <span class="pm-chip due">📝 待复习 ${reviewCount}</span>
+      <span class="pm-chip new">🆕 新卡 ${newCount}</span>
+      <span class="pm-chip learn">📖 学习中 ${learnCount}</span>
+    </div>
+    ${bars}`;
 }
 
 // ---- Writing ----

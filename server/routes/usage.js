@@ -33,15 +33,15 @@ function privacyGet(req, res) {
     external: [
       {
         name: 'MiniMax',
-        configured: !!MINIMAX_KEY,
-        base: MINIMAX_BASE,
+        configured: !!MINIMAX_KEY(),
+        base: MINIMAX_BASE(),
         purpose: '对话生成、评分分析、出题、划词翻译、联网搜索',
         sends: ['对话消息与你的输入文本', '（联网时）搜索关键词'],
         note: '密钥只在服务端 .env，前端不可见；请求由本机后端转发'
       },
       {
         name: 'ElevenLabs',
-        configured: !!ELEVEN_KEY,
+        configured: !!ELEVEN_KEY(),
         base: 'https://api.elevenlabs.io',
         purpose: '语音朗读（TTS）与 Anki 卡片音频',
         sends: ['需要朗读的文本'],

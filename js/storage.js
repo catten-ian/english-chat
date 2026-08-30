@@ -239,7 +239,7 @@ const CACHE_OWNER_KEY = 'ai_en_cache_owner';
 const USER_CACHE_KEYS = [
   'ai_en_convs', 'ai_en_vocab', 'ai_en_weak', 'ai_en_current_conv',
   'ai_en_settings_backup', 'ai_en_backup_latest', 'ai_en_backup_history',
-  'ai_en_dict_history', 'ai_en_mode', 'ai_en_game_tab', 'ai_en_anki_tasks'
+  'ai_en_dict_history', 'ai_en_mode', 'ai_en_game_tab', 'ai_en_practice_tab', 'ai_en_anki_tasks'
 ];
 
 function clearUserCache() {

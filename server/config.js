@@ -89,9 +89,32 @@ function loadEnvFile(p) {
   return out;
 }
 const env = { ...loadEnvFile(path.join(BASE, '.env')) };
-const MINIMAX_KEY = process.env.MINIMAX_API_KEY || env.MINIMAX_API_KEY || '';
-const ELEVEN_KEY = process.env.ELEVEN_API_KEY || env.ELEVEN_API_KEY || '';
-const MINIMAX_BASE = process.env.MINIMAX_BASE || env.MINIMAX_BASE || 'https://api.minimaxi.com';
+/* 密钥用可变量 + getter 暴露：设置面板里更换 key 后需要进程内立即生效
+   （否则只能重启服务）。
+   读取顺序：进程环境变量优先于 .env 文件。注意判断用 !== undefined
+   而不是真值——测试会显式注入空串表示「强制未配置」，若用 || 会
+   意外回落到开发者本机 .env 的真实 key。 */
+function pickKey(envName, fileValue) {
+  const v = process.env[envName];
+  return (v !== undefined ? v : fileValue) || '';
+}
+let _MINIMAX_KEY = pickKey('MINIMAX_API_KEY', env.MINIMAX_API_KEY);
+let _ELEVEN_KEY = pickKey('ELEVEN_API_KEY', env.ELEVEN_API_KEY);
+let _MINIMAX_BASE = pickKey('MINIMAX_BASE', env.MINIMAX_BASE) || 'https://api.minimaxi.com';
+const KEY_SOURCES = {
+  minimax: process.env.MINIMAX_API_KEY !== undefined ? 'env' : (env.MINIMAX_API_KEY ? 'file' : 'none'),
+  eleven: process.env.ELEVEN_API_KEY !== undefined ? 'env' : (env.ELEVEN_API_KEY ? 'file' : 'none')
+};
+function setRuntimeKey(service, key) {
+  if (service === 'minimax') _MINIMAX_KEY = key;
+  else if (service === 'eleven') _ELEVEN_KEY = key;
+}
+function setMinimaxBase(base) { if (base) _MINIMAX_BASE = String(base).trim(); }
+/* 密钥/上游地址以函数形式暴露：调用点取的是当前值，
+   设置面板换 key 后立即生效而无需重启。 */
+const MINIMAX_KEY = () => _MINIMAX_KEY;
+const ELEVEN_KEY = () => _ELEVEN_KEY;
+const MINIMAX_BASE = () => _MINIMAX_BASE;
 
 const ALLOWED_ORIGINS = new Set(['null', 'http://localhost:8091', 'http://127.0.0.1:8091']);
 
@@ -147,6 +170,8 @@ module.exports = {
   PROXY_TIMEOUT, STREAM_IDLE_TIMEOUT, STREAM_TOTAL_TIMEOUT, SESSION_TTL_DAYS,
   USER_DATA_KEYS,
   MINIMAX_KEY, ELEVEN_KEY, MINIMAX_BASE, ALLOWED_ORIGINS,
+  KEY_SOURCES, setRuntimeKey, setMinimaxBase,
+  ENV_FILE: process.env.AI_EN_ENV_FILE ? path.resolve(process.env.AI_EN_ENV_FILE) : path.join(BASE, '.env'),
   ANKI_DECK_PREFIX, ANKI_ALLOWED_MODELS, ANKI_MAX_NOTES, ANKI_MAX_CARDS, ANKI_MAX_MEDIA_B64,
   ANKI_READONLY_ACTIONS, ANKI_GUI_ACTIONS, ANKI_GUARDED_ACTIONS,
   STATIC_MIME, STATIC_DIRS, INDEX_FILE

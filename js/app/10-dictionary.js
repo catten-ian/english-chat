@@ -6,6 +6,7 @@
 ============================================================ */
 /* ---------- Dictionary / Translator ---------- */
 // 词典查询历史记录（最多 12 条，存 localStorage）
+// feedback 保存的是结果区完整 HTML：点击历史项时原样还原，不重新调 API
 function saveDictHistory(text, feedbackHtml) {
   if (!text) return;
   const list = getSetting('dictHistory', []);
@@ -13,8 +14,9 @@ function saveDictHistory(text, feedbackHtml) {
   if (feedbackHtml) item.feedback = feedbackHtml;
   const idx = list.findIndex(x => x.text === text);
   if (idx >= 0) {
-    list.splice(idx, 1);
-    // 旧的 feedback 也丢弃，让最新一次的结果生效
+    // 同词条重复查询：移到最前；有新反馈就用新的，没有则保留旧的
+    const old = list.splice(idx, 1)[0];
+    if (!item.feedback && old && old.feedback) item.feedback = old.feedback;
   }
   list.unshift(item);
   setSetting('dictHistory', list.slice(0, 12));
@@ -25,27 +27,24 @@ function renderDictHistory() {
   if (!el) return;
   const list = getSetting('dictHistory', []);
   if (!list.length) { el.innerHTML = ''; return; }
-  el.innerHTML = '<div style="font-size:10px;color:var(--text2);margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">' +
-    '🕘 查询历史（点击查看反馈）' +
-    '<span data-action="clear-dict-history" style="cursor:pointer;color:var(--text2);font-size:10px" title="清空历史">🗑️ 清空</span>' +
+  el.innerHTML = '<div class="dh-head">🕘 查询历史' +
+    '<span class="dh-sub">点击词条回看结果，不重新查询</span>' +
+    '<span data-action="clear-dict-history" class="dh-clear" title="清空历史">🗑️ 清空</span>' +
     '</div>' +
+    '<div class="dh-list">' +
     list.map((x, i) => {
       const tm = new Date(x.t || Date.now());
       const ts = (tm.getMonth() + 1) + '-' + tm.getDate() + ' ' + String(tm.getHours()).padStart(2, '0') + ':' + String(tm.getMinutes()).padStart(2, '0');
       const hasFeedback = !!x.feedback;
-      return '<div style="padding:2px 4px;border-radius:4px;line-height:1.5">' +
-        '<div data-action="query-dict-history" data-arg1="' + i + '" title="点击重新查询" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;white-space:nowrap">' +
-        '<span style="overflow:hidden;text-overflow:ellipsis;user-select:none">' + esc(x.text.length > 28 ? x.text.substring(0, 28) + '…' : x.text) + '</span>' +
-        '<span style="color:var(--text3);font-size:10px;flex-shrink:0;margin-left:6px">' + ts + '</span></div>' +
-        (hasFeedback ? '<div data-action="toggle-dict-feedback" data-arg1="' + i + '" style="font-size:10px;color:var(--primary);cursor:pointer;margin-top:2px;user-select:none">📋 查看上次反馈</div>' +
-          '<div id="dictFb_' + i + '" style="display:none;margin-top:4px;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;font-size:11px">' + x.feedback + '</div>' : '') +
+      return '<div data-action="restore-dict-history" data-arg1="' + i + '"' +
+        ' class="dh-item' + (hasFeedback ? ' has-fb' : '') + '"' +
+        ' title="' + (hasFeedback ? '点击回看上次结果' : '该记录没有保存结果（点击会重新查询）') + '">' +
+        '<span class="dh-text">' + esc(x.text.length > 28 ? x.text.substring(0, 28) + '…' : x.text) + '</span>' +
+        (hasFeedback ? '<span class="dh-fb-badge">📋</span>' : '') +
+        '<span class="dh-time">' + esc(ts) + '</span>' +
         '</div>';
-    }).join('');
-}
-
-function toggleDictFeedback(i) {
-  const el = document.getElementById('dictFb_' + i);
-  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }).join('') +
+    '</div>';
 }
 
 function clearDictHistory() {
@@ -53,13 +52,22 @@ function clearDictHistory() {
   renderDictHistory();
 }
 
-function queryDictFromHistory(idx) {
+/* 点击历史词条：把保存的结果 HTML 还原到主结果区。
+   没有存过结果（老数据）才退回重新查询。 */
+function restoreDictHistory(idx) {
   const list = getSetting('dictHistory', []);
   const item = list[idx];
   if (!item) return;
   const input = document.getElementById('dictInput');
-  if (input) { input.value = item.text; input.focus(); }
-  queryDict();
+  const resultEl = document.getElementById('dictResult');
+  if (input) input.value = item.text;
+  if (item.feedback && resultEl) {
+    resultEl.innerHTML = item.feedback;
+    if (typeof updateDictContext === 'function') updateDictContext();
+  } else {
+    // 老版本存的历史没有 feedback：只能重新查询
+    queryDict();
+  }
 }
 
 function updateDictContext() {

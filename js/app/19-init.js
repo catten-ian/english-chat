@@ -119,6 +119,9 @@ registerAction('submit-translate', function () { submitTranslate(); });
 registerAction('show-translate-answer', function () { showTranslateAnswer(); });
 registerAction('toggle-tr-history', function () { toggleTranslateHistory(); });
 registerAction('switch-game-tab', function () { switchGameTab(this.getAttribute('data-game')); });
+// 学习中心子页切换（15-modes.js）
+registerAction('switch-practice-tab', function () { switchPracticeTab(this.getAttribute('data-ptab')); });
+registerAction('practice-refresh', function () { refreshPracticeTab(); });
 registerAction('charade-source', function () { charadeSource(this.getAttribute('data-arg1')); });
 registerAction('charade-next', function () { charadeNext(); });
 registerAction('charade-reveal', function () { charadeReveal(); });
@@ -171,6 +174,11 @@ registerAction('anki-task-delete', function () { deleteAnkiTask(this.getAttribut
 registerAction('cost-range', function () { setCostRange(this.getAttribute('data-arg1')); });
 registerAction('cost-set-price', function () { setCostPrice(this.getAttribute('data-arg1'), this.value); });
 registerAction('cost-clear-usage', function () { clearUsageRecords(); });
+// 服务与密钥（12-settings.js）
+registerAction('keys-rotate', function () { rotateKey(this.getAttribute('data-arg1')); });
+registerAction('keys-test', function () { testKeyConn(this.getAttribute('data-arg1')); });
+registerAction('keys-edit-base', function () { toggleBaseEditor(); });
+registerAction('keys-save-base', function () { saveMinimaxBase(); });
 // 对话/版本树（07-chat-actions.js）
 registerAction('save-edit', function () { saveEdit(this.getAttribute('data-arg1')); });
 registerAction('cancel-edit', function () { cancelEdit(this.getAttribute('data-arg1')); });
@@ -181,8 +189,7 @@ registerAction('delete-conv', function () { deleteConv(this.getAttribute('data-a
 registerAction('quick-add-anki', function () { quickAddToAnki(this.getAttribute('data-arg1'), this.getAttribute('data-arg2')); });
 registerAction('quick-add-vocab', function () { quickAddVocab(this.getAttribute('data-arg1'), this.getAttribute('data-arg2')); });
 registerAction('clear-dict-history', function () { clearDictHistory(); });
-registerAction('query-dict-history', function () { queryDictFromHistory(+this.getAttribute('data-arg1')); });
-registerAction('toggle-dict-feedback', function () { toggleDictFeedback(+this.getAttribute('data-arg1')); });
+registerAction('restore-dict-history', function () { restoreDictHistory(+this.getAttribute('data-arg1')); });
 // 高考题库（09-gaokao.js）
 registerAction('open-gaokao-exam', function () { openGaokaoExam(this.getAttribute('data-arg1')); });
 registerAction('back-gaokao-list', function () { backToGaokaoList(); });
@@ -198,6 +205,8 @@ registerAction('prompt-new-character', function () { promptNewCharacter(); });
 registerAction('music-prev', function () { musicPrev(); });
 registerAction('settings-music-toggle', function () { settingsMusicToggle(); });
 registerAction('music-next', function () { musicNext(); });
+registerAction('music-cycle-mode', function () { cycleMusicMode(); });
+registerAction('music-seek', function () { musicSeekTo(this.value); });
 registerAction('send-strategist-instruction', function () { sendStrategistInstruction(); });
 registerAction('check-anki-connect', function () { checkAnkiConnect(); });
 registerAction('reconnect-anki-connect', function () { reconnectAnkiConnect(); });
@@ -582,6 +591,8 @@ input.addEventListener('keydown', function(e) {
       // Anki 任务中心：登录后先渲染一次，并尝试补发上次遗留的排队任务
       if (typeof renderAnkiTaskCenter === 'function') renderAnkiTaskCenter();
       if (typeof processAnkiQueue === 'function' && authToken) processAnkiQueue().catch(() => {});
+      // 学习中心：若上次停留在复习/成本子页，登录后立即渲染对应内容
+      if (currentMode === 'practice' && typeof switchPracticeTab === 'function') switchPracticeTab(currentPracticeTab || 'overview', true);
 
       const currentId = getCurrentConvId();
       const convs = getAllConversations();
@@ -624,8 +635,10 @@ input.addEventListener('keydown', function(e) {
       });
       const savedGameTab = localStorage.getItem('ai_en_game_tab');
       if (savedGameTab && ['charade', 'cloze', 'wordle'].includes(savedGameTab)) currentGameTab = savedGameTab;
+      const savedPracticeTab = localStorage.getItem('ai_en_practice_tab');
+      if (savedPracticeTab && ['overview', 'review', 'cost'].includes(savedPracticeTab)) currentPracticeTab = savedPracticeTab;
       const savedMode = localStorage.getItem('ai_en_mode');
-      const validModes = ['chat', 'reading', 'practice', 'writing', 'translation', 'game', 'progress'];
+      const validModes = ['chat', 'reading', 'practice', 'writing', 'translation', 'game'];
       if (savedMode && validModes.includes(savedMode)) {
         switchMode(savedMode, true);
       } else {
