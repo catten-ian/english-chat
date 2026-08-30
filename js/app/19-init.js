@@ -171,7 +171,7 @@ registerAction('anki-queue-retry-all', function () { retryAllFailedAnkiTasks(); 
 registerAction('anki-queue-clear-done', function () { clearFinishedAnkiTasks(); });
 registerAction('anki-task-retry', function () { retryAnkiTask(this.getAttribute('data-arg1')); });
 registerAction('anki-task-delete', function () { deleteAnkiTask(this.getAttribute('data-arg1')); });
-// 成本与隐私中心（22-cost.js）
+// 成本与隐私中心（23-cost.js）
 registerAction('cost-range', function () { setCostRange(this.getAttribute('data-arg1')); });
 registerAction('cost-set-price', function () { setCostPrice(this.getAttribute('data-arg1'), this.value); });
 registerAction('cost-clear-usage', function () { clearUsageRecords(); });
@@ -439,11 +439,13 @@ document.addEventListener('DOMContentLoaded', function() {
   initSyncIndicator();
   initMobileMore();
   document.getElementById('difficulty').addEventListener('input', updateDifficulty);
-  // 作文题目区拖拽图片：dragover/drop 不是 click/change/input，需静态绑定
-  const wTopicDisplay = document.getElementById('wTopicDisplay');
-  if (wTopicDisplay) {
-    wTopicDisplay.addEventListener('dragover', function (e) { e.preventDefault(); });
-    wTopicDisplay.addEventListener('drop', function (e) { handleTopicImageDrop(e); });
+  // 作文题目图片拖拽：dragover/drop 不是 click/change/input，需静态绑定。
+  // 绑在整个 Writing 区——题目区（#wTopicDisplay）未确认题目前是隐藏的，
+  // 绑父容器保证隐藏时也能把图片拖到写作区任意位置。
+  const writingArea = document.getElementById('writingArea');
+  if (writingArea) {
+    writingArea.addEventListener('dragover', function (e) { e.preventDefault(); });
+    writingArea.addEventListener('drop', function (e) { e.preventDefault(); handleTopicImageDrop(e); });
   }
   musicInit();
 

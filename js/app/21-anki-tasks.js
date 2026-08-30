@@ -161,13 +161,15 @@ async function processAnkiQueue(opts) {
       if (!cur || (cur.status !== 'pending' && cur.status !== 'failed')) continue;
       const success = await runAnkiTask(cur);
       if (success) ok++; else fail++;
-      renderAnkiTaskCenter();
+      // 渲染失败（如目标 DOM 在当前模块不可见）绝不能中断队列循环，
+      // 否则任务会永远停在 running、后续任务全部饿死。
+      try { renderAnkiTaskCenter(); } catch (e) {}
     }
   } finally {
     ankiQueueRunning = false;
   }
-  renderAnkiTaskCenter();
-  if (typeof renderAnkiSidebar === 'function') renderAnkiSidebar().catch(() => {});
+  try { renderAnkiTaskCenter(); } catch (e) {}
+  if (typeof renderAnkiSidebar === 'function') { try { await renderAnkiSidebar(); } catch (e) {} }
   if (options.manual || ok || fail) {
     toastMsg('📚 Anki 队列：成功 ' + ok + (fail ? '，失败 ' + fail : ''));
   }

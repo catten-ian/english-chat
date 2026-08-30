@@ -57,7 +57,7 @@ const BACKUP_EXTRA_DIR = (() => {
 const MAX_BODY = 24 * 1024 * 1024;
 const MAX_USER_DATA = 8 * 1024 * 1024;   // 单个 user_data key 上限
 const MAX_ANKI_BODY = 12 * 1024 * 1024;  // Anki 代理请求上限（含 base64 音频）
-const PROXY_TIMEOUT = 60000;              // 建连 / 等首字节
+const PROXY_TIMEOUT = 120000;             // 非流式请求整体上限（出题批量 JSON 生成常需 30-60s）
 const STREAM_IDLE_TIMEOUT = 90000;        // SSE 空闲上限
 const STREAM_TOTAL_TIMEOUT = 10 * 60000;  // SSE 总时长上限
 const SESSION_TTL_DAYS = 30;

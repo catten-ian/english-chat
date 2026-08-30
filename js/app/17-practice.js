@@ -112,15 +112,19 @@ function pickWritingTopic(topic) {
 let currentTopicImageDataUrl = null;
 
 function updateTopicDisplay(topic) {
+  const display = document.getElementById('wTopicDisplay');
   const textWrap = document.getElementById('wTopicTextWrap');
   const imgWrap = document.getElementById('wTopicImageWrap');
   const imgEl = document.getElementById('wTopicImage');
+  const hasTopic = !!(topic && String(topic).trim());
+  const hasImage = !!currentTopicImageDataUrl;
+  if (display) display.style.display = (hasTopic || hasImage) ? 'flex' : 'none';
   if (textWrap) {
-    if (topic) textWrap.innerHTML = '✍️ ' + esc(topic);
-    else textWrap.innerHTML = '<span style="color:var(--text2);font-weight:500;font-size:15px">📝 选择或输入一个作文题目，开始写作</span>';
+    if (hasTopic) textWrap.innerHTML = '✍️ ' + esc(topic);
+    else textWrap.innerHTML = '';
   }
   if (imgWrap && imgEl) {
-    if (currentTopicImageDataUrl) {
+    if (hasImage) {
       imgEl.src = currentTopicImageDataUrl;
       imgWrap.style.display = 'inline-block';
     } else {

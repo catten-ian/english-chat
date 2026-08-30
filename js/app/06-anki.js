@@ -335,26 +335,37 @@ async function processAnalysisForAnki(parsed, userText) {
 // ---- AI 出题 prompt ----
 function buildQuizPrompt(wpList) {
   const multiWp = getSetting('ankiQuizMultiWp', true) !== false;
-  return `You are an English quiz generator for a Chinese learner. Create quiz questions to test these weak knowledge points.
+  return `You are an ENGLISH quiz generator for a Chinese-speaking learner of English.
+The learner is studying ENGLISH (vocabulary, grammar, collocations, usage). Generate
+quiz questions that drill their ENGLISH.
 
-Weak points to cover:
+Weak points to cover (each has a Chinese hint describing the English point to drill):
 ${wpList.map(w => `- [${w.id}] (${w.category}) ${w.point}${w.suggestion ? '\n  Tip: ' + w.suggestion.substring(0, 80) : ''}`).join('\n')}
 
 Requirements:
 ${multiWp ? '- One question should test AS MANY weak points as possible (ideally 2-3 at a time), as long as it stays natural.' : '- Each question should test exactly ONE weak point.'}
 - Cover ALL given weak points across the questions.
 - Generate ${Math.max(1, Math.ceil(wpList.length * (parseInt(getSetting('ankiQuizPerWp', 2)) || 2) / 1.6))} questions.
-- Question types: multiple_choice (4 options A/B/C/D), fill_blank (with hint in brackets), or error_correction.
-- Use natural English at an appropriate level. Questions should be realistic.
+- Question types: multiple_choice (4 options A/B/C/D), fill_blank (English sentence with ___), or error_correction.
+- ALL question stems, options and answers MUST be in ENGLISH. The learner is Chinese, but
+  they are learning ENGLISH — never write questions in Chinese and never ask them to choose
+  between Chinese characters/words (e.g. do NOT write "Which sentence uses 方位 correctly?"
+  with Chinese sentences).
+- If a weak-point hint is a Chinese distinction (e.g. 方位 vs 方向), turn it into the
+  ENGLISH equivalent: test the English words it maps to (position/direction/orientation...)
+  in natural English sentences, e.g. a fill-in-the-blank or "choose the correct English word".
+- Use natural English at an appropriate level (CET-4/6 ~ IELTS). Sentences must be realistic.
+- The "explanation" field MAY be in Chinese to help the learner understand, but everything the
+  learner reads as the question/options/answer must be English.
 
 Return ONLY valid JSON (no markdown, no thinking):
 {
   "questions": [
     {
       "type": "multiple_choice|fill_blank|error_correction",
-      "question": "the question text (with ___ for blanks, or the erroneous sentence)",
-      "options": ["A. ...", "B. ...", "C. ...", "D. ..."],   // only for multiple_choice
-      "answer": "correct answer (for MC: option letter + text; for fill: missing word; for error: correction)",
+      "question": "English question text (use ___ for blanks, or the erroneous English sentence)",
+      "options": ["A. ...", "B. ...", "C. ...", "D. ..."],   // only for multiple_choice, all in English
+      "answer": "for MC: the option letter only (A/B/C/D); for fill: the missing English word/phrase; for error: the corrected English",
       "explanation": "Chinese explanation with reasons, referencing each tested weak point",
       "weak_point_ids": ["id1", "id2"]
     }
@@ -370,6 +381,17 @@ function parseQuizResponse(raw) {
   // fallback: extract from larger JSON
   const obj2 = smartParseJSON('{"questions":' + raw + '}');
   if (obj2 && Array.isArray(obj2.questions)) return obj2.questions;
+  // fallback: 模型可能在 content 里输出 <think>...</think> 思考块（未禁用思考时），
+  // 剥掉思考块后再解析。
+  try {
+    const stripped = (typeof stripThinking === 'function') ? stripThinking(raw) : raw;
+    if (stripped && stripped !== raw) {
+      const obj3 = smartParseJSON(stripped);
+      if (obj3 && Array.isArray(obj3.questions)) return obj3.questions;
+      const obj4 = smartParseJSON('{"questions":' + stripped + '}');
+      if (obj4 && Array.isArray(obj4.questions)) return obj4.questions;
+    }
+  } catch (e) {}
   return null;
 }
 
@@ -378,7 +400,8 @@ async function autoGenerateQuizQuestions(wpList) {
   if (!wpList || !wpList.length) return;
   const perWp = parseInt(getSetting('ankiQuizPerWp', 2)) || 2;
   const needs = wpList.filter(w => w && !w.archived && (w.anki_notes || []).length < perWp);
-  if (!needs.length) return;
+  // 没有需要补题的薄弱点（都已达标）不是失败：返回空结果，避免任务被误标 failed。
+  if (!needs.length) return { added: 0, skipped: 0, note: 'all covered' };
   const batch = needs.slice(0, 12);
   // 多轮 API 调用，每轮 6 个薄弱点，以强化多对多关系
   const maxPerCall = 6;
@@ -390,7 +413,7 @@ async function autoGenerateQuizQuestions(wpList) {
       const raw = await callAPI([
         { role: 'system', content: buildQuizPrompt(round) },
         { role: 'user', content: 'Generate quiz questions for these weak points.' }
-      ], { temperature: 0.7, maxTokens: 5000 });
+      ], { temperature: 0.7, maxTokens: 5000, thinking: { type: 'disabled' } });
       const qs = parseQuizResponse(raw);
       if (qs && qs.length) allQuestions.push(...qs);
     } catch (e) { dbg('QUIZ_GEN', e.message); }
@@ -690,250 +713,3 @@ async function renderAnkiSidebar() {
   }
 }
 
-// ---- 网页答题复习（通过 AnkiConnect GUI 驱动 Anki FSRS 排程） ----
-let webReviewState = null; // {cardId, total, current, correct, el}
-function startWebReview() {
-  removeAllModals();
-  webReviewState = { cardId: null, total: 0, current: 0, correct: 0 };
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  overlay.setAttribute('role', 'dialog');
-  overlay.setAttribute('aria-modal', 'true');
-  overlay.setAttribute('aria-label', 'Anki 网页复习');
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  const modal = document.createElement('div');
-  modal.id = 'ankiReviewModal';
-  modal.style.cssText = 'background:#fff;border-radius:14px;padding:24px;max-width:560px;width:94%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);';
-  modal.innerHTML = `<div style="text-align:center;padding:20px">
-    <div style="font-size:16px;margin-bottom:12px">⏳ 启动 Anki 复习会话...</div>
-    <div class="spinner" style="width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto"></div>
-  </div>`;
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  // 异步启动复习
-  setTimeout(async () => {
-    try {
-      // 先检查 Anki 连接
-      const ver = await ankiPostCall({ action: 'version', version: 6 });
-      if (!ver || !ver.ok || !ver.result || !ver.result.result) {
-        modal.innerHTML = '<div style="text-align:center;padding:20px;color:var(--orange)">⚠️ Anki 未运行或 AnkiConnect 未连接<br><br>请先打开 Anki（可最小化），然后重新点击「✅ 复习」<br><br><button data-action="close-overlay" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">关闭</button></div>';
-        return;
-      }
-      const result = await ankiPostCall({ action: 'guiDeckReview', version: 6, params: { name: ankiWeakDeck() } });
-      // guiDeckReview 返回 true/false
-      if (!result || !result.ok || !result.result || !result.result.result) {
-        // 可能牌组没有待复习卡片
-        const cardIds = await ankiPostCall({ action: 'findCards', version: 6, params: { query: 'deck:' + ankiWeakDeck() + ' is:due' } });
-        const dueCount = (cardIds && cardIds.result && cardIds.result.result) ? cardIds.result.result.length : 0;
-        if (dueCount === 0) {
-          modal.innerHTML = '<div style="text-align:center;padding:20px"><div style="font-size:40px;margin-bottom:12px">🎉</div><div style="font-size:18px;font-weight:700;margin-bottom:8px">薄弱点牌组没有待复习卡片</div><div style="font-size:14px;color:var(--text2);margin-bottom:4px">继续对话，新的薄弱点会自动生成题目</div><button data-action="close-overlay" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">关闭</button></div>';
-        } else {
-          modal.innerHTML = '<div style="text-align:center;padding:20px;color:var(--orange)">⚠️ 无法启动复习会话（有 ' + dueCount + ' 张待复习卡片，但 Anki 拒绝启动）<br>请确保 Anki 窗口已打开，然后重试<br><br><button data-action="close-overlay" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">关闭</button></div>';
-        }
-        return;
-      }
-      await new Promise(r => setTimeout(r, 500));
-      fetchNextWebReviewCard();
-    } catch (e) {
-      modal.innerHTML = '<div style="text-align:center;padding:20px;color:var(--red)">❌ 启动复习失败：' + esc(e.message || e) + '<br><br>请确认 Anki 已运行且 AnkiConnect 插件已安装（默认端口 8765）<br><br><button data-action="close-overlay" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">关闭</button></div>';
-    }
-  }, 300);
-  overlay.onclick = function(e) { if (e.target === overlay) { closeWebReview(); } };
-}
-
-function fetchNextWebReviewCard() {
-  (async () => {
-    try {
-      const card = await ankiPostCall({ action: 'guiCurrentCard', version: 6 });
-      const cardData = card && card.result && card.result.result;
-      if (!cardData) {
-        // 没有更多卡片 — 检查是否 Anki 已退出复习模式
-        const total = webReviewState.current;
-        if (total > 0) {
-          finishWebReview();
-        } else {
-          // 没有卡片可复习：很可能薄弱点题目从未成功推送（anki_notes 全空），
-          // 提供「立即补题」而不是干巴巴的空状态——补题走任务队列，成功后自动开考
-          showWebReviewEmptyWithCatchUp();
-        }
-        return;
-      }
-      webReviewState.cardId = cardData.cardId;
-      webReviewState.current++;
-      webReviewState.total = Math.max(webReviewState.total, webReviewState.current);
-      showWebReviewQuestion(cardData);
-    } catch (e) {
-      const modal = document.getElementById('ankiReviewModal');
-      if (modal) {
-        modal.innerHTML = '<div style="text-align:center;padding:20px;color:var(--red)">❌ 读取卡片失败：' + esc(e.message || e) + '<br><br><button data-action="close-web-review" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">关闭</button></div>';
-      }
-    }
-  })();
-}
-
-/* 空牌组的「补题」引导：
-   统计需要出题的薄弱点数量，一键入队补题，队列跑完后自动重新进入复习。 */
-function showWebReviewEmptyWithCatchUp() {
-  const modal = document.getElementById('ankiReviewModal');
-  if (!modal) return;
-  const perWp = parseInt(getSetting('ankiQuizPerWp', 2)) || 2;
-  const needs = Object.values(getWeak()).filter(w => w && !w.archived && (w.anki_notes || []).length < perWp);
-  const hasQueueSupport = typeof enqueueAnkiTask === 'function';
-
-  if (!needs.length || !hasQueueSupport) {
-    // 真的没有可补的题（全部掌握/归档，或旧版本无队列）
-    modal.innerHTML = '<div style="text-align:center;padding:20px"><div style="font-size:40px;margin-bottom:12px">🎉</div><div style="font-size:18px;font-weight:700;margin-bottom:8px">薄弱点牌组没有待复习卡片</div><div style="font-size:14px;color:var(--text2);margin-bottom:4px">继续对话，新的薄弱点会自动生成题目</div><button data-action="close-overlay" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">关闭</button></div>';
-    return;
-  }
-
-  modal.innerHTML = `<div style="text-align:center;padding:20px">
-    <div style="font-size:40px;margin-bottom:12px">📭</div>
-    <div style="font-size:18px;font-weight:700;margin-bottom:8px">薄弱点牌组没有待复习卡片</div>
-    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:6px">
-      你有 <b style="color:var(--text)">${needs.length}</b> 个薄弱点还没有题目卡
-      （每薄弱点 ${perWp} 道，预计生成约 ${Math.min(12, needs.length) * Math.ceil(perWp / 2)}+ 道题）。<br>
-      可能是之前出题时 Anki 没开或 AI 调用失败，题目没有推送成功。
-    </div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">补题会调用 AI 生成（约需几十秒），完成后自动开始复习。</div>
-    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-      <button data-action="web-review-catchup" style="padding:9px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">⚡ 立即补题并复习</button>
-      <button data-action="close-overlay" style="padding:9px 20px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:14px;cursor:pointer">以后再说</button>
-    </div>
-  </div>`;
-}
-
-/* 补题执行：入队 quiz 任务 → 跑队列 → 全部完成后自动重启复习会话 */
-async function webReviewCatchUp() {
-  const modal = document.getElementById('ankiReviewModal');
-  if (!modal) return;
-  const perWp = parseInt(getSetting('ankiQuizPerWp', 2)) || 2;
-  const needs = Object.values(getWeak()).filter(w => w && !w.archived && (w.anki_notes || []).length < perWp);
-  if (!needs.length) { fetchNextWebReviewCard(); return; }
-
-  modal.innerHTML = `<div style="text-align:center;padding:24px">
-    <div style="font-size:16px;font-weight:700;margin-bottom:10px">🤖 正在为 ${needs.length} 个薄弱点生成题目…</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">AI 出题中，请稍候（每轮最多 6 个薄弱点，可能需要多轮调用）</div>
-    <div class="spinner" style="width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto"></div>
-  </div>`;
-
-  try {
-    // 分批入队（与 autoGenerateQuizQuestions 单次上限一致）
-    for (let i = 0; i < needs.length; i += 12) {
-      const chunk = needs.slice(i, i + 12);
-      enqueueAnkiTask('quiz', { weakPointIds: chunk.map(w => w.id).filter(Boolean) }, '复习补题：' + chunk.length + ' 个薄弱点');
-    }
-    const r = await processAnkiQueue({ manual: true, includeFailed: true });
-    const tasks = getAnkiTasks();
-    const justDone = tasks.filter(t => t.status === 'done' && (t.label || '').startsWith('复习补题')).length;
-    const failed = tasks.filter(t => (t.status === 'failed' || t.status === 'dead') && (t.label || '').startsWith('复习补题')).length;
-
-    if (failed && !justDone) {
-      modal.innerHTML = `<div style="text-align:center;padding:20px;color:var(--red)">
-        <div style="font-size:34px;margin-bottom:10px">😔</div>
-        <div style="font-size:16px;font-weight:700;margin-bottom:8px">补题失败（AI 或 Anki 出错）</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:14px">任务已留在队列里，可在「学习中心 → 复习与 Anki」的任务中心重试</div>
-        <button data-action="close-overlay" style="padding:8px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">关闭</button>
-      </div>`;
-      return;
-    }
-
-    // 成功（或部分成功）：重启复习会话拉新卡
-    const okMsg = justDone ? `已生成 ${justDone} 批题目` : '题目已就绪';
-    modal.innerHTML = `<div style="text-align:center;padding:24px">
-      <div style="font-size:16px;font-weight:700;margin-bottom:8px">✅ ${okMsg}${failed ? `，${failed} 批失败（可稍后重试）` : ''}</div>
-      <div style="font-size:12px;color:var(--text2)">正在进入复习…</div>
-    </div>`;
-    setTimeout(() => {
-      // 重开复习会话（guiDeckReview 需要 Anki 处于非复习态；先关掉当前 overlay）
-      closeWebReview();
-      setTimeout(() => startWebReview(), 400);
-    }, 800);
-  } catch (e) {
-    modal.innerHTML = `<div style="text-align:center;padding:20px;color:var(--red)">❌ 补题出错：${esc(e.message || e)}<br><br><button data-action="close-overlay" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">关闭</button></div>`;
-  }
-}
-
-function showWebReviewQuestion(cardData) {
-  const modal = document.getElementById('ankiReviewModal');
-  if (!modal) return;
-  const q = cardData.question || '';
-  const fields = cardData.fields || {};
-  // 提取干净文本（去除 HTML 标签用于显示，但保留布局）
-  const questionHtml = q || fields.Question || fields.Question?.value || '';
-  modal.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <span style="font-size:13px;font-weight:600">📝 题目 (${webReviewState.current}/${webReviewState.total})</span>
-    <span style="font-size:12px;color:var(--text2)">✅ ${webReviewState.correct}/${webReviewState.current}</span>
-  </div>
-  <div style="font-size:15px;line-height:1.8;padding:16px;background:var(--bg);border-radius:10px;margin-bottom:14px;text-align:center">${questionHtml}</div>
-  <div style="display:flex;gap:8px;justify-content:center">
-    <button data-action="web-review-show-answer" style="padding:8px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">🤔 显示答案</button>
-    <button data-action="close-web-review" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:13px;cursor:pointer">退出</button>
-  </div>`;
-}
-
-function webReviewShowAnswer() {
-  (async () => {
-    try {
-      await ankiPostCall({ action: 'guiShowAnswer', version: 6 });
-      await new Promise(r => setTimeout(r, 200));
-      const card = await ankiPostCall({ action: 'guiCurrentCard', version: 6 });
-      const cardData = card && card.result && card.result.result;
-      if (!cardData) return;
-      const answerHtml = cardData.answer || '';
-      const modal = document.getElementById('ankiReviewModal');
-      if (!modal) return;
-      modal.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <span style="font-size:13px;font-weight:600">📝 题目 (${webReviewState.current}/${webReviewState.total})</span>
-        <span style="font-size:12px;color:var(--text2)">✅ ${webReviewState.correct}/${webReviewState.current}</span>
-      </div>
-      <div style="font-size:15px;line-height:1.8;padding:16px;background:var(--bg);border-radius:10px;margin-bottom:8px;text-align:center">${answerHtml}</div>
-      <div style="text-align:center;font-size:13px;color:var(--text2);margin:8px 0">这次答得怎么样？</div>
-      <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-        <button data-action="web-review-answer" data-arg1="1" style="flex:1;min-width:60px;padding:8px 10px;border-radius:8px;border:1px solid #ef4444;background:#fef2f2;color:#dc2626;font-size:13px;cursor:pointer">😰 忘记</button>
-        <button data-action="web-review-answer" data-arg1="2" style="flex:1;min-width:60px;padding:8px 10px;border-radius:8px;border:1px solid #f59e0b;background:#fffbeb;color:#d97706;font-size:13px;cursor:pointer">🤔 模糊</button>
-        <button data-action="web-review-answer" data-arg1="3" style="flex:1;min-width:60px;padding:8px 10px;border-radius:8px;border:1px solid #22c55e;background:#f0fdf4;color:#15803d;font-size:13px;cursor:pointer">😊 记得</button>
-        <button data-action="web-review-answer" data-arg1="4" style="flex:1;min-width:60px;padding:8px 10px;border-radius:8px;border:1px solid #3b82f6;background:#eff6ff;color:#2563eb;font-size:13px;cursor:pointer">😎 简单</button>
-      </div>
-      <div style="text-align:center;margin-top:10px"><button data-action="close-web-review" style="border:none;background:none;color:var(--text2);font-size:12px;cursor:pointer">退出复习</button></div>`;
-    } catch (e) {
-      dbg('ANKI_ANSWER_SHOW', e.message);
-    }
-  })();
-}
-
-function webReviewAnswer(ease) {
-  (async () => {
-    try {
-      if (ease >= 3) webReviewState.correct++;
-      await ankiPostCall({ action: 'guiAnswerCard', version: 6, params: { ease } });
-      await new Promise(r => setTimeout(r, 300));
-      // 同步更新 weak points（异步不阻塞）
-      syncAnkiReviewData().catch(() => {});
-      fetchNextWebReviewCard();
-    } catch (e) {
-      dbg('ANKI_ANSWER', e.message);
-      document.getElementById('ankiReviewModal').innerHTML = '<div style="text-align:center;padding:20px;color:var(--red)">❌ 答题提交失败：' + esc(e.message) + '<br><br><button data-action="close-web-review" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">关闭</button></div>';
-    }
-  })();
-}
-
-function finishWebReview() {
-  const modal = document.getElementById('ankiReviewModal');
-  if (!modal) return;
-  const pct = webReviewState.total > 0 ? Math.round((webReviewState.correct / webReviewState.total) * 100) : 0;
-  modal.innerHTML = `<div style="text-align:center;padding:20px">
-    <div style="font-size:40px;margin-bottom:12px">🎉</div>
-    <div style="font-size:18px;font-weight:700;margin-bottom:8px">复习完成!</div>
-    <div style="font-size:14px;color:var(--text2);margin-bottom:4px">共 ${webReviewState.total} 题 · 正确 ${webReviewState.correct} 题</div>
-    <div style="font-size:24px;font-weight:700;color:${pct >= 70 ? 'var(--green)' : 'var(--red)'}">正确率 ${pct}%</div>
-    <button data-action="close-overlay" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">关闭</button>
-  </div>`;
-}
-
-function closeWebReview() {
-  webReviewState = null;
-  const modal = document.getElementById('ankiReviewModal');
-  if (modal) modal.parentElement.remove();
-  renderAnkiSidebar();
-}
-

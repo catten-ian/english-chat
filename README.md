@@ -156,7 +156,8 @@ ai-english-chat/
 │   │   ├── 19-init.js        # DOMContentLoaded 初始化、登录引导、定时备份
 │   │   ├── 20-progress.js    # Progress 学习者模型仪表盘（纯本地聚合）
 │   │   ├── 21-anki-tasks.js  # Anki 任务中心（持久化队列 + 重试）
-│   │   └── 22-cost.js        # 成本与隐私中心（用量图表 + 隐私面板）
+│   │   ├── 22-web-review.js  # 网页答题复习（选择/填空键盘作答 + 自动评分）
+│   │   └── 23-cost.js        # 成本与隐私中心（用量图表 + 隐私面板）
 │   ├── config.js        # 角色卡、配置常量（不含密钥）
 │   └── storage.js       # 存储层（登录 + SQLite 读写 + 本地缓存隔离）
 ├── scripts/

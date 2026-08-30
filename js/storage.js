@@ -343,27 +343,41 @@ function saveVocab(v) {
    }
    旧格式（v1，key 形如 "语法搭配|he/she/it 加-s"）读取时会自动迁移为 v2。
 */
+function newWeakPointId() {
+  return 'wp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
 function getWeak() {
   let w;
   try { w = JSON.parse(localStorage.getItem('ai_en_weak') || '{}'); } catch(e) { w = {}; }
-  if (w && typeof w === 'object' && !Array.isArray(w)) {
-    // 检测 v1 旧格式（存在含 | 的 key）并迁移
-    let migrated = false;
-    const out = {};
-    for (const [k, v] of Object.entries(w)) {
-      if (k.includes('|') && v && typeof v === 'object') {
-        out['wp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)] = migrateWeakPoint(v, k);
-        migrated = true;
-      } else {
-        out[k] = v;
-      }
+  if (!w || typeof w !== 'object' || Array.isArray(w)) return {};
+  // 归一化：保证 map 的 key 与对象内部的 id 完全一致。
+  // 历史 bug：v1→v2 迁移时 key 与 id 用了两次不同的随机串，导致按 id
+  // 查不到条目（补题任务批量报「薄弱点已不存在」）。这里统一自愈：
+  // 每条薄弱点都以其自身的 id 作为键重新归位。
+  let changed = false;
+  const out = {};
+  for (const [k, v] of Object.entries(w)) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) { out[k] = v; continue; }
+    let entry;
+    let id;
+    if (k.includes('|')) {
+      entry = migrateWeakPoint(v, k);   // v1 旧格式
+      id = newWeakPointId();
+      changed = true;
+    } else {
+      entry = v;
+      id = entry.id || k;
+      if (!entry.id) changed = true;
     }
-    if (migrated) {
-      saveWeak(out);
-      return out;
-    }
+    entry.id = id;
+    if (id !== k) changed = true;       // 键与 id 不一致，需要重排
+    if (!out[id]) out[id] = entry;
   }
-  return w && typeof w === 'object' ? w : {};
+  if (changed) {
+    try { saveWeak(out); } catch (e) {}
+  }
+  return out;
 }
 
 function migrateWeakPoint(v, oldKey) {
@@ -371,7 +385,6 @@ function migrateWeakPoint(v, oldKey) {
   const category = parts[0] || v.category || '语法搭配';
   const point = parts.length > 1 ? parts.slice(1).join('|') : (v.point || '');
   return {
-    id: 'wp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     category: category,
     point: point,
     suggestion: v.suggestion || '',
@@ -380,7 +393,7 @@ function migrateWeakPoint(v, oldKey) {
     ease: 2.5,
     streak: 0,
     last_quizzed: null,
-    anki_notes: [],
+    anki_notes: Array.isArray(v.anki_notes) ? v.anki_notes : [],
     archived: false,
     created_at: new Date().toISOString()
   };
@@ -427,11 +440,11 @@ function addWeakPoint(category, point, suggestion) {
   if (found) {
     found.count = (found.count || 0) + 1;
     if (suggestion && !found.suggestion) found.suggestion = suggestion;
-    if (!found.id) { delete w[findKeyByName(w, category, point)]; found.id = 'wp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+    if (!found.id) { found.id = newWeakPointId(); }
     w[found.id] = found;
   } else {
     const wp = {
-      id: 'wp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      id: newWeakPointId(),
       category: category || '语法搭配',
       point: point || '',
       suggestion: suggestion || '',
