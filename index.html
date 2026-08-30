@@ -13,7 +13,7 @@
 <link rel="icon" type="image/jpeg" href="img/icons/favicon.jpg?v=20260829a">
 <link rel="apple-touch-icon" href="img/icons/favicon.jpg?v=20260829a">
 
-<link rel="stylesheet" href="css/style.css?v=20260830a">
+<link rel="stylesheet" href="css/style.css?v=20260830c">
 
 <link rel="stylesheet" href="vendor/katex/katex.min.css?v=20260828b">
 
@@ -68,17 +68,17 @@
 
     </div>
 
-    <span class="sync-ind" id="syncIndicator" title="同步状�? style="display:none">💾</span>
+    <span class="sync-ind" id="syncIndicator" title="同步状态" style="display:none">💾</span>
 
     <span class="user-badge" id="userBadge" title="当前账户"></span>
 
-    <button class="toggle-btn" id="ankiToggle" data-action="toggle-anki" title="自动添加�?Anki">📚 Anki</button>
+    <button class="toggle-btn" id="ankiToggle" data-action="toggle-anki" title="自动添加到 Anki">📚 Anki</button>
 
     <button class="toggle-btn" id="autoReadToggle" data-action="toggle-auto-read" title="自动朗读回复">🔊 Auto</button>
 
-    <button class="music-btn" id="musicToggle" data-action="toggle-music" title="背景音乐：单击播�?暂停，双击下一首，滚轮调音量，悬停展开播放�?>🎵<span class="music-bubble" id="musicBubble"></span></button>
+    <button class="music-btn" id="musicToggle" data-action="toggle-music" title="背景音乐：单击播放/暂停，双击下一首，滚轮调音量，悬停展开播放器">🎵<span class="music-bubble" id="musicBubble"></span></button>
 
-    <button class="new-topic-btn" id="newConvBtn" data-action="prompt-new-conv">🔄 新对�?/button>
+    <button class="new-topic-btn" id="newConvBtn" data-action="prompt-new-conv">🔄 新对话</button>
 
     <button class="debug-btn" data-action="open-settings" title="设置">⚙️ 设置</button>
 
@@ -86,14 +86,14 @@
 
     <button class="debug-btn" data-action="go-home" title="返回首页">🏠 首页</button>
 
-    <button class="mobile-more-btn" data-action="toggle-mobile-more" title="更多" aria-label="更多功能" aria-haspopup="true">�?/button>
+    <button class="mobile-more-btn" data-action="toggle-mobile-more" title="更多" aria-label="更多功能" aria-haspopup="true">⋯</button>
 
     <div class="mobile-more-menu" id="mobileMoreMenu" role="menu" aria-label="更多功能">
       <div class="mmm-user" id="mmmUser"></div>
       <button class="mmm-item" data-action="toggle-anki" role="menuitem">📚 Anki 自动添加</button>
       <button class="mmm-item" data-action="toggle-auto-read" role="menuitem">🔊 自动朗读回复</button>
       <button class="mmm-item" data-action="toggle-music" role="menuitem">🎵 背景音乐</button>
-      <button class="mmm-item" data-action="prompt-new-conv" role="menuitem">🔄 新对�?/button>
+      <button class="mmm-item" data-action="prompt-new-conv" role="menuitem">🔄 新对话</button>
       <button class="mmm-item" data-action="open-settings" role="menuitem">⚙️ 设置</button>
       <button class="mmm-item" data-action="export-debug" role="menuitem">🔧 调试快照</button>
       <button class="mmm-item" data-action="go-home" role="menuitem">🏠 返回首页</button>
@@ -117,7 +117,7 @@
 
     <p class="home-sub">Welcome, <span id="homeUser" style="font-weight:700"></span> · Pick a mode to start</p>
 
-    <p class="home-tagline">实时 AI 反馈 · 内联批注 · 个性化 Anki 复习 · 多模态评�?/p>
+    <p class="home-tagline">实时 AI 反馈 · 内联批注 · 个性化 Anki 复习 · 多模态评分</p>
 
     <div class="home-grid">
 
@@ -147,7 +147,7 @@
 
         <div class="home-name">学习中心</div>
 
-        <div class="home-desc">学习者模�?· 薄弱点复习与 Anki 同步 · 用量与隐�?/div>
+        <div class="home-desc">学习者模型 · 薄弱点复习与 Anki 同步 · 用量与隐私</div>
 
       </button>
 
@@ -157,7 +157,7 @@
 
         <div class="home-name">WRITING</div>
 
-        <div class="home-desc">Write essays on any topic for 高�?/ CET / 考研, then get detailed feedback.</div>
+        <div class="home-desc">Write essays on any topic for 高考 / CET / 考研, then get detailed feedback.</div>
 
       </button>
 
@@ -167,7 +167,7 @@
 
         <div class="home-name">TRANSLATION</div>
 
-        <div class="home-desc">Practice Chinese �?English translation. Question bank or AI-generated.</div>
+        <div class="home-desc">Practice Chinese → English translation. Question bank or AI-generated.</div>
 
       </button>
 
@@ -177,13 +177,13 @@
 
         <div class="home-name">GAME</div>
 
-        <div class="home-desc">Charade (AI 猜词) · Cloze (11�?0) · Wordle (猜单�?.</div>
+        <div class="home-desc">Charade (AI 猜词) · Cloze (11选10) · Wordle (猜单词).</div>
 
       </button>
 
     </div>
 
-    <button class="home-logout" data-action="logout-app">退出登�?/button>
+    <button class="home-logout" data-action="logout-app">退出登录</button>
 
   </div>
 
@@ -203,7 +203,7 @@
 
       <h3>💬 对话记录</h3>
 
-      <button class="sidebar-new-btn" data-action="sidebar-new-conv">�?新对�?/button>
+      <button class="sidebar-new-btn" data-action="sidebar-new-conv">＋ 新对话</button>
 
     </div>
 
@@ -215,7 +215,7 @@
 
   </div>
 
-  <button class="sidebar-toggle" id="sidebarToggle" data-action="toggle-sidebar" title="对话管理">�?/button>
+  <button class="sidebar-toggle" id="sidebarToggle" data-action="toggle-sidebar" title="对话管理">▶</button>
 
   <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" data-action="toggle-sidebar" title="对话记录">💬</button>
 
@@ -237,13 +237,13 @@
 
 <div class="slash-menu" id="slashMenu" style="display:none"></div>
 
-         <textarea id="userInput" placeholder="用英语回�?.. (Enter 发送，Shift+Enter 换行)" rows="1" autocomplete="off" aria-label="消息输入�?></textarea>
+         <textarea id="userInput" placeholder="用英语回复... (Enter 发送，Shift+Enter 换行)" rows="1" autocomplete="off" aria-label="消息输入框"></textarea>
 
          <button class="send-btn" id="sendBtn" data-action="send-message">
 
-          <span class="spin"></span> 发�?      </button>
+          <span class="spin"></span> 发送       </button>
 
-        <button class="send-btn" id="stopBtn" data-action="stop-sending" style="display:none;background:#dc2626">�?停止</button>
+        <button class="send-btn" id="stopBtn" data-action="stop-sending" style="display:none;background:#dc2626">⏹ 停止</button>
 
       </div>
 
@@ -259,13 +259,13 @@
 
         <strong style="font-size:13px">📖 阅读 Reading</strong>
 
-        <span class="reading-source-pill" id="rdSourcePill">📰 时政精�?/span>
+        <span class="reading-source-pill" id="rdSourcePill">📰 时政精选</span>
 
         <span class="lang-chip" id="rdLangChip">EN</span>
 
         <span class="toolbar-spacer"></span>
 
-        <button class="a-btn small" id="rdHlBtn" data-action="toggle-hl">🖍�?高亮</button>
+        <button class="a-btn small" id="rdHlBtn" data-action="toggle-hl">🖍️ 高亮</button>
 
         <button class="a-btn small" id="rdNotesBtn" data-action="toggle-notes">📒 笔记 <span id="rdNoteCount" class="draft-indicator"></span></button>
 
@@ -283,17 +283,17 @@
 
           <div class="reading-empty" id="rdEmpty">
 
-            <h2>📖 选一篇开始阅�?/h2>
+            <h2>📖 选一篇开始阅读</h2>
 
-            <p>支持时政精选文章，或者粘贴你自己的英文材�?br>支持划线高亮 · 划词翻译 · 一键进入背诵练�?/p>
+            <p>支持时政精选文章，或者粘贴你自己的英文材料<br>支持划线高亮 · 划词翻译 · 一键进入背诵练习</p>
 
             <div class="reading-source-tabs" id="rdSourceTabs">
 
-              <button class="active" data-src="presets">📰 时政精�?/button>
+              <button class="active" data-src="presets">📰 时政精选</button>
 
               <button data-src="paste">📝 粘贴文章</button>
 
-              <button data-src="history">🕘 最近阅�?/button>
+              <button data-src="history">🕘 最近阅读</button>
 
             </div>
 
@@ -319,7 +319,7 @@
 
                     <button class="a-btn" data-action="reset-reading-picker">取消</button>
 
-                    <button class="a-btn primary" data-action="start-reading-paste">开始阅�?/button>
+                    <button class="a-btn primary" data-action="start-reading-paste">开始阅读</button>
 
                   </div>
 
@@ -345,27 +345,27 @@
 
 
 
-    <!-- Practice：学习中心（学习概览 / 复习�?Anki / 成本与隐�?三个子页�?-->
+    <!-- Practice：学习中心（学习概览 / 复习与 Anki / 成本与隐私 三个子页） -->
 
     <div class="module-area" id="practiceArea" style="display:none">
 
       <div class="pm-head">
         <div class="pm-head-text">
           <h2>📊 学习中心</h2>
-          <p>学习者模型、Anki 复习与外�?API 成本，都在这�?/p>
+          <p>学习者模型、Anki 复习与外部 API 成本，都在这里</p>
         </div>
         <button class="a-btn small" data-action="practice-refresh" title="重新聚合数据">🔄 刷新</button>
       </div>
 
       <div class="pm-tabs" role="tablist" aria-label="学习中心子页">
         <button class="pm-tab active" data-ptab="overview" data-action="switch-practice-tab" role="tab" aria-selected="true">📈 学习概览</button>
-        <button class="pm-tab" data-ptab="review" data-action="switch-practice-tab" role="tab" aria-selected="false">🎯 复习�?Anki</button>
-        <button class="pm-tab" data-ptab="cost" data-action="switch-practice-tab" role="tab" aria-selected="false">💰 成本与隐�?/button>
+        <button class="pm-tab" data-ptab="review" data-action="switch-practice-tab" role="tab" aria-selected="false">🎯 复习与 Anki</button>
+        <button class="pm-tab" data-ptab="cost" data-action="switch-practice-tab" role="tab" aria-selected="false">💰 成本与隐私</button>
       </div>
 
       <div class="pm-body">
 
-        <!-- 子页 1：学习概览（学习者模型仪表盘�?-->
+        <!-- 子页 1：学习概览（学习者模型仪表盘） -->
         <section class="pm-pane" id="pmPaneOverview" role="tabpanel">
           <div id="progressDashboard"></div>
         </section>
@@ -376,14 +376,14 @@
           <div id="practiceStats"></div>
 
           <div class="pm-actions">
-            <button class="a-btn primary" data-action="start-web-review">�?开始网页复�?/button>
+            <button class="a-btn primary" data-action="start-web-review">✅ 开始网页复习</button>
             <button class="a-btn" data-action="push-all-anki">📚 一键同步到 Anki</button>
             <button class="a-btn ghost" data-action="anki-sync">🔄 拉取复习数据</button>
             <button class="a-btn ghost" data-action="toggle-anki">⚙️ 切换自动添加</button>
           </div>
           <div class="pm-hint">
-            「一键同步」把生词本所有词 + 薄弱�?AI 出题，全部推到对�?Anki 卡组�?
-            推送任务会进入下方队列，Anki 没开也不会丢�?
+            「一键同步」把生词本所有词 + 薄弱点 AI 出题，全部推到对应 Anki 卡组。
+            推送任务会进入下方队列，Anki 没开也不会丢。
           </div>
 
           <div id="ankiTaskCenter" class="anki-task-center"></div>
@@ -413,7 +413,7 @@
 
           <select id="wExamType" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);font-size:13px;background:var(--bg)">
 
-            <option value="高考英�?>College Entrance Exam</option>
+            <option value="高考英语">College Entrance Exam</option>
 
             <option value="考研英语">Postgraduate Exam</option>
 
@@ -421,7 +421,7 @@
 
             <option value="大学英语六级">CET-6</option>
 
-            <option value="雅�?>IELTS</option>
+            <option value="雅思">IELTS</option>
 
             <option value="托福">TOEFL</option>
 
@@ -443,13 +443,13 @@
 
             <div style="display:flex;flex-direction:column;gap:6px">
 
-              <button class="dict-btn" data-action="start-writing" style="padding:4px 14px;font-size:13px">开始写�?/button>
+              <button class="dict-btn" data-action="start-writing" style="padding:4px 14px;font-size:13px">开始写作</button>
 
               <label class="toggle-btn" style="padding:4px 12px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="附加题目图片（也可直接拖拽到下方题目区）">
 
                 <input type="file" id="wTopicImageInput" accept="image/*" style="display:none" data-action="topic-image">
 
-                🖼�?图片
+                🖼️ 图片
 
               </label>
 
@@ -461,13 +461,13 @@
 
         </div>
 
-        <button class="toggle-btn" data-action="clear-writing" title="清除" style="align-self:flex-end">🗑�?清除</button>
+        <button class="toggle-btn" data-action="clear-writing" title="清除" style="align-self:flex-end">🗑️ 清除</button>
 
       </div>
 
       <div id="wTopicDisplay" style="padding:24px 32px;text-align:center;font-size:22px;font-weight:700;color:var(--text);background:linear-gradient(135deg,var(--primary-bg),#fdf4ff);border-bottom:1px solid var(--border);min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.6;white-space:pre-wrap">
 
-        <div id="wTopicTextWrap"><span style="color:var(--text2);font-weight:500;font-size:15px">📝 选择或输入一个作文题目，开始写�?/span></div>
+        <div id="wTopicTextWrap"><span style="color:var(--text2);font-weight:500;font-size:15px">📝 选择或输入一个作文题目，开始写作</span></div>
 
         <div id="wTopicImageWrap" style="margin-top:12px;display:none;position:relative">
 
@@ -481,7 +481,7 @@
 
       <div class="answer-area" id="wAnswerArea">
 
-        <textarea id="wText" placeholder="Write your essay here in English..." aria-label="作文作答�?></textarea>
+        <textarea id="wText" placeholder="Write your essay here in English..." aria-label="作文作答区"></textarea>
 
         <div class="ann-overlay" id="wAnnOverlay" aria-label="作文标注视图"></div>
 
@@ -505,7 +505,7 @@
 
       <div class="translate-config" style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
 
-        <span style="font-size:13px;font-weight:600">🌐 Chinese �?English Translation</span>
+        <span style="font-size:13px;font-weight:600">🌐 Chinese → English Translation</span>
 
         <button class="toggle-btn" id="trBankBtn" data-action="translate-source" data-arg1="bank" style="font-size:12px">📚 题库</button>
 
@@ -513,7 +513,7 @@
 
         <select id="trCategorySelect" data-action="tr-category-changed" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg)"></select>
 
-        <label class="toggle-btn" style="font-size:12px;padding:4px 10px;cursor:pointer" title="导入自定义题库（JSON 文件�?>
+        <label class="toggle-btn" style="font-size:12px;padding:4px 10px;cursor:pointer" title="导入自定义题库（JSON 文件）">
 
           <input type="file" id="trImportInput" accept="application/json,.json" style="display:none" data-action="import-tr-bank">
 
@@ -521,21 +521,21 @@
 
         </label>
 
-        <button class="toggle-btn" data-action="export-tr-bank" style="font-size:12px;padding:4px 10px" title="导出当前题库�?JSON">💾 导出</button>
+        <button class="toggle-btn" data-action="export-tr-bank" style="font-size:12px;padding:4px 10px" title="导出当前题库为 JSON">💾 导出</button>
 
-        <button class="dict-btn" data-action="next-translate" style="font-size:12px;margin-left:auto">下一�?�?/button>
+        <button class="dict-btn" data-action="next-translate" style="font-size:12px;margin-left:auto">下一题 →</button>
 
       </div>
 
       <div id="trQuestionProgress" style="padding:0 20px;flex-shrink:0"></div>
 
-      <div id="trQuestion" class="tr-question" style="padding:20px 24px;font-size:18px;line-height:1.6;text-align:center;flex-shrink:0">点击「下一题」开�?/div>
+      <div id="trQuestion" class="tr-question" style="padding:20px 24px;font-size:18px;line-height:1.6;text-align:center;flex-shrink:0">点击「下一题」开始</div>
 
       <div id="trQuestionWords" style="padding:0 24px 6px;display:none;flex-wrap:wrap;gap:6px;justify-content:center;font-size:12px"></div>
 
       <div class="answer-area" id="trAnswerArea">
 
-        <textarea id="trInput" placeholder="Write your English translation here..." aria-label="翻译作答�?></textarea>
+        <textarea id="trInput" placeholder="Write your English translation here..." aria-label="翻译作答区"></textarea>
 
         <div class="ann-overlay" id="trAnnOverlay" aria-label="翻译标注视图"></div>
 
@@ -543,9 +543,9 @@
 
       <div class="translate-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
 
-        <button class="send-btn" data-action="submit-translate" style="padding:6px 18px;font-size:14px">�?提交</button>
+        <button class="send-btn" data-action="submit-translate" style="padding:6px 18px;font-size:14px">✅ 提交</button>
 
-        <button class="dict-btn" data-action="show-translate-answer" style="font-size:12px">显示参考答�?/button>
+        <button class="dict-btn" data-action="show-translate-answer" style="font-size:12px">显示参考答案</button>
 
         <button class="dict-btn" data-action="toggle-tr-history" style="font-size:12px;margin-left:auto">📋 历史 <span id="trHistCount" style="color:var(--text3)">(0)</span></button>
 
@@ -557,7 +557,7 @@
 
 
 
-    <!-- Game 中心（Charade / Cloze / Wordle�?->
+    <!-- Game 中心（Charade / Cloze / Wordle）-->
 
     <div class="module-area" id="gameArea" style="display:none;flex-direction:column;height:100%">
 
@@ -579,21 +579,21 @@
 
         <div class="charade-config" style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
 
-          <span style="font-size:13px;font-weight:600">🎭 Charade �?你描述，AI �?/span>
+          <span style="font-size:13px;font-weight:600">🎭 Charade — 你描述，AI 猜</span>
 
           <button class="toggle-btn" id="chBankBtn" data-action="charade-source" data-arg1="bank" style="font-size:12px">📚 题库</button>
 
           <button class="toggle-btn ai-btn" id="chAiBtn" data-action="charade-source" data-arg1="ai" style="font-size:12px">🤖 AI 出词</button>
 
-          <span id="chScore" style="font-size:12px;font-weight:700;color:var(--green);margin-left:auto">�?0/0</span>
+          <span id="chScore" style="font-size:12px;font-weight:700;color:var(--green);margin-left:auto">✅ 0/0</span>
 
-          <button class="dict-btn" data-action="charade-next" style="font-size:12px">跳过 �?/button>
+          <button class="dict-btn" data-action="charade-next" style="font-size:12px">跳过 →</button>
 
         </div>
 
         <div id="chWord" class="ch-word" style="padding:32px 24px;text-align:center;flex-shrink:0;min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center">
 
-          <div style="font-size:14px;color:var(--text2);margin-bottom:8px">只有你能看到这个词，描述它让 AI �?/div>
+          <div style="font-size:14px;color:var(--text2);margin-bottom:8px">只有你能看到这个词，描述它让 AI 猜</div>
 
           <button class="send-btn" data-action="charade-reveal" style="padding:8px 24px;font-size:16px">🎯 显示单词</button>
 
@@ -603,18 +603,18 @@
 
 <div class="answer-area" id="chAnswerArea">
 
-        <textarea id="chDesc" placeholder="Describe the word in English. Do NOT say the word itself. AI will try to guess it." aria-label="描述作答�?></textarea>
+        <textarea id="chDesc" placeholder="Describe the word in English. Do NOT say the word itself. AI will try to guess it." aria-label="描述作答区"></textarea>
 
         <div class="ann-overlay" id="chAnnOverlay" aria-label="描述标注视图"></div>
 
       </div>
 
       <div class="charade-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
-          <button class="send-btn" id="chSubmitBtn" data-action="submit-charade" style="padding:6px 18px;font-size:14px">🤔 �?AI �?/button>
+          <button class="send-btn" id="chSubmitBtn" data-action="submit-charade" style="padding:6px 18px;font-size:14px">🤔 让 AI 猜</button>
 
           <button class="dict-btn" id="chHintBtn" data-action="charade-hint" style="font-size:12px;display:none">💡 提示</button>
 
-          <button class="dict-btn" data-action="charade-next" style="font-size:12px">跳过 �?/button>
+          <button class="dict-btn" data-action="charade-next" style="font-size:12px">跳过 →</button>
 
         </div>
 
@@ -622,21 +622,21 @@
 
 
 
-      <!-- Cloze 11�?0 -->
+      <!-- Cloze 11选10 -->
 
       <div class="game-module" id="clozeArea" style="display:none;flex-direction:column;flex:1;min-height:0">
 
         <div class="cloze-config" style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
 
-          <span style="font-size:13px;font-weight:600">📝 Cloze · 11�?0</span>
+          <span style="font-size:13px;font-weight:600">📝 Cloze · 11选10</span>
 
-          <button class="toggle-btn" id="clozeVocabBtn" data-action="cloze-source" data-arg1="vocab" style="font-size:12px">📚 生词�?/button>
+          <button class="toggle-btn" id="clozeVocabBtn" data-action="cloze-source" data-arg1="vocab" style="font-size:12px">📚 生词本</button>
 
           <button class="toggle-btn ai-btn" id="clozeAiBtn" data-action="cloze-source" data-arg1="ai" style="font-size:12px">🤖 AI 出题</button>
 
-          <span id="clozeScore" style="font-size:12px;font-weight:700;color:var(--green);margin-left:auto">�?0/0</span>
+          <span id="clozeScore" style="font-size:12px;font-weight:700;color:var(--green);margin-left:auto">✅ 0/0</span>
 
-          <button class="dict-btn" data-action="cloze-next" style="font-size:12px">新一�?�?/button>
+          <button class="dict-btn" data-action="cloze-next" style="font-size:12px">新一组 →</button>
 
         </div>
 
@@ -646,7 +646,7 @@
 
         <div class="cloze-actions" style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--surface)">
 
-          <button class="send-btn" data-action="submit-cloze" style="padding:6px 18px;font-size:14px">�?提交答案</button>
+          <button class="send-btn" data-action="submit-cloze" style="padding:6px 18px;font-size:14px">✅ 提交答案</button>
 
           <button class="dict-btn" data-action="cloze-answers" style="font-size:12px">显示答案</button>
 
@@ -666,11 +666,11 @@
 
           <button class="toggle-btn ai-btn" id="wlAiBtn" data-action="wordle-source" data-arg1="ai" style="font-size:12px">🤖 AI 出词</button>
 
-          <button class="toggle-btn" id="wlCustomBtn" data-action="wordle-source" data-arg1="custom" style="font-size:12px">✏️ 自定�?/button>
+          <button class="toggle-btn" id="wlCustomBtn" data-action="wordle-source" data-arg1="custom" style="font-size:12px">✏️ 自定义</button>
 
-          <span id="wordleStatus" style="font-size:12px;color:var(--text2);margin-left:auto">猜词�?..</span>
+          <span id="wordleStatus" style="font-size:12px;color:var(--text2);margin-left:auto">猜词中...</span>
 
-          <button class="dict-btn" data-action="wordle-new" style="font-size:12px">新词 �?/button>
+          <button class="dict-btn" data-action="wordle-new" style="font-size:12px">新词 →</button>
 
         </div>
 
@@ -692,7 +692,7 @@
 
      <div class="panel-drag-handle" id="panelDragHandle" title="拖动移动小窗"></div>
 
-     <div class="panel-mode-controls" aria-label="反馈面板模式"><button data-action="panel-mode" data-arg1="collapsed" title="关闭反馈面板" aria-label="关闭反馈面板">×</button><button data-action="panel-mode" data-arg1="mini" title="浮动显示" aria-label="浮动显示">�?/button><button data-action="panel-mode" data-arg1="expanded" title="固定显示" aria-label="固定显示">�?/button></div>
+     <div class="panel-mode-controls" aria-label="反馈面板模式"><button data-action="panel-mode" data-arg1="collapsed" title="关闭反馈面板" aria-label="关闭反馈面板">×</button><button data-action="panel-mode" data-arg1="mini" title="浮动显示" aria-label="浮动显示">□</button><button data-action="panel-mode" data-arg1="expanded" title="固定显示" aria-label="固定显示">▣</button></div>
 
      <div class="resize-handle resize-handle-left" id="panelResize"></div>
 
@@ -714,9 +714,9 @@
 
         <button class="right-tab active" data-ftab="current" data-action="switch-feedback-tab">📊 本次反馈</button>
 
-        <button class="right-tab" data-ftab="vocab" data-action="switch-feedback-tab">📖 生词�?span class="badge" id="wordCount">0</span></button>
+        <button class="right-tab" data-ftab="vocab" data-action="switch-feedback-tab">📖 生词本<span class="badge" id="wordCount">0</span></button>
 
-        <button class="right-tab" data-ftab="weak" data-action="switch-feedback-tab">🎯 知识薄弱�?/button>
+        <button class="right-tab" data-ftab="weak" data-action="switch-feedback-tab">🎯 知识薄弱点</button>
 
       </div>
 
@@ -724,7 +724,7 @@
 
         <div id="analysisContent">
 
-          <div class="empty" style="padding:24px 0">开始对话后，这里会显示你的回答评分与改进建�?/div>
+          <div class="empty" style="padding:24px 0">开始对话后，这里会显示你的回答评分与改进建议</div>
 
         </div>
 
@@ -734,7 +734,7 @@
 
         <div id="vocabContent">
 
-          <div class="empty">划�?AI 的回复，点击「加入生词本�?/div>
+          <div class="empty">划选 AI 的回复，点击「加入生词本」</div>
 
         </div>
 
@@ -744,7 +744,7 @@
 
         <div id="weakContent">
 
-          <div class="empty">对话中自动追踪你的薄弱环�?/div>
+          <div class="empty">对话中自动追踪你的薄弱环节</div>
 
         </div>
 
@@ -758,7 +758,7 @@
 
       <div class="dict-input-wrap">
 
-        <textarea id="dictInput" rows="3" placeholder="输入中文或英文单�?句子，或直接提问（如：如何用英语表达'我很期待'？）..."></textarea>
+        <textarea id="dictInput" rows="3" placeholder="输入中文或英文单词/句子，或直接提问（如：如何用英语表达'我很期待'？）..."></textarea>
 
         <button class="dict-btn" id="dictBtn" data-action="query-dict">查询</button>
 
@@ -784,7 +784,7 @@
 
         <select id="bankCatSel" data-action="bank-render" style="font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:#fff;flex:1;min-width:80px"></select>
 
-        <select id="bankStatusSel" data-action="bank-render" title="筛选作答状�? style="font-size:12px;padding:4px 4px;border-radius:6px;border:1px solid var(--border);background:#fff">
+        <select id="bankStatusSel" data-action="bank-render" title="筛选作答状态" style="font-size:12px;padding:4px 4px;border-radius:6px;border:1px solid var(--border);background:#fff">
 
           <option value="all">全部</option>
 
@@ -820,7 +820,7 @@
 
     <span class="tip-title" id="tipWord"></span>
 
-    <span class="tip-drag-hint" title="按住拖动">�?拖动</span>
+    <span class="tip-drag-hint" title="按住拖动">⠟ 拖动</span>
 
   </div>
 
@@ -830,7 +830,7 @@
 
     <div class="tip-actions">
 
-      <button class="tip-add" id="tipAdd" data-action="add-from-tip">加入生词�?/button>
+      <button class="tip-add" id="tipAdd" data-action="add-from-tip">加入生词本</button>
 
       <button class="tip-close" data-action="hide-tip">关闭</button>
 
@@ -838,7 +838,7 @@
 
   </div>
 
-  <div class="tip-resize" id="tipResize" title="拖动右下角调整大�?></div>
+  <div class="tip-resize" id="tipResize" title="拖动右下角调整大小"></div>
 
 </div>
 
@@ -852,9 +852,9 @@
 
 <script src="js/storage.js?v=20260828b"></script>
 
-<!-- app.js 已按领域拆分�?js/app/�?
-     顺序不可调整：存在顶�?IIFE、事件绑定与 const 声明的执行顺序依赖�?
-     校验�?test/app-split.test.js（文件齐�?/ 无重复顶层声�?/ 拼接可解析）�?-->
+<!-- app.js 已按领域拆分到 js/app/。
+     顺序不可调整：存在顶层 IIFE、事件绑定与 const 声明的执行顺序依赖。
+     校验见 test/app-split.test.js（文件齐全 / 无重复顶层声明 / 拼接可解析）。 -->
 <script src="js/app/01-core.js?v=20260828f"></script>
 <script src="js/app/02-agents.js?v=20260828f"></script>
 <script src="js/app/03-parse.js?v=20260828f"></script>
@@ -890,9 +890,9 @@
 
     <h2>AI English Coach</h2>
 
-    <p class="login-sub">Login to start · 七大功能模块 · 数据按账户隔离存�?/p>
+    <p class="login-sub">Login to start · 七大功能模块 · 数据按账户隔离存储</p>
 
-    <input id="loginUser" type="text" placeholder="用户�? autocomplete="username" aria-label="用户�?>
+    <input id="loginUser" type="text" placeholder="用户名" autocomplete="username" aria-label="用户名">
 
     <input id="loginPass" type="password" placeholder="密码" autocomplete="current-password" aria-label="密码">
 
@@ -908,7 +908,7 @@
 
     <button id="loginBtn" class="login-btn">🔓 登录</button>
 
-    <div class="login-hint">默认账户 test / catten（密码与账户名相同）<br>修改密码：python scripts\manage_users.py reset &lt;用户�?gt; &lt;新密�?gt;</div>
+    <div class="login-hint">默认账户 test / catten（密码与账户名相同）<br>修改密码：python scripts\manage_users.py reset &lt;用户名&gt; &lt;新密码&gt;</div>
 
   </div>
 
@@ -916,7 +916,7 @@
 
 
 
-<!-- ============ 新对�?· 话题选择 ============ -->
+<!-- ============ 新对话 · 话题选择 ============ -->
 
 <div id="topicModal" class="topic-modal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="topicModalTitle">
 
@@ -934,19 +934,19 @@
 
 
 
-<!-- Toast 提示队列（替�?alert�?->
+<!-- Toast 提示队列（替代 alert）-->
 
 <div id="toastStack" class="toast-stack" role="status" aria-live="polite"></div>
 
 
 
-<!-- 高亮颜色选择�?->
+<!-- 高亮颜色选择器-->
 
 <div id="hlPicker" class="hl-picker" role="dialog" aria-label="高亮颜色" style="display:none"></div>
 
 
 
-<!-- ============ 移动端底部导航（�?67px 显示，桌面隐藏） ============ -->
+<!-- ============ 移动端底部导航（≤767px 显示，桌面隐藏） ============ -->
 <nav class="bottom-nav" id="bottomNav" aria-label="功能模块切换">
   <button class="mode-btn bn-tab" data-mode="chat" data-action="switch-mode" type="button"><span class="bn-ico">💬</span><span class="bn-label">Chat</span></button>
   <button class="mode-btn bn-tab" data-mode="reading" data-action="switch-mode" type="button"><span class="bn-ico">📖</span><span class="bn-label">Reading</span></button>
@@ -958,15 +958,4 @@
 
 </body>
 
-
-
-
-
-
-
-</body>
-
 </html>
-
-
-
