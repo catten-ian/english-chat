@@ -1468,3 +1468,37 @@ button.a-btn {
   .pg-dim-label { width: 96px; font-size: 11px; }
   .pg-grid { grid-template-columns: 1fr; }
 }
+
+
+/* ==================== Anki 任务中心 ==================== */
+.anki-task-center { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--surface); }
+.at-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.at-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.at-actions { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+
+.at-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.at-chip { font-size: 11px; padding: 2px 9px; border-radius: 10px; font-weight: 600; }
+.at-chip.pending { background: #f1f5f9; color: #475569; }
+.at-chip.running { background: #dbeafe; color: #1d4ed8; }
+.at-chip.done    { background: #dcfce7; color: #15803d; }
+.at-chip.failed  { background: #fef3c7; color: #92400e; }
+.at-chip.dead    { background: #fee2e2; color: #b91c1c; }
+
+.at-empty { font-size: 13px; color: var(--text2); padding: 14px 0; text-align: center; line-height: 1.6; }
+.at-list { display: flex; flex-direction: column; gap: 6px; }
+.at-item {
+  display: grid; grid-template-columns: 84px 1fr auto auto auto; gap: 8px; align-items: center;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font-size: 12px;
+}
+.at-status { font-weight: 700; white-space: nowrap; }
+.at-label { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.at-res { color: var(--green); font-weight: 700; white-space: nowrap; }
+.at-time { color: var(--text3); font-size: 11px; white-space: nowrap; }
+.at-btns { display: flex; gap: 4px; }
+.at-err { grid-column: 1 / -1; color: var(--red); font-size: 11px; line-height: 1.5; word-break: break-word; }
+.at-more { font-size: 11px; color: var(--text3); text-align: center; margin-top: 8px; }
+
+@media (max-width: 767px) {
+  .at-item { grid-template-columns: 72px 1fr auto; }
+  .at-time { display: none; }
+}

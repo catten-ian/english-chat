@@ -161,6 +161,12 @@ registerAction('anki-sync', function () { syncAnkiReviewData(); renderAnkiSideba
 registerAction('web-review-show-answer', function () { webReviewShowAnswer(); });
 registerAction('close-web-review', function () { closeWebReview(); });
 registerAction('web-review-answer', function () { webReviewAnswer(+this.getAttribute('data-arg1')); });
+// Anki 任务中心（21-anki-tasks.js）
+registerAction('anki-queue-run', function () { processAnkiQueue({ manual: true, includeFailed: true }); });
+registerAction('anki-queue-retry-all', function () { retryAllFailedAnkiTasks(); });
+registerAction('anki-queue-clear-done', function () { clearFinishedAnkiTasks(); });
+registerAction('anki-task-retry', function () { retryAnkiTask(this.getAttribute('data-arg1')); });
+registerAction('anki-task-delete', function () { deleteAnkiTask(this.getAttribute('data-arg1')); });
 // 对话/版本树（07-chat-actions.js）
 registerAction('save-edit', function () { saveEdit(this.getAttribute('data-arg1')); });
 registerAction('cancel-edit', function () { cancelEdit(this.getAttribute('data-arg1')); });
@@ -569,6 +575,9 @@ input.addEventListener('keydown', function(e) {
 
       renderVocab();
       renderWeak();
+      // Anki 任务中心：登录后先渲染一次，并尝试补发上次遗留的排队任务
+      if (typeof renderAnkiTaskCenter === 'function') renderAnkiTaskCenter();
+      if (typeof processAnkiQueue === 'function' && authToken) processAnkiQueue().catch(() => {});
 
       const currentId = getCurrentConvId();
       const convs = getAllConversations();

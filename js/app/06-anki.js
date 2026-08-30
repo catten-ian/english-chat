@@ -246,6 +246,8 @@ async function ensureQuizModelAndDeck() {
 }
 
 // ---- 处理分析结果 → 自动推送到 Anki ----
+// 卡片不再直接推送，而是先入「Anki 任务中心」队列（21-anki-tasks.js）：
+// Anki 没开 / AnkiConnect 报错时任务保留为 pending，可在 Practice 模块重试，不再静默丢失。
 async function processAnalysisForAnki(parsed, userText) {
   if (!parsed) return;
   const masterOn = ankiAutoAdd;
@@ -253,6 +255,7 @@ async function processAnalysisForAnki(parsed, userText) {
   const corrOn = masterOn && getSetting('ankiAutoCorr', true) !== false;
   const extOn = masterOn && getSetting('ankiAutoExt', true) !== false;
   const weakOn = masterOn && getSetting('ankiAutoWeak', true) !== false;
+  const useQueue = typeof enqueueAnkiTask === 'function';
   let total = 0, added = 0;
 
   // 生词卡片（默写题型：中文释义→默写英文）
@@ -276,8 +279,10 @@ async function processAnalysisForAnki(parsed, userText) {
       notes.push({ deckName: ankiVocabDeck(), modelName: VOCAB_MODEL, fields: { Front: frontText, Back: backText }, tags: [ankiUserTag(), 'vocabulary'] });
     }
     total += notes.length;
-    const r = await ankiAddNotesBatch(notes);
-    added += r.added;
+    if (notes.length) {
+      if (useQueue) enqueueAnkiTask('notes', { notes }, '生词 ' + notes.length + ' 张');
+      else { const r = await ankiAddNotesBatch(notes); added += r.added; }
+    }
   }
 
   // 纠错卡片
@@ -290,8 +295,10 @@ async function processAnalysisForAnki(parsed, userText) {
       notes.push({ deckName: ankiCorrDeck(), modelName: 'Basic', fields: { Front: front, Back: back }, tags: [ankiUserTag(), 'correction'] });
     }
     total += notes.length;
-    const r = await ankiAddNotesBatch(notes);
-    added += r.added;
+    if (notes.length) {
+      if (useQueue) enqueueAnkiTask('notes', { notes }, '纠错 ' + notes.length + ' 张');
+      else { const r = await ankiAddNotesBatch(notes); added += r.added; }
+    }
   }
 
   // 拓展知识卡片
@@ -303,8 +310,10 @@ async function processAnalysisForAnki(parsed, userText) {
       notes.push({ deckName: ankiExtDeck(), modelName: 'Basic', fields: { Front: front, Back: back }, tags: [ankiUserTag(), 'extension'] });
     }
     total += notes.length;
-    const r = await ankiAddNotesBatch(notes);
-    added += r.added;
+    if (notes.length) {
+      if (useQueue) enqueueAnkiTask('notes', { notes }, '拓展知识 ' + notes.length + ' 张');
+      else { const r = await ankiAddNotesBatch(notes); added += r.added; }
+    }
   }
 
   // 薄弱点 → 触发自动出题（实际出题在 maybeGenerateQuizQuestions 中处理）
@@ -312,7 +321,15 @@ async function processAnalysisForAnki(parsed, userText) {
     // weak_points 已通过 trackWeakPoints 存入存储，这里只需触发出题策略
   }
 
-  if (total > 0) toastMsg('📚 Anki: 已添加 ' + added + ' / ' + total + ' 张卡片');
+  if (useQueue) {
+    if (total > 0) {
+      toastMsg('📋 已加入 Anki 队列：' + total + ' 张卡片');
+      // 立即尝试消费一次；Anki 没开则原地排队，不报错
+      processAnkiQueue().catch(() => {});
+    }
+  } else if (total > 0) {
+    toastMsg('📚 Anki: 已添加 ' + added + ' / ' + total + ' 张卡片');
+  }
 }
 
 // ---- AI 出题 prompt ----
@@ -412,14 +429,25 @@ async function autoGenerateQuizQuestions(wpList) {
 }
 
 // ---- 出题策略调度 ----
+// 出题同样走「Anki 任务中心」队列：AI 出题失败 / Anki 没开都可在 Practice 模块重试。
 function maybeGenerateQuizQuestions(newWpList) {
   if (!newWpList || !newWpList.length) return;
   const masterOn = ankiAutoAdd && getSetting('ankiAutoWeak', true) !== false;
   if (!masterOn) return;
+  const useQueue = typeof enqueueAnkiTask === 'function';
   const strategy = getSetting('ankiQuizStrategy', 'instant');
+  const enqueue = (list) => {
+    if (!list || !list.length) return;
+    if (useQueue) {
+      enqueueAnkiTask('quiz', { weakPointIds: list.map(w => w.id).filter(Boolean) }, '薄弱点出题 ' + list.length + ' 个');
+      processAnkiQueue().catch(() => {});
+    } else {
+      autoGenerateQuizQuestions(list);
+    }
+  };
   if (strategy === 'instant') {
     // 即时出题：对新发现的薄弱点立即出题
-    autoGenerateQuizQuestions(newWpList);
+    enqueue(newWpList);
   } else {
     // 积攒模式：统计所有未满 2 道的薄弱点
     const w = getWeak();
@@ -427,7 +455,7 @@ function maybeGenerateQuizQuestions(newWpList) {
     const batchSize = parseInt(getSetting('ankiQuizBatchSize', 5)) || 5;
     const pending = Object.values(w).filter(wp => !wp.archived && (wp.anki_notes || []).length < perWp);
     if (pending.length >= batchSize) {
-      autoGenerateQuizQuestions(pending.slice(0, batchSize));
+      enqueue(pending.slice(0, batchSize));
     }
   }
 }

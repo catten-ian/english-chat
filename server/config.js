@@ -71,7 +71,8 @@ const USER_DATA_KEYS = {
   reading: 'object',
   characters: 'array',
   avatar: 'string',
-  strategist: 'array'
+  strategist: 'array',
+  anki_tasks: 'array'
 };
 
 /* ==================== Keys: env > .env ==================== */

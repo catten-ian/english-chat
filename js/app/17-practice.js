@@ -14,6 +14,8 @@ function renderPracticeStats() {
   el.innerHTML += '<div style="margin-top:12px;display:flex;gap:8px">' +
     '<button class="send-btn" data-action="start-web-review" style="padding:8px 20px;font-size:14px">✅ 开始网页复习</button>' +
     '<button class="toggle-btn" data-action="toggle-anki" style="font-size:13px">📚 切换自动添加</button></div>';
+  // Anki 任务中心（持久化队列：排队 / 失败重试 / 清理）
+  if (typeof renderAnkiTaskCenter === 'function') renderAnkiTaskCenter();
 }
 
 // ---- Writing ----

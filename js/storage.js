@@ -216,7 +216,7 @@ const CACHE_OWNER_KEY = 'ai_en_cache_owner';
 const USER_CACHE_KEYS = [
   'ai_en_convs', 'ai_en_vocab', 'ai_en_weak', 'ai_en_current_conv',
   'ai_en_settings_backup', 'ai_en_backup_latest', 'ai_en_backup_history',
-  'ai_en_dict_history', 'ai_en_mode', 'ai_en_game_tab'
+  'ai_en_dict_history', 'ai_en_mode', 'ai_en_game_tab', 'ai_en_anki_tasks'
 ];
 
 function clearUserCache() {
@@ -262,6 +262,10 @@ async function loadUserData() {
   localStorage.setItem('ai_en_settings_backup', JSON.stringify(settingsObj));
   // 服务端 settings 展开写入真实 setting 键（此前只写 backup，导致设置无法跨浏览器恢复）
   hydrateSettingsFromServer(settingsObj);
+
+  // Anki 任务队列（换设备/换浏览器时也能继续补发未完成的推送）
+  const ankiTasks = await apiLoad('anki_tasks');
+  localStorage.setItem('ai_en_anki_tasks', JSON.stringify(Array.isArray(ankiTasks) ? ankiTasks : []));
 
   const avatar = await apiLoad('avatar');
   setSetting('avatar', typeof avatar === 'string' ? avatar : '');
