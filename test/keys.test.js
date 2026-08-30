@@ -139,9 +139,15 @@ describe('POST /api/keys/rotate（写入隔离的临时 .env，端到端）', ()
     }
   });
 
-  test('rotate-base：非法 URL 400、合法 URL 通过后 status 反映新值', async () => {
-    const { startServer, request, login } = require('./helpers');
-    const s = await startServer({ tag: 'keys-base', env: { MINIMAX_API_KEY: '', ELEVEN_API_KEY: '' } });
+  test('rotate-base：非法 URL 400、合法 URL 通过后 status 反映新值并持久化到隔离 .env', async () => {
+    const { startServer, request, login, APP_DIR } = require('./helpers');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-en-env-'));
+    const envFile = path.join(dir, '.env');
+    fs.writeFileSync(envFile, '# smoke\n', 'utf8');
+    const s = await startServer({
+      tag: 'keys-base',
+      env: { MINIMAX_API_KEY: '', ELEVEN_API_KEY: '', AI_EN_ENV_FILE: envFile }
+    });
     try {
       const token = await login(s.port, 'test', 'test');
       let r = await request({ port: s.port, method: 'POST', path: '/api/keys/rotate-base', token, json: { base: 'not-a-url' } });
@@ -152,9 +158,15 @@ describe('POST /api/keys/rotate（写入隔离的临时 .env，端到端）', ()
       // 进程内立即生效（status 返回新 base）
       const st = JSON.parse((await request({ port: s.port, path: '/api/keys/status', token })).body);
       assert.strictEqual(st.minimax.base, 'http://127.0.0.1:9999');
+      // 必须持久化到注入的 .env（回归：曾误把文件路径传成 key 名，base 从未落盘）
+      const txt = fs.readFileSync(envFile, 'utf8');
+      assert.ok(txt.includes('MINIMAX_BASE=http://127.0.0.1:9999'), 'base 应写入 .env');
+      // 回归：曾在服务 cwd（仓库根）生成名为 MINIMAX_BASE 的垃圾文件
+      assert.ok(!fs.existsSync(path.join(APP_DIR, 'MINIMAX_BASE')), '不应在应用目录生成 MINIMAX_BASE 垃圾文件');
     } finally {
       await s.stop();
       s.cleanup();
+      fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 });

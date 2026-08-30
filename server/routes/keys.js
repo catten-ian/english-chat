@@ -95,7 +95,7 @@ async function rotateBase(req, res) {
     sendJson(res, 400, { error: 'base must be a valid http(s) URL' }, req); return;
   }
   try {
-    writeEnvKey('MINIMAX_BASE', base);
+    writeEnvKey(ENV_FILE, 'MINIMAX_BASE', base);
   } catch (e) {
     logger.error('写入 .env 失败: ' + e.message, { err: e });
     sendJson(res, 500, { error: 'failed to write .env', detail: e.message }, req); return;
