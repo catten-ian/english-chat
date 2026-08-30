@@ -164,6 +164,7 @@ registerAction('anki-sync', function () { syncAnkiReviewData(); renderAnkiSideba
 registerAction('web-review-show-answer', function () { webReviewShowAnswer(); });
 registerAction('close-web-review', function () { closeWebReview(); });
 registerAction('web-review-answer', function () { webReviewAnswer(+this.getAttribute('data-arg1')); });
+registerAction('web-review-catchup', function () { webReviewCatchUp(); });
 // Anki 任务中心（21-anki-tasks.js）
 registerAction('anki-queue-run', function () { processAnkiQueue({ manual: true, includeFailed: true }); });
 registerAction('anki-queue-retry-all', function () { retryAllFailedAnkiTasks(); });

@@ -752,11 +752,9 @@ function fetchNextWebReviewCard() {
         if (total > 0) {
           finishWebReview();
         } else {
-          // 没有卡片可复习（可能是牌组为空或所有卡片都已复习）
-          const modal = document.getElementById('ankiReviewModal');
-          if (modal) {
-            modal.innerHTML = '<div style="text-align:center;padding:20px"><div style="font-size:40px;margin-bottom:12px">📭</div><div style="font-size:18px;font-weight:700;margin-bottom:8px">没有待复习的卡片</div><div style="font-size:14px;color:var(--text2);margin-bottom:4px">薄弱点牌组中暂时没有到期的题目</div><div style="font-size:12px;color:var(--text2)">继续对话，新的薄弱点会自动生成题目推送到 Anki</div><button data-action="close-overlay" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">关闭</button></div>';
-          }
+          // 没有卡片可复习：很可能薄弱点题目从未成功推送（anki_notes 全空），
+          // 提供「立即补题」而不是干巴巴的空状态——补题走任务队列，成功后自动开考
+          showWebReviewEmptyWithCatchUp();
         }
         return;
       }
@@ -771,6 +769,88 @@ function fetchNextWebReviewCard() {
       }
     }
   })();
+}
+
+/* 空牌组的「补题」引导：
+   统计需要出题的薄弱点数量，一键入队补题，队列跑完后自动重新进入复习。 */
+function showWebReviewEmptyWithCatchUp() {
+  const modal = document.getElementById('ankiReviewModal');
+  if (!modal) return;
+  const perWp = parseInt(getSetting('ankiQuizPerWp', 2)) || 2;
+  const needs = Object.values(getWeak()).filter(w => w && !w.archived && (w.anki_notes || []).length < perWp);
+  const hasQueueSupport = typeof enqueueAnkiTask === 'function';
+
+  if (!needs.length || !hasQueueSupport) {
+    // 真的没有可补的题（全部掌握/归档，或旧版本无队列）
+    modal.innerHTML = '<div style="text-align:center;padding:20px"><div style="font-size:40px;margin-bottom:12px">🎉</div><div style="font-size:18px;font-weight:700;margin-bottom:8px">薄弱点牌组没有待复习卡片</div><div style="font-size:14px;color:var(--text2);margin-bottom:4px">继续对话，新的薄弱点会自动生成题目</div><button data-action="close-overlay" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">关闭</button></div>';
+    return;
+  }
+
+  modal.innerHTML = `<div style="text-align:center;padding:20px">
+    <div style="font-size:40px;margin-bottom:12px">📭</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:8px">薄弱点牌组没有待复习卡片</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:6px">
+      你有 <b style="color:var(--text)">${needs.length}</b> 个薄弱点还没有题目卡
+      （每薄弱点 ${perWp} 道，预计生成约 ${Math.min(12, needs.length) * Math.ceil(perWp / 2)}+ 道题）。<br>
+      可能是之前出题时 Anki 没开或 AI 调用失败，题目没有推送成功。
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">补题会调用 AI 生成（约需几十秒），完成后自动开始复习。</div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button data-action="web-review-catchup" style="padding:9px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">⚡ 立即补题并复习</button>
+      <button data-action="close-overlay" style="padding:9px 20px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:14px;cursor:pointer">以后再说</button>
+    </div>
+  </div>`;
+}
+
+/* 补题执行：入队 quiz 任务 → 跑队列 → 全部完成后自动重启复习会话 */
+async function webReviewCatchUp() {
+  const modal = document.getElementById('ankiReviewModal');
+  if (!modal) return;
+  const perWp = parseInt(getSetting('ankiQuizPerWp', 2)) || 2;
+  const needs = Object.values(getWeak()).filter(w => w && !w.archived && (w.anki_notes || []).length < perWp);
+  if (!needs.length) { fetchNextWebReviewCard(); return; }
+
+  modal.innerHTML = `<div style="text-align:center;padding:24px">
+    <div style="font-size:16px;font-weight:700;margin-bottom:10px">🤖 正在为 ${needs.length} 个薄弱点生成题目…</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">AI 出题中，请稍候（每轮最多 6 个薄弱点，可能需要多轮调用）</div>
+    <div class="spinner" style="width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto"></div>
+  </div>`;
+
+  try {
+    // 分批入队（与 autoGenerateQuizQuestions 单次上限一致）
+    for (let i = 0; i < needs.length; i += 12) {
+      const chunk = needs.slice(i, i + 12);
+      enqueueAnkiTask('quiz', { weakPointIds: chunk.map(w => w.id).filter(Boolean) }, '复习补题：' + chunk.length + ' 个薄弱点');
+    }
+    const r = await processAnkiQueue({ manual: true, includeFailed: true });
+    const tasks = getAnkiTasks();
+    const justDone = tasks.filter(t => t.status === 'done' && (t.label || '').startsWith('复习补题')).length;
+    const failed = tasks.filter(t => (t.status === 'failed' || t.status === 'dead') && (t.label || '').startsWith('复习补题')).length;
+
+    if (failed && !justDone) {
+      modal.innerHTML = `<div style="text-align:center;padding:20px;color:var(--red)">
+        <div style="font-size:34px;margin-bottom:10px">😔</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px">补题失败（AI 或 Anki 出错）</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:14px">任务已留在队列里，可在「学习中心 → 复习与 Anki」的任务中心重试</div>
+        <button data-action="close-overlay" style="padding:8px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">关闭</button>
+      </div>`;
+      return;
+    }
+
+    // 成功（或部分成功）：重启复习会话拉新卡
+    const okMsg = justDone ? `已生成 ${justDone} 批题目` : '题目已就绪';
+    modal.innerHTML = `<div style="text-align:center;padding:24px">
+      <div style="font-size:16px;font-weight:700;margin-bottom:8px">✅ ${okMsg}${failed ? `，${failed} 批失败（可稍后重试）` : ''}</div>
+      <div style="font-size:12px;color:var(--text2)">正在进入复习…</div>
+    </div>`;
+    setTimeout(() => {
+      // 重开复习会话（guiDeckReview 需要 Anki 处于非复习态；先关掉当前 overlay）
+      closeWebReview();
+      setTimeout(() => startWebReview(), 400);
+    }, 800);
+  } catch (e) {
+    modal.innerHTML = `<div style="text-align:center;padding:20px;color:var(--red)">❌ 补题出错：${esc(e.message || e)}<br><br><button data-action="close-overlay" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">关闭</button></div>`;
+  }
 }
 
 function showWebReviewQuestion(cardData) {

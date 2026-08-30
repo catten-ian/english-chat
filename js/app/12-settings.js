@@ -70,7 +70,7 @@ function openSettings() {
   modal.innerHTML = `<div class="modal-header"><h3 id="settingsTitle">⚙️ 设置</h3><button class="modal-close" data-action="close-overlay" aria-label="关闭">×</button></div>
     <div class="modal-body">
 
-    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="account">
       <div style="font-size:14px;font-weight:600;margin-bottom:10px">👤 账户</div>
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
         <div id="avatarPreview" style="width:52px;height:52px;border-radius:50%;background:var(--primary-bg);display:flex;align-items:center;justify-content:center;font-size:26px;overflow:hidden;border:1px solid var(--border)">${avatar ? '<img src="' + esc(avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤'}</div>
@@ -88,13 +88,13 @@ function openSettings() {
       </div>
     </div>
 
-    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="characters">
       <div style="font-size:14px;font-weight:600;margin-bottom:10px">🎭 角色卡</div>
       <div style="display:flex;flex-direction:column;gap:6px">${charOptions}</div>
       <button data-action="prompt-new-character" style="margin-top:8px;padding:6px 14px;border-radius:6px;border:1px dashed var(--primary);background:#fff;color:var(--primary);font-size:12px;cursor:pointer">＋ 新建角色</button>
     </div>
 
-    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="chat">
       <div style="font-size:14px;font-weight:600;margin-bottom:6px">🧭 聊天偏好</div>
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:6px 0">
         <input type="checkbox" id="setAnki" ${isAnki ? 'checked' : ''} style="width:17px;height:17px">
@@ -126,7 +126,7 @@ function openSettings() {
       </label>
     </div>
 
-    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="music">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="font-size:14px;font-weight:600">🎵 背景音乐</div>
         <span id="setMusicStatus" style="font-size:11px;color:var(--text2)">${musicItems.length ? musicItems.length + ' 首曲目' : '正在读取 music/ 目录…'}</span>
@@ -175,7 +175,7 @@ function openSettings() {
       <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.6">顶部 🎵 按钮：单击播放/暂停，双击下一首，滚轮调音量，<b>悬停展开迷你播放器</b>（可拖动进度）。</div>
     </div>
 
-    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="quiz">
       <div style="font-size:14px;font-weight:600;margin-bottom:8px">📝 薄弱点出题策略</div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:8px">分析发现薄弱点后，AI 自动生成题目推送到 Anki 薄弱点牌组，利用 Anki 的原生排程（FSRS）复习。题组可能在同一道题中考察多个相关薄弱点。</div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -198,7 +198,7 @@ function openSettings() {
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px"><input type="checkbox" id="setQuizMultiWp" ${getSetting('ankiQuizMultiWp', true) === false ? '' : 'checked'} style="width:15px;height:15px"> 尽量一题多薄弱点（多轮 API 强化覆盖）</label>
     </div>
 
-    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="topic">
       <div style="font-size:14px;font-weight:600;margin-bottom:6px">🎯 你想谈论的主题</div>
       <input id="setUserTopic" type="text" value="${esc(getSetting('userTopic',''))}" placeholder="例：科幻电影、健身、心理咨询…（留空则不引导）"
         style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;outline:none">
@@ -207,7 +207,7 @@ function openSettings() {
         style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;outline:none">
     </div>
 
-    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="answer">
       <div style="font-size:14px;font-weight:600;margin-bottom:8px">📝 作答设置（作文 / 翻译 / 描述作答框）</div>
       <div style="display:flex;gap:12px;margin-bottom:8px">
         <label style="display:flex;align-items:center;gap:8px;font-size:12px;flex:1">
@@ -231,7 +231,7 @@ function openSettings() {
       <div style="font-size:12px;color:var(--text2)">作答框默认在左右留出较大边缘间距，内容变长后会自动缩短边缘留白以容纳更多文字。</div>
     </div>
 
-    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="trrules">
       <div style="font-size:14px;font-weight:600;margin-bottom:6px">🌐 翻译规则版本（用于翻译题库 / AI 出题 / 评分）</div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:8px">选择 AI 评分时使用哪套规则：</div>
       <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:6px 0">
@@ -265,7 +265,7 @@ function openSettings() {
       <div style="font-size:11px;color:var(--text3);margin-top:6px">注：「必用词」来自题目 JSON 中的「词」字段。当前翻译题库（上海高考 2020-2024 一二三模）共 348 道已注入必用词。</div>
     </div>
 
-    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="strategist">
       <div style="font-size:14px;font-weight:600;margin-bottom:4px">🤖 策略师指令（引导 Alex 的风格/角色）</div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:8px">发送一条指令让策略师在每次回复前参考。可选「常驻」：写入系统提示词长期生效；不勾选则只对下一条消息生效一次。</div>
       <textarea id="setStrategistInstr" rows="2" placeholder="例：让 Alex 更幽默一点 / 扮演一个严格的面试官 / 多用俚语…" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;outline:none;resize:vertical"></textarea>
@@ -277,7 +277,7 @@ function openSettings() {
       ${strategistHTML}
     </div>
 
-    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" id="keysSection">
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="keys">
       <div style="font-size:14px;font-weight:600;margin-bottom:6px">🔌 服务与密钥</div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:10px">密钥保存在服务端 <code>.env</code>（gitignored），页面只显示掩码，永不明文回传。保存后立即生效，无需重启。</div>
       <div id="keysStatusBox" style="font-size:12px;color:var(--text2)">⏳ 正在读取密钥状态…</div>
@@ -404,6 +404,7 @@ function restructureSettingsModal(modal) {
       { title: '🃏 薄弱点出题策略', matchText: '薄弱点出题策略' },
       { title: '🎯 主题与长度', matchText: '你想谈论的主题' },
       { title: '🤖 策略师指令', matchText: '策略师指令' },
+      { title: '🔌 服务与密钥', matchText: '服务与密钥' },
       { title: '🔌 连接与备份', matchText: 'AnkiConnect' }
     ];
     const groups = [];
