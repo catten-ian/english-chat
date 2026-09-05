@@ -78,7 +78,10 @@ function renderMD(text, mode) {
   s = s.replace(/\$([^$\n]+?)\$/g, (m, tex) => { mathSegs.push({ tex, display: 0 }); return '\u0000MATH' + (mathSegs.length - 1) + '\u0000'; });
 
   // Escape HTML
-  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // 双引号必须一起转义：下面会把 URL 拼进 href="..."，
+  // 否则 [x](https://a"style="position:fixed;width:100vw;height:100vh) 能闭合 href
+  // 并注入任意属性（全屏点击劫持 / 覆盖 rel="noopener"）。
+  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
   // Blockquotes
   s = s.split('\n').map(line => {
@@ -102,8 +105,8 @@ function renderMD(text, mode) {
   s = s.replace(/~~(.+?)~~/g, '<del>$1</del>');
   // Inline code: `code`
   s = s.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
-  // Links: [text](url)
-  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // Links: [text](url)。URL 里额外排除引号，双保险（上面已把引号转成实体）
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s"'`]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 
   // Build blocks line by line; handle nested lists by indentation, skip <br> inside blocks
   const out = [];

@@ -90,9 +90,14 @@ async function ankiAddNotesBatch(notes) {
         const noteIds = [];
         const valid = [];
         addedResults.forEach((nid, j) => { if (nid != null && nid !== false) { noteIds.push(nid); valid.push(nid); } });
-        // 映射回原始索引对应的 note id（用于关联 weak point）
-        const order = [];
-        toAdd.forEach((n, j) => { order.push(addedResults[j] != null && addedResults[j] !== false ? addedResults[j] : null); });
+        // 映射回原始索引对应的 note id（用于关联 weak point）：
+        // addedResults 与去重后的 toAdd 对齐，调用方按原始 notes 的下标取用，
+        // 必须经 idxMap 还原，否则一旦有重复卡被过滤，后续 note id 会绑到错误的薄弱点上。
+        const order = new Array(notes.length).fill(null);
+        toAdd.forEach((n, j) => {
+          const nid = addedResults[j];
+          order[idxMap[j]] = (nid != null && nid !== false) ? nid : null;
+        });
         // AnkiConnect 忽略 deckName 的兜底：用 changeDeck 移到正确牌组
         const deckPlacement = [];
         toAdd.forEach((n, j) => {
@@ -102,27 +107,35 @@ async function ankiAddNotesBatch(notes) {
         if (deckPlacement.length) ensureDeckPlacement(deckPlacement).catch(() => {});
         return { added: valid.length, skipped: skipped + (addedResults.length - valid.length), noteIds, order };
       }
-      return { added: toAdd.length, skipped, noteIds: [], order: [] };
+      return { added: toAdd.length, skipped, noteIds: [], order: new Array(notes.length).fill(null) };
     }
     // fallback: 逐条添加
     let added = 0, skipped = 0;
     const noteIds = [];
     const deckPlacement = [];
-    for (const n of notes) {
+    // order 与传入的 notes 一一对齐（失败的位置为 null），供调用方按原始下标关联薄弱点
+    const order = new Array(notes.length).fill(null);
+    for (let i = 0; i < notes.length; i++) {
+      const n = notes[i];
       try {
         const d = await ankiPostCall({
           action: 'addNote', version: 6,
           params: { note: { deckName: n.deckName, modelName: n.modelName || 'Basic', fields: n.fields, tags: n.tags || [] } }
         });
-        if (d && d.result && d.result.result && !d.result.error) { added++; noteIds.push(d.result.result); deckPlacement.push({ noteId: d.result.result, deckName: n.deckName }); }
+        if (d && d.result && d.result.result && !d.result.error) {
+          added++;
+          noteIds.push(d.result.result);
+          order[i] = d.result.result;
+          deckPlacement.push({ noteId: d.result.result, deckName: n.deckName });
+        }
         else skipped++;
       } catch (e) { skipped++; }
     }
     if (deckPlacement.length) ensureDeckPlacement(deckPlacement).catch(() => {});
-    return { added, skipped, noteIds, order: noteIds };
+    return { added, skipped, noteIds, order };
   } catch (e) {
     dbg('ANKI_BATCH_ERR', e.message);
-    return { added: 0, skipped: notes.length, noteIds: [], order: [] };
+    return { added: 0, skipped: notes.length, noteIds: [], order: new Array(notes.length).fill(null) };
   }
 }
 

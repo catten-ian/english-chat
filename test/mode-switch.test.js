@@ -43,3 +43,61 @@ test('首页点击当前模式 Chat 仍会进入聊天区', () => {
   assert.strictEqual(elements.chatArea.style.display, 'flex');
   assert.strictEqual(stored.get('ai_en_mode'), 'chat');
 });
+
+test('填空输入框 Enter 提交后不会冒泡为下一题', () => {
+  const listeners = {};
+  const input = {
+    value: '',
+    focus() { active = this; },
+    addEventListener(type, fn) { listeners[type] = fn; }
+  };
+  const submit = { addEventListener() {} };
+  const modal = {
+    querySelectorAll() { return [input]; },
+    querySelector(selector) { return selector === '#wrFillSubmit' ? submit : input; }
+  };
+  let active = null;
+  let submitted = 0;
+  const sandbox = {
+    webReviewState: { quiz: { type: 'fill' }, locked: false },
+    setTimeout() {},
+    document: { getElementById: () => null, querySelector: () => null }
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  const source = fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8');
+  vm.runInContext(source, sandbox, { filename: '22-web-review.js' });
+  vm.runInContext("webReviewState = { quiz: { type: 'fill' }, locked: false };", sandbox);
+
+  sandbox.webReviewBindFillSubmit(modal);
+  const event = {
+    key: 'Enter',
+    defaultPrevented: false,
+    propagationStopped: false,
+    preventDefault() { this.defaultPrevented = true; },
+    stopPropagation() { this.propagationStopped = true; }
+  };
+  input.value = 'answer';
+  listeners.keydown(event);
+
+  assert.strictEqual(vm.runInContext('webReviewState.stage', sandbox), 'graded');
+  assert.strictEqual(event.defaultPrevented, true);
+  assert.strictEqual(event.propagationStopped, true);
+});
+
+test('网页复习拒绝接管其他账户的 Anki 牌组', () => {
+  const sandbox = {
+    ANKI_DECK_PREFIX: '英语学习',
+    currentUser: () => 'test',
+    ankiBaseDeck: () => '英语学习::test'
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  const source = `function ankiBaseDeck() { return ANKI_DECK_PREFIX + '::' + currentUser(); }\n` + fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8');
+  vm.runInContext(source, sandbox, { filename: '22-web-review.js' });
+
+  assert.strictEqual(sandbox.webReviewDeckMatches({ deckName: '英语学习::test::薄弱点' }), true);
+  assert.strictEqual(sandbox.webReviewDeckMatches({ deckName: '英语学习::test' }), true);
+  assert.strictEqual(sandbox.webReviewDeckMatches({ deckName: '英语学习::catten::薄弱点' }), false);
+  assert.strictEqual(sandbox.webReviewDeckMatches({ deckName: 'Default' }), false);
+});

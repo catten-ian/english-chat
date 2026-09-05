@@ -627,7 +627,8 @@ async function checkAnkiConnect(manual) {
 }
 
 async function reconnectAnkiConnect() {
-  ankiModelCache = null; ankiDeckEnsured = false;   // 强制重新探测  const ok = await checkAnkiConnect(true);
+  ankiModelCache = null; ankiDeckEnsured = false;   // 强制重新探测
+  const ok = await checkAnkiConnect(true);
   if (!ok) toastMsg('请确认 Anki 已运行、AnkiConnect 插件已安装（默认 8765 端口），然后重新点击「重连」。');
 }
 

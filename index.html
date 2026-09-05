@@ -794,7 +794,7 @@
 
         </select>
 
-        <input id="bankSearch" type="text" placeholder="🔍 搜索题目..." data-action="bank-render" style="flex:1;min-width:100px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+        <input id="bankSearch" type="text" placeholder="🔍 搜索题目..." aria-label="搜索题库题目" data-action="bank-search" style="flex:1;min-width:100px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none">
 
       </div>
 
@@ -850,33 +850,33 @@
 
 <script src="js/shgaoka_bank.js?v=20260828b"></script>
 
-<script src="js/storage.js?v=20260830a"></script>
+<script src="js/storage.js?v=20260906a"></script>
 
 <!-- app.js 已按领域拆分到 js/app/。
      顺序不可调整：存在顶层 IIFE、事件绑定与 const 声明的执行顺序依赖。
      校验见 test/app-split.test.js（文件齐全 / 无重复顶层声明 / 拼接可解析）。 -->
-<script src="js/app/01-core.js?v=20260828f"></script>
+<script src="js/app/01-core.js?v=20260906a"></script>
 <script src="js/app/02-agents.js?v=20260828f"></script>
 <script src="js/app/03-parse.js?v=20260828f"></script>
 <script src="js/app/04-chat-tree.js?v=20260828f"></script>
 <script src="js/app/05-chat-view.js?v=20260905a"></script>
-<script src="js/app/06-anki.js?v=20260830h"></script>
-<script src="js/app/07-chat-actions.js?v=20260828f"></script>
+<script src="js/app/06-anki.js?v=20260906a"></script>
+<script src="js/app/07-chat-actions.js?v=20260906a"></script>
 <script src="js/app/08-selection.js?v=20260828f"></script>
 <script src="js/app/09-gaokao.js?v=20260828f"></script>
-<script src="js/app/10-dictionary.js?v=20260830b"></script>
+<script src="js/app/10-dictionary.js?v=20260906a"></script>
 <script src="js/app/11-ui-panels.js?v=20260828f"></script>
-<script src="js/app/12-settings.js?v=20260905a"></script>
+<script src="js/app/12-settings.js?v=20260906a"></script>
 <script src="js/app/13-banks.js?v=20260828f"></script>
 <script src="js/app/14-music.js?v=20260830b"></script>
 <script src="js/app/15-modes.js?v=20260905a"></script>
 <script src="js/app/16-reading.js?v=20260828f"></script>
 <script src="js/app/17-practice.js?v=20260830d"></script>
 <script src="js/app/18-games.js?v=20260828f"></script>
-<script src="js/app/19-init.js?v=20260830d"></script>
+<script src="js/app/19-init.js?v=20260906a"></script>
 <script src="js/app/20-progress.js?v=20260830a"></script>
 <script src="js/app/21-anki-tasks.js?v=20260830c"></script>
-<script src="js/app/22-web-review.js?v=20260830e"></script>
+<script src="js/app/22-web-review.js?v=20260905c"></script>
 <script src="js/app/23-cost.js?v=20260830a"></script>
 
 

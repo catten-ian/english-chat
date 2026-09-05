@@ -4,8 +4,10 @@
    - 所有 /api/db/* 与代理均带 Authorization: Bearer <token>
 ============================================================ */
 
-// 同源（Caddy/Nginx 反代 /api → 后端 8091）时为空字符串；
-// 若用 file:// 直接双击打开 index.html，则显式指向本地后端（服务端 CORS 已放行 null 来源）
+// 同源（Caddy/Nginx 反代 /api → 后端 8091）时为空字符串。
+// 注意：file:// 直接双击打开已不再受支持——服务端 CORS 不再放行 `Origin: null`
+// （任意第三方 sandbox iframe 都能伪造该来源）。请用 http://localhost:8091 访问。
+// 这里保留指向仍便于本地调试时看到明确的 CORS 报错而不是同源静默失败。
 const BACKEND_URL = (typeof location !== 'undefined' && location.protocol === 'file:') ? 'http://localhost:8091' : "";
 
 /* ---------- Auth ---------- */
@@ -239,7 +241,9 @@ const CACHE_OWNER_KEY = 'ai_en_cache_owner';
 const USER_CACHE_KEYS = [
   'ai_en_convs', 'ai_en_vocab', 'ai_en_weak', 'ai_en_current_conv',
   'ai_en_settings_backup', 'ai_en_backup_latest', 'ai_en_backup_history',
-  'ai_en_dict_history', 'ai_en_mode', 'ai_en_game_tab', 'ai_en_practice_tab', 'ai_en_anki_tasks'
+  'ai_en_dict_history', 'ai_en_mode', 'ai_en_game_tab', 'ai_en_practice_tab', 'ai_en_anki_tasks',
+  // 作答草稿（15-modes.js DRAFT_KEYS）：不清会把上一个账户的作文/翻译原文恢复给下一个账户
+  'ai_en_draft_writing', 'ai_en_draft_translation', 'ai_en_draft_charade'
 ];
 
 function clearUserCache() {
@@ -304,13 +308,46 @@ async function loadUserData() {
 /* settings 对象 → ai_en_setting_* 键。current_conv 单独处理（不是偏好项） */
 function hydrateSettingsFromServer(settingsObj) {
   if (!settingsObj || typeof settingsObj !== 'object') return;
-  for (const [k, v] of Object.entries(settingsObj)) {
-    if (k === 'current_conv') {
-      if (v) localStorage.setItem('ai_en_current_conv', String(v));
-      continue;
+  _suppressSettingSync = true;   // 回填期间不要把刚读下来的值再推回服务端
+  try {
+    for (const [k, v] of Object.entries(settingsObj)) {
+      if (k === 'current_conv') {
+        if (v) localStorage.setItem('ai_en_current_conv', String(v));
+        continue;
+      }
+      if (v === undefined) continue;
+      setSetting(k, v);
     }
-    if (v === undefined) continue;
-    setSetting(k, v);
+  } finally {
+    _suppressSettingSync = false;
+  }
+}
+
+/* ---------- 只存在本地的偏好键 → 随 settings 快照同步到服务端 ----------
+   这些键由各模块直接 setSetting 写入，既没有独立的 apiSave key，
+   也不在 saveSettings() 的表单里，所以以前登出清缓存后会永久丢失。
+   setSetting 命中白名单时自动合并进 settings 快照并入队上传（apiSave 会合并同键写入）。 */
+const SYNCED_SETTING_KEYS = [
+  'trHistory',        // 翻译作答历史（上限 100 条）
+  'trQuestionStats',  // 每题最佳分/作答次数
+  'trCustomBank',     // 用户导入的自定义翻译题库
+  'dictHistory',      // 查词历史（上限 12 条）
+  'ankiVocabPhase',   // 生词卡两阶段进度
+  'ankiStreak',       // 连续学习天数
+  'ankiLastStudy'     // 最近学习日期
+];
+let _suppressSettingSync = false;
+
+function syncSettingToServer(key) {
+  if (_suppressSettingSync) return;
+  if (SYNCED_SETTING_KEYS.indexOf(key) === -1) return;
+  try {
+    const snap = getSettingsBackup();
+    snap[key] = JSON.parse(localStorage.getItem('ai_en_setting_' + key));
+    saveSettingsBackup(snap);
+    apiSave('settings', snap);
+  } catch (e) {
+    if (typeof dbg === 'function') dbg('SETTING_SYNC', key + ': ' + (e.message || e));
   }
 }
 
@@ -476,7 +513,23 @@ function getAllConversations() {
   try { return JSON.parse(localStorage.getItem('ai_en_convs') || '{}'); } catch(e) { return {}; }
 }
 function saveAllConversations(convs) {
-  localStorage.setItem('ai_en_convs', JSON.stringify(convs));
+  // 服务端是权威数据源：即使本地写入因配额失败，也必须把这次改动推上去，
+  // 否则用户只看到「回复失败」而对话内容实际已丢。
+  try {
+    localStorage.setItem('ai_en_convs', JSON.stringify(convs));
+  } catch (e) {
+    // QuotaExceededError：先丢掉本地备份快照腾出空间再重试一次
+    try {
+      localStorage.removeItem('ai_en_backup_history');
+      localStorage.removeItem('ai_en_backup_latest');
+      localStorage.setItem('ai_en_convs', JSON.stringify(convs));
+    } catch (e2) {
+      if (typeof toastMsg === 'function') {
+        toastMsg('⚠️ 本地存储已满，本地缓存未更新（对话仍会保存到服务器）', 'error', 4000);
+      }
+      if (typeof dbg === 'function') dbg('LS_QUOTA', e2.message || String(e2));
+    }
+  }
   apiSave('conversations', convs);
 }
 function getCurrentConvId() {
@@ -530,7 +583,7 @@ function saveConversation(messages) {
   if (!convs[id].title || convs[id].title === '新对话') {
     const firstUser = findFirstUserContent(messages);
     if (firstUser) {
-      convs[id].title = firstUser.replace(/[\\n\\r]+/g, ' ').substring(0, 28) + (firstUser.length > 28 ? '...' : '');
+      convs[id].title = firstUser.replace(/[\n\r]+/g, ' ').substring(0, 28) + (firstUser.length > 28 ? '...' : '');
     }
   }
   saveAllConversations(convs);

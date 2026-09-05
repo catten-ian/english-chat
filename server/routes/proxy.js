@@ -22,6 +22,8 @@ const { recordUsage, parseChatUsage, parseStreamUsage } = require('../services/u
 // MiniMax chat（非流式）
 async function chat(req, res) {
   const body = await readBody(req);
+  // readBody 超限/客户端中断时返回 null。不拦下来会把 null 当请求体真的发给上游并计费。
+  if (!body) { sendJson(res, 413, { error: 'body too large' }, req); return; }
   const r = await proxyRequest(MINIMAX_BASE() + '/v1/chat/completions', body, { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + MINIMAX_KEY() });
   // 用量记账（只记数字，不记内容）
   const u = parseChatUsage(r.data) || {};
@@ -37,6 +39,7 @@ async function chat(req, res) {
 // MiniMax chat（流式 SSE）
 async function chatStream(req, res) {
   const body = await readBody(req);
+  if (!body) { sendJson(res, 413, { error: 'body too large' }, req); return; }
   // 一个 controller 贯穿整个流生命周期：
   // 客户端断开（点「停止」/关页面）必须真正中止上游，否则 MiniMax 会继续生成并计费
   const ctrl = new AbortController();
@@ -137,6 +140,7 @@ async function chatStream(req, res) {
 // MiniMax web search
 async function websearch(req, res) {
   const body = await readBody(req);
+  if (!body) { sendJson(res, 413, { error: 'body too large' }, req); return; }
   const r = await proxyRequest(MINIMAX_BASE() + '/v1/coding_plan/search', body, { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + MINIMAX_KEY() });
   // 联网搜索按次计（不记搜索词）
   recordUsage({ userId: req.uid, provider: 'minimax', kind: 'websearch', status: r.status });
@@ -147,6 +151,7 @@ async function websearch(req, res) {
 // ElevenLabs TTS
 async function tts(req, res, voiceId) {
   const body = await readBody(req);
+  if (!body) { sendJson(res, 413, { error: 'body too large' }, req); return; }
   // TTS 按字符计费：从请求体里只取 text 长度（不留文本内容）
   let chars = 0;
   let ttsModel = null;
@@ -157,7 +162,9 @@ async function tts(req, res, voiceId) {
   } catch (e) {}
   const r = await proxyRequest('https://api.elevenlabs.io/v1/text-to-speech/' + voiceId, body, { 'Content-Type': 'application/json', 'xi-api-key': ELEVEN_KEY() }, 30000);
   recordUsage({ userId: req.uid, provider: 'elevenlabs', kind: 'tts', model: ttsModel, chars, status: r.status });
-  res.writeHead(r.status, { 'Content-Type': 'audio/mpeg', ...corsHeaders(req) });
+  // 上游报错时返回的是 JSON，标成 audio/mpeg 前端就无法解析失败原因
+  const ctype = (r.status >= 200 && r.status < 300) ? 'audio/mpeg' : 'application/json; charset=utf-8';
+  res.writeHead(r.status, { 'Content-Type': ctype, ...corsHeaders(req) });
   res.end(r.data);
 }
 

@@ -138,6 +138,17 @@ registerAction('switch-right-tab', function () { switchRightTab(this.getAttribut
 registerAction('switch-feedback-tab', function () { switchFeedbackTab(this.getAttribute('data-ftab')); });
 registerAction('query-dict', function () { queryDict(); });
 registerAction('bank-render', function () { renderTrBankPanel(); });
+/* 题库搜索框：input + change 都会触发委托，每个字符都重建 ~400 条 HTML。
+   这里做 150ms 防抖，并在题库面板不可见时直接跳过（作答后 trUpdateQuestionStat 也会调用）。 */
+let _bankSearchTimer = null;
+registerAction('bank-search', function () {
+  clearTimeout(_bankSearchTimer);
+  _bankSearchTimer = setTimeout(function () {
+    const pane = document.getElementById('tab-gaokao');
+    if (pane && pane.style.display === 'none') return;
+    renderTrBankPanel();
+  }, 150);
+});
 registerAction('toggle-mobile-panel', function () { toggleMobilePanel(); });
 registerAction('add-from-tip', function () { addFromTip(); });
 registerAction('hide-tip', function () { hideTip(); });
@@ -674,8 +685,16 @@ input.addEventListener('keydown', function(e) {
   })();
 
   // Periodic auto-backup every 2 minutes；保留层级由多时间节点策略控制
-  setInterval(function() {
+  // 只在已登录时启动：未登录也跑会每 2 分钟发一次没有 Authorization 头的 /api/backup
+  startAutoBackup();
+});
+
+let _autoBackupTimer = null;
+function startAutoBackup() {
+  if (_autoBackupTimer) return;
+  _autoBackupTimer = setInterval(function() {
+    if (!isAuthed()) return;   // 会话失效/登出后停止打服务端
     localStorageBackup();
     try { fetch((BACKEND_URL || '') + '/api/backup', { method: 'POST', headers: { ...authHeaders() } }).catch(() => {}); } catch(e) {}
   }, 120000);
-});
+}

@@ -10,6 +10,9 @@ function getSetting(key, def) {
 }
 function setSetting(key, val) {
   localStorage.setItem('ai_en_setting_' + key, JSON.stringify(val));
+  // 只存在本地的偏好（翻译历史/查词历史/自定义题库等）随 settings 快照上传，
+  // 否则登出清缓存即永久丢失。白名单与抑制逻辑见 js/storage.js。
+  if (typeof syncSettingToServer === 'function') syncSettingToServer(key);
 }
 
 function toggleAnki() {

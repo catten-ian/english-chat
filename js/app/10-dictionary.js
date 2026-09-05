@@ -273,7 +273,7 @@ async function queryDict() {
     } else if (obj && obj.answer) {
       html += '<div style="font-size:13px;line-height:1.6;padding:8px;background:var(--primary-bg);border-radius:8px" class="md-content">' + renderMD(obj.answer, 'markdown') + '</div>';
     } else {
-      html = esc(cleaned || raw);
+      html = esc(cleaned || accText || '');
     }
 
     // Extensions
@@ -290,10 +290,6 @@ async function queryDict() {
 
     resultEl.innerHTML = html;
     saveDictHistory(text, html);
-    // Track weak points from dict
-    if (obj && obj.weak_points) {
-      obj.weak_points.forEach(wp => addWeakPoint(wp.category || '词汇', wp.point || ''));
-    }
   } catch (err) {
     resultEl.innerHTML = '<div style="color:var(--red);font-size:13px;padding:12px">⚠️ 查询失败: ' + esc(err.message.substring(0, 100)) + '</div>';
     dbg('DICT_ERR', err.message);

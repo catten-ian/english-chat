@@ -124,7 +124,26 @@ describe('renderMD() 不得输出可执行 HTML', () => {
 
     const good = renderMD('[example](https://example.com)');
     assert.match(good, /<a href="https:\/\/example\.com"/);
-    assert.match(good, /rel="noopener"/);
+    assert.match(good, /rel="noopener noreferrer"/);
+  });
+
+  test('链接 URL 里的引号不能闭合 href 注入属性', () => {
+    // 回归：转义只处理 & < > 时，URL 里的 " 能闭合 href 并注入 style/rel
+    // （全屏点击劫持 + 覆盖 rel="noopener" 造成反向 tabnabbing）
+    // 判定标准：URL 必须完整落在一对引号内，标签上只允许渲染器自己生成的三个属性
+    const shape = /<a href="[^"]*" target="_blank" rel="noopener noreferrer">/;
+
+    const clickjack = renderMD('[x](https://evil.example"style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999)');
+    assert.match(clickjack, shape, '标签形状被破坏: ' + clickjack);
+    assert.ok(!/<a [^>]*\sstyle=/i.test(clickjack), '不应注入 style 属性: ' + clickjack);
+
+    const relInject = renderMD('[x](https://evil.example"rel="opener)');
+    assert.match(relInject, shape, '标签形状被破坏: ' + relInject);
+    const relCount = (relInject.match(/\srel=/gi) || []).length;
+    assert.strictEqual(relCount, 1, '只应有渲染器自己生成的一个 rel: ' + relInject);
+
+    // 正文里的引号仍应以实体形式安全显示
+    assert.match(renderMD('他说 "hi"'), /&quot;hi&quot;/);
   });
 
   test('数学公式内容被转义', () => {

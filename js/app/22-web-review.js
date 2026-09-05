@@ -72,6 +72,29 @@ function startWebReview() {
   overlay.onclick = function(e) { if (e.target === overlay) { closeWebReview(); } };
 }
 
+function webReviewDeckMatches(cardData) {
+  const deck = String(cardData && cardData.deckName || '');
+  const base = ankiBaseDeck();
+  return deck === base || deck.startsWith(base + '::');
+}
+
+function showWebReviewDeckMismatch(cardData) {
+  const modal = document.getElementById('ankiReviewModal');
+  if (!modal) return;
+  const actual = String(cardData && cardData.deckName || '未知牌组');
+  modal.innerHTML = `<div style="text-align:center;padding:20px">
+    <div style="font-size:40px;margin-bottom:12px">⚠️</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:10px">Anki 当前正在复习其他账户的牌组</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.8;text-align:left">
+      当前网页账户：<b>${esc(currentUser() || '未知')}</b><br>
+      网页目标牌组：<b>${esc(ankiBaseDeck())}</b><br>
+      Anki 当前牌组：<b>${esc(actual)}</b><br><br>
+      请先在 Anki 中退出当前复习窗口，再重新点击网页复习。这样可以避免把其他账户的卡混入本次复习。
+    </div>
+    <button data-action="close-overlay" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">关闭</button>
+  </div>`;
+}
+
 function fetchNextWebReviewCard() {
   (async () => {
     try {
@@ -87,6 +110,10 @@ function fetchNextWebReviewCard() {
           // 提供「立即补题」而不是干巴巴的空状态——补题走任务队列，成功后自动开考
           showWebReviewEmptyWithCatchUp();
         }
+        return;
+      }
+      if (!webReviewDeckMatches(cardData)) {
+        showWebReviewDeckMismatch(cardData);
         return;
       }
       webReviewState.cardId = cardData.cardId;
@@ -412,6 +439,7 @@ function webReviewBindFillSubmit(modal) {
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
+        e.stopPropagation(); // 提交后阶段会同步变成 graded，不能让同一 Enter 再触发下一题
         if (i + 1 < inputs.length) inputs[i + 1].focus();
         else doSubmit();
       }

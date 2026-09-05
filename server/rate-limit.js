@@ -1,16 +1,18 @@
 /* ============================================================
    AI 英语对话教练 - 限流框架（server/rate-limit.js）
    ------------------------------------------------------------
-   内存滑动窗口限流器。当前【默认不启用】：
-   本应用是单机多用户场景（127.0.0.1 绑定），登录接口此前明确
-   「先不加限流」。本模块提供完整可用的实现与接入示例，未来要
-   限制登录爆破 / 代理滥用时直接在 app.js 里启用即可。
+   内存滑动窗口限流器。
+
+   当前接入点：
+     - POST /api/auth/login（server/routes/auth.js）：只对【失败】计数，
+       成功登录立即 clear，按 IP + 用户名双维度限，防密码爆破。
 
    用法：
      const limiter = createRateLimiter({ windowMs: 60000, max: 20 });
      // 在某条路由里：
      const r = limiter.check(req.socket.remoteAddress);
      if (!r.ok) { sendJson(res, 429, { error: 'too many requests' }); return; }
+     // 放行后按需计数：limiter.hit(key)
 
    窗口滑动：每次 check 时丢弃窗口外的旧时间戳，再判断是否超限。
    内存占用与活跃 key 数成正比，单机场景完全可接受。
@@ -63,6 +65,8 @@ function createRateLimiter(opts) {
     },
     /* 统计当前被跟踪的 key 数（调试/监控用） */
     size() { return hits.size; },
+    /* 清空单个 key 的计数（例如登录成功后清掉该 IP/账户的失败记录） */
+    clear(key) { hits.delete(key); },
     reset() { hits.clear(); }
   };
 }

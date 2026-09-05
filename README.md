@@ -65,8 +65,8 @@ npm start               # 等价于 node server.js，http://localhost:8091
 
 ```bash
 cd ai-english-chat
-npm test                # node:test，零依赖，117 个用例
-npm run check           # 语法检查（server.js + server/**/*.js + js/**/*.js + test/ + scripts/）
+npm test                # node:test，零依赖，216 个用例（含全量语法检查）
+npm run check           # 单独跑语法检查（server.js + server/**/*.js + js/**/*.js + test/ + scripts/）
 ```
 
 测试全部在临时目录中启动独立服务进程（通过 `AI_EN_DATA_DIR` 注入），**不会读写 `data/app.db` 或 `.env`**，也不调用任何外部 API。
@@ -89,6 +89,10 @@ npm run check           # 语法检查（server.js + server/**/*.js + js/**/*.js
 | `test/api-contract.test.js` | 前端调用的每个 `/api/*` 都有后端路由、Anki action 与模型白名单前后端一致、user_data key 一致、无残留的旧 Python 入口引用、前端配置不含 key |
 | `test/app-split.test.js` | app.js 拆分完整性：切片齐全/命名规范、index.html 顺序加载、无重复顶层声明、拼接可解析、关键函数齐全 |
 | `test/required-words.test.js` | 翻译必用词匹配：变式（defers/stopped/studies）、词性标注、多词短语、句型骨架、句首大写；以真实题库参考答案命中率做回归 |
+| `test/mode-switch.test.js` | 模式切换：面板显隐、当前模式持久化 |
+| `test/encoding.test.js` | 全站 UTF-8 编码防回归（源码/文档不得出现乱码字节） |
+| `test/audit-fixes.test.js` | 2026-09 审计修复回归：Anki query 顶层 OR 越权、note 媒体字段拒绝、CORS 不放行 `Origin: null`、限流器 clear/窗口滑出、5 个必现前端 bug 的源码级断言、草稿键与本地偏好同步白名单一致性、背景音乐播放逻辑（模式/进度/音量）、登录失败限流端到端 |
+| `test/syntax-all.test.js` | 把 `scripts/check-syntax.js` 纳入 `npm test`（此前 `js/storage.js`、`js/config.js`、`scripts/*.js` 从未被解析） |
 
 ### 默认账户
 
@@ -123,18 +127,18 @@ ai-english-chat/
 │   ├── db.js            # SQLite 连接（WAL）+ 题库播种
 │   ├── migrations.js    # schema 版本迁移（PRAGMA user_version）
 │   ├── auth.js          # PBKDF2 / 会话 token 哈希 / 鉴权 / 用户播种
-│   ├── validation.js    # user_data 类型校验 + Anki 代理守卫
-│   ├── rate-limit.js    # 滑动窗口限流框架（默认不启用）
+│   ├── validation.js    # user_data 类型校验 + Anki 代理守卫（含检索串归属校验）
+│   ├── rate-limit.js    # 滑动窗口限流框架（已接入登录失败限流）
 │   ├── helpers.js       # CORS / JSON / 请求体读取
-│   ├── routes/          # health / music / auth / user-data / gaokao / backup / proxy / static
-│   └── services/        # backup（快照+分层保留）/ anki（AnkiConnect）/ proxy（上游转发）
+│   ├── routes/          # health / music / auth / user-data / gaokao / backup / proxy / keys / usage / static
+│   └── services/        # backup（快照+分层保留）/ anki（AnkiConnect）/ proxy（上游转发）/ logger（JSONL+轮转）/ usage（用量记账）/ envfile（.env 原子写）
 ├── start.bat            # 启动脚本
 ├── .env                 # 密钥（gitignored）
 ├── css/
 │   └── style.css        # 样式
 ├── package.json         # engines.node >=22.5 + start/test/check 脚本（零第三方依赖）
 ├── js/
-│   ├── app/             # 主应用逻辑，按领域拆分为 19 个切片（原单体 app.js，约 8200 行）
+│   ├── app/             # 主应用逻辑，按领域拆分为 23 个切片（原单体 app.js，约 8200 行）
 │   │   ├── 01-core.js        # 全局状态、工具函数、Markdown 渲染、系统提示词、callAPI
 │   │   ├── 02-agents.js      # 策略师 / 执行者（联网研究）/ SSE 流式
 │   │   ├── 03-parse.js       # 高容忍度 JSON 解析、AI 回复提取
@@ -159,18 +163,30 @@ ai-english-chat/
 │   │   ├── 22-web-review.js  # 网页答题复习（选择/填空键盘作答 + 自动评分）
 │   │   └── 23-cost.js        # 成本与隐私中心（用量图表 + 隐私面板）
 │   ├── config.js        # 角色卡、配置常量（不含密钥）
-│   └── storage.js       # 存储层（登录 + SQLite 读写 + 本地缓存隔离）
+│   ├── shgaoka_bank.js  # 上海高考翻译题库（由 data/gaokao_translations.json 生成）
+│   └── storage.js       # 存储层（登录 + SQLite 读写 + 本地缓存隔离 + 本地偏好同步白名单）
 ├── scripts/
-│   └── check-syntax.js  # npm run check 实际执行：枚举 js/** 逐个 node --check├── test/                # node:test 测试（临时 DB，不碰真实数据）
+│   ├── check-syntax.js  # npm run check 实际执行：枚举 js/** 逐个 node --check
+│   └── backup_cli.js    # 备份 list / verify / restore（演练默认开，恢复前自动存盘）
+├── test/                # node:test 测试（临时 DB，不碰真实数据）
 │   ├── helpers.js       # 启动隔离服务进程 / HTTP 工具
 │   ├── static-security.test.js
 │   ├── auth.test.js
 │   ├── user-data.test.js
 │   ├── anki-proxy.test.js
+│   ├── anki-tasks.test.js
 │   ├── schema-backup.test.js
+│   ├── backup-service.test.js
+│   ├── logger.test.js
+│   ├── usage.test.js
+│   ├── keys.test.js
 │   ├── render-security.test.js
 │   ├── api-contract.test.js
 │   ├── app-split.test.js
+│   ├── mode-switch.test.js
+│   ├── encoding.test.js
+│   ├── audit-fixes.test.js
+│   ├── syntax-all.test.js
 │   └── required-words.test.js
 ├── docs/
 │   └── audit-2026-08.md # 代码审查与修复记录
@@ -199,7 +215,7 @@ python scripts\manage_users.py list
 
 ## 前端结构说明
 
-`js/app.js` 已拆分为 `js/app/01-core.js … 22-cost.js` 共 **22 个顺序切片**，由 `index.html` 按序加载（01–19 为原单体拆分，20–22 为新增功能切片）。这是「顺序切片」而非模块化重构，原因：原文件含顶层 IIFE、事件绑定与 `const/let` 声明，重排会改变执行顺序与 TDZ 行为。切片本身没有 `import/export`，函数仍声明在全局作用域，跨切片调用靠加载顺序保证。
+`js/app.js` 已拆分为 `js/app/01-core.js … 23-cost.js` 共 **23 个顺序切片**，由 `index.html` 按序加载（01–19 为原单体拆分，20–23 为新增功能切片）。这是「顺序切片」而非模块化重构，原因：原文件含顶层 IIFE、事件绑定与 `const/let` 声明，重排会改变执行顺序与 TDZ 行为。切片本身没有 `import/export`，函数仍声明在全局作用域，跨切片调用靠加载顺序保证。
 
 拆分由 `_archive/ai-english-chat-legacy-20260828/split-app.js`（gitignored，不在仓库内运行）生成，校验约束：
 

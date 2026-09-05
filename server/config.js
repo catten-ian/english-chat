@@ -116,7 +116,12 @@ const MINIMAX_KEY = () => _MINIMAX_KEY;
 const ELEVEN_KEY = () => _ELEVEN_KEY;
 const MINIMAX_BASE = () => _MINIMAX_BASE;
 
-const ALLOWED_ORIGINS = new Set(['null', 'http://localhost:8091', 'http://127.0.0.1:8091']);
+/* 允许的 Origin。
+   注意：这里刻意不包含 'null'。`Origin: null` 由 sandbox iframe / data: 文档发出，
+   任意第三方站点都能构造，等于给外部页面开了带凭据的跨源读权限
+   （配合默认账户 + /api/keys/rotate-base 可窃取上游 API key）。
+   本应用页面由本服务自身提供，不需要 file:// 支持。 */
+const ALLOWED_ORIGINS = new Set(['http://localhost:8091', 'http://127.0.0.1:8091']);
 
 /* ==================== Anki 代理白名单与归属校验 ====================
    AnkiConnect 是无鉴权的本机高权限接口。代理若原样转发任意 action，

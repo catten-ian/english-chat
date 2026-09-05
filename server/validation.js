@@ -47,6 +47,54 @@ function isSafeMediaName(name) {
   return typeof name === 'string' && /^ai_en_[A-Za-z0-9_-]{1,64}\.(mp3|m4a|ogg|wav)$/.test(name);
 }
 
+/* AnkiConnect 的 note 支持 audio/picture/video 数组，其条目可写 {path:...}（把本机任意文件
+   复制进 Anki 媒体库）或 {url:...}（让 Anki 去抓远端地址）。本应用的音频一律走
+   storeMediaFile + [sound:...]（见 js/app/06-anki.js），从不使用这些字段，
+   因此在代理层直接拒绝，避免通过 addNote 绕开 storeMediaFile 的文件名白名单。 */
+const ANKI_NOTE_MEDIA_FIELDS = ['audio', 'picture', 'video'];
+function badNoteMedia(note) {
+  for (const f of ANKI_NOTE_MEDIA_FIELDS) {
+    if (note[f] !== undefined) {
+      return { status: 403, error: 'note.' + f + ' not allowed（音频请走 storeMediaFile）' };
+    }
+  }
+  return null;
+}
+
+/* 顶层 OR 检测：括号内的 OR 是安全的（deck:X (is:due OR is:new)），
+   括号外的 OR 会新增一个不受牌组限定的检索分支（deck:X OR deck:*），必须拒绝。
+   括号不配对时形状不可信，同样按「有顶层 OR」处理。 */
+function hasTopLevelOr(query) {
+  let depth = 0;
+  const re = /\(|\)|\sor\s/gi;
+  let m;
+  while ((m = re.exec(query)) !== null) {
+    const tok = m[0];
+    if (tok === '(') depth++;
+    else if (tok === ')') { depth--; if (depth < 0) return true; }
+    else if (depth === 0) return true;
+  }
+  return depth !== 0;
+}
+
+/* Anki 检索串归属校验。合法形态只有两种：
+   1) 以 deck:<本用户牌组根> 开头，可继续 AND 其它条件（括号内可用 OR）
+   2) 纯 nid: 列表（刚 addNotes 完用 changeDeck 归位，见 ensureDeckPlacement）
+   历史缺陷：此前只做 query.includes('deck:'+root)，`deck:<root> OR deck:*`
+   能整库读取 / 把任意卡片移进自己牌组。 */
+function ankiQueryScoped(query, root) {
+  const q = String(query || '').trim();
+  if (!q) return false;
+  if (q.includes('*')) return false;              // 通配符可逃出本用户子树
+  if (/(^|\s)-deck:/i.test(q)) return false;      // 取反牌组限定
+  // 形态 2：纯 nid: 列表（单个，或用 OR 连接多个）
+  const alts = q.split(/\s+or\s+/i).map(s => s.trim()).filter(Boolean);
+  if (alts.length && alts.length <= ANKI_MAX_NOTES && alts.every(t => /^nid:\d{1,20}$/.test(t))) return true;
+  // 形态 1：deck: 限定开头，且不得有顶层 OR 追加不受限分支
+  if (hasTopLevelOr(q)) return false;
+  return q.startsWith('deck:' + root);
+}
+
 /* 校验一次 Anki 代理请求。通过返回 null，否则返回 { status, error } */
 function ankiGuard(payload, username) {
   if (!payload || typeof payload !== 'object') return { status: 400, error: 'invalid anki payload' };
@@ -71,6 +119,7 @@ function ankiGuard(payload, username) {
       if (note.modelName !== undefined && !ANKI_ALLOWED_MODELS.has(note.modelName)) {
         return { status: 403, error: 'model not allowed: ' + String(note.modelName).slice(0, 40) };
       }
+      { const m = badNoteMedia(note); if (m) return m; }
       return null;
     }
     case 'addNotes':
@@ -84,6 +133,7 @@ function ankiGuard(payload, username) {
         if (n.modelName !== undefined && !ANKI_ALLOWED_MODELS.has(n.modelName)) {
           return { status: 403, error: 'model not allowed: ' + String(n.modelName).slice(0, 40) };
         }
+        { const m = badNoteMedia(n); if (m) return m; }
       }
       return null;
     }
@@ -113,12 +163,7 @@ function ankiGuard(payload, username) {
       //      （用于刚添加完卡片后 changeDeck 归位，见 ensureDeckPlacement）
       const query = typeof p.query === 'string' ? p.query : '';
       if (!query) return { status: 400, error: 'query required' };
-      if (query.includes('deck:' + root)) return null;
-
-      const terms = query.split(/\s+(?:OR|or)\s+/).map(s => s.trim()).filter(Boolean);
-      if (terms.length && terms.length <= ANKI_MAX_NOTES && terms.every(t => /^nid:\d{1,20}$/.test(t))) {
-        return null;
-      }
+      if (ankiQueryScoped(query, root)) return null;
       return { status: 403, error: 'query must be scoped to deck:' + root + ' 或为 nid: 列表' };
     }
     case 'cardsInfo': {
@@ -132,7 +177,7 @@ function ankiGuard(payload, username) {
       // 与 findCards 同样限定在本用户牌组内（生词去重时会查 deck:...::词汇 tag:vocabulary）
       const query = typeof p.query === 'string' ? p.query : '';
       if (!query) return { status: 400, error: 'query required' };
-      if (!query.includes('deck:' + root)) {
+      if (!ankiQueryScoped(query, root)) {
         return { status: 403, error: 'query must be scoped to deck:' + root };
       }
       return null;
@@ -165,4 +210,4 @@ function ankiGuard(payload, username) {
   }
 }
 
-module.exports = { matchesType, ankiGuard, ankiUserDeckRoot, isOwnedDeck, isSaneDeckName, isSafeMediaName };
+module.exports = { matchesType, ankiGuard, ankiUserDeckRoot, isOwnedDeck, isSaneDeckName, isSafeMediaName, ankiQueryScoped };
