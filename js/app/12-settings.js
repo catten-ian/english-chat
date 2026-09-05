@@ -794,7 +794,11 @@ function uploadAvatar(input) {
     const preview = document.getElementById('avatarPreview');
     if (preview) preview.innerHTML = '<img src="' + esc(dataUrl) + '" style="width:100%;height:100%;object-fit:cover">';
     const badge = document.getElementById('userBadge');
-    if (badge) badge.textContent = currentUser() || '';
+    if (badge) {
+      badge.textContent = currentUser() || '';
+      badge.style.backgroundImage = 'url("' + dataUrl.replace(/"/g, '') + '")';
+    }
+    document.querySelectorAll('.msg.user .avatar').forEach(el => { el.innerHTML = userAvatarHTML(); });
     toastMsg('✅ 头像已更新');
   };
   reader.readAsDataURL(file);

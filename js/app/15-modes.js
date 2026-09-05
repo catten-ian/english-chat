@@ -83,7 +83,9 @@ function refreshPracticeTab() {
 }
 
 function switchMode(mode, force) {
-  if (currentMode === mode && !force) return;
+  const home = document.getElementById('homePage');
+  const onHome = home && home.style.display !== 'none';
+  if (currentMode === mode && !force && !onHome) return;
   // 自动保存当前模式的作答草稿（不弹窗）
   if (currentMode === 'writing') saveAnswerDraft('writing');
   else if (currentMode === 'translation') saveAnswerDraft('translation');

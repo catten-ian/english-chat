@@ -104,10 +104,15 @@ async function translateAiMessage(msgId, btn) {
   }
 }
 
+function userAvatarHTML() {
+  const avatar = getSetting('avatar', '');
+  return avatar ? `<img src="${esc(avatar)}" alt="用户头像">` : '👤';
+}
+
 function userBubbleHTML(msg) {
   const hint = msg.feedback && msg.feedback.analysis ? '<span class="feedback-hint">✓ 已反馈</span>' : '';
   return `
-    <div class="avatar">👤</div>
+    <div class="avatar">${userAvatarHTML()}</div>
     <div class="bubble user-bubble" data-action="select-feedback" data-arg1="${msg.id}">
       <div class="user-text">${esc(msg.content)}</div>
       <div class="msg-actions">
