@@ -372,6 +372,12 @@ ${multiWp ? '- One question should test AS MANY weak points as possible (ideally
   ENGLISH equivalent: test the English words it maps to (position/direction/orientation...)
   in natural English sentences, e.g. a fill-in-the-blank or "choose the correct English word".
 - Use natural English at an appropriate level (CET-4/6 ~ IELTS). Sentences must be realistic.
+- For error_correction, the question MUST contain a real, objectively incorrect English sentence.
+  Never mark a grammatical sentence as wrong just to test an alternative word order or style.
+  In particular, "enough experience" and "experience enough" can both be grammatical in
+  suitable contexts; do not create an error-correction item by changing one to the other.
+- The error_correction answer MUST genuinely correct the error, and its explanation MUST NOT
+  say that the original sentence is correct, has no grammar error, or should be retained.
 - The "explanation" field MAY be in Chinese to help the learner understand, but everything the
   learner reads as the question/options/answer must be English.
 
@@ -388,6 +394,24 @@ Return ONLY valid JSON (no markdown, no thinking):
     }
   ]
 }`;
+}
+
+// ---- AI 题目质量校验 ----
+function isQuizQuestionUsable(q) {
+  if (!q || typeof q !== 'object') return false;
+  const type = String(q.type || '').trim().toLowerCase();
+  const question = String(q.question || '').trim();
+  const answer = String(q.answer || '').trim();
+  const explanation = String(q.explanation || '').trim();
+  if (!question || !answer || !['multiple_choice', 'fill_blank', 'error_correction'].includes(type)) return false;
+  if (type === 'multiple_choice') {
+    return Array.isArray(q.options) && q.options.length === 4 && /^[A-D]$/i.test(answer);
+  }
+  if (type === 'fill_blank') return /_{2,}/.test(question);
+
+  // Reject self-contradictory “corrections” that admit the original is already valid.
+  const contradiction = /(原句|原文|本题)[^。！？\n]{0,40}(正确|无语法错误|没有语法错误|保留原句)|(original sentence|original|sentence)[^.!?\n]{0,40}(correct|no grammar error|grammatically correct|should be retained)/i.test(explanation);
+  return !contradiction && answer !== question;
 }
 
 // ---- 解析 AI 出题响应 ----
@@ -435,9 +459,13 @@ async function autoGenerateQuizQuestions(wpList) {
       if (qs && qs.length) allQuestions.push(...qs);
     } catch (e) { dbg('QUIZ_GEN', e.message); }
   }
-  if (!allQuestions.length) return;
+  const validQuestions = allQuestions.filter(isQuizQuestionUsable);
+  if (!validQuestions.length) {
+    dbg('QUIZ_QUALITY', 'AI returned no usable quiz questions');
+    return;
+  }
   // 构建 Anki 笔记
-  const notes = allQuestions.map(q => {
+  const notes = validQuestions.map(q => {
     const qText = q.question + (q.options && q.options.length ? '\n\n' + q.options.join('\n') : '');
     return {
       deckName: ankiWeakDeck(),
@@ -451,7 +479,7 @@ async function autoGenerateQuizQuestions(wpList) {
   if (res.noteIds && res.noteIds.length && Array.isArray(res.order)) {
     const w = getWeak();
     let changed = false;
-    allQuestions.forEach((q, qi) => {
+    validQuestions.forEach((q, qi) => {
       const nid = res.order[qi];
       if (!nid) return;
       (q.weak_point_ids || []).forEach(id => {
@@ -729,4 +757,3 @@ async function renderAnkiSidebar() {
     el.innerHTML = '<div class="anki-sidebar-section"><div class="anki-sidebar-header">📚 Anki</div><div class="anki-sidebar-stat" style="color:var(--text2)">❌ 连接失败</div></div>';
   }
 }
-

@@ -101,3 +101,24 @@ test('网页复习拒绝接管其他账户的 Anki 牌组', () => {
   assert.strictEqual(sandbox.webReviewDeckMatches({ deckName: '英语学习::catten::薄弱点' }), false);
   assert.strictEqual(sandbox.webReviewDeckMatches({ deckName: 'Default' }), false);
 });
+
+test('AI 不应把合法句子生成成自相矛盾的纠错题', () => {
+  const sandbox = {};
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  const source = fs.readFileSync(path.join(APP_DIR, 'js', 'app', '06-anki.js'), 'utf8');
+  vm.runInContext(source, sandbox, { filename: '06-anki.js' });
+
+  assert.strictEqual(sandbox.isQuizQuestionUsable({
+    type: 'error_correction',
+    question: 'She has enough experience to handle it.',
+    answer: 'She has experience enough to handle it.',
+    explanation: '本题实际无语法错误，原句正确。'
+  }), false);
+  assert.strictEqual(sandbox.isQuizQuestionUsable({
+    type: 'error_correction',
+    question: 'She have enough experience to handle it.',
+    answer: 'She has enough experience to handle it.',
+    explanation: '第三人称单数主语后使用 has。'
+  }), true);
+});
