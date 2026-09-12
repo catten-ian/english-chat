@@ -23,7 +23,7 @@ const VOCAB_REC_STREAK = 3;
 function startWebReview() {
   removeAllModals();
   if (webReviewState && webReviewState.keyHandler) document.removeEventListener('keydown', webReviewState.keyHandler);
-  webReviewState = { cardId: null, total: 0, current: 0, correct: 0, queueStats: null, currentQueue: null };
+  webReviewState = { cardId: null, total: 0, current: 0, correct: 0, queueStats: null, currentQueue: null, history: [] };
   const session = webReviewState;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -105,7 +105,7 @@ async function webReviewRefreshQueueStats(cardData) {
   try {
     // Deck statistics respect Anki's daily limits; raw is:new counts do not.
     const [statsResult, infoResult] = await Promise.all([
-      ankiPostCall({ action: 'getDeckStats', version: 6, params: { decks } }),
+      ankiPostCall({ action: 'getDeckStats', version: 6, params: { decks: [base] } }),
       cardData ? ankiPostCall({ action: 'cardsInfo', version: 6, params: { cards: [cardData.cardId] } }) : null
     ]);
     if (webReviewState !== st || st.statsRequest !== request) return;
@@ -280,17 +280,54 @@ async function webReviewCatchUp() {
 }
 
 /* ==================== 卡片解析 ==================== */
-function webReviewFieldText(cardData, name) {
+function webReviewFieldRaw(cardData, name) {
   const f = cardData && cardData.fields && cardData.fields[name];
-  let raw = (f && (f.value !== undefined ? f.value : f)) || '';
+  return String((f && (f.value !== undefined ? f.value : f)) || '');
+}
+
+function webReviewTextFromHTML(raw) {
   const d = document.createElement('div');
-  d.innerHTML = String(raw);
+  d.innerHTML = String(raw || '');
   d.querySelectorAll('script, style, template').forEach(el => el.remove());
   d.querySelectorAll('br').forEach(el => el.replaceWith('\n'));
   d.querySelectorAll('div, p, li, ul, ol, h1, h2, h3, h4, blockquote').forEach(el => {
     el.prepend('\n'); el.append('\n');
   });
-  return (d.textContent || '').replace(/\r/g, '').replace(/\u00a0/g, ' ').replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n');
+  return (d.textContent || '').replace(/\r/g, '').replace(/\u00a0/g, ' ').replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n').trim();
+}
+
+function webReviewFieldText(cardData, name) {
+  return webReviewTextFromHTML(webReviewFieldRaw(cardData, name));
+}
+
+function webReviewStripHTML(raw) {
+  return String(raw || '')
+    .replace(/<br\s*\/?>(?:\n)?/gi, '\n')
+    .replace(/<\/(?:div|p|li|ul|ol|h[1-4]|blockquote)>/gi, '\n')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, '\'')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .trim();
+}
+
+function webReviewStructuredQuiz(raw) {
+  const html = String(raw || '');
+  const optionBlocks = [...html.matchAll(/<div[^>]*class="[^"]*\bquiz-option\b[^"]*"[^>]*>([\s\S]*?)<\/div>/g)].map(m => m[1]);
+  if (optionBlocks.length !== 4) return null;
+  const options = optionBlocks.map((body, index) => {
+    const letter = body.match(/<span[^>]*class="[^"]*\bletter\b[^"]*"[^>]*>\s*([A-D])\s*<\/span>/i);
+    const textHTML = body.replace(/<span[^>]*class="[^"]*\bletter\b[^"]*"[^>]*>[\s\S]*?<\/span>/i, '');
+    return { letter: letter ? letter[1] : 'ABCD'[index], text: webReviewStripHTML(textHTML).replace(/\s+/g, ' ').trim() };
+  });
+  if (options.map(o => o.letter).join('') !== 'ABCD' || options.some(o => !o.text)) return null;
+  const stemMatch = html.match(/<div[^>]*class="[^"]*\bquiz-stem\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+  return { stem: stemMatch ? webReviewStripHTML(stemMatch[1]).replace(/\s+/g, ' ').trim() : '', options };
 }
 
 function webReviewVocabPhaseMap() {
@@ -354,9 +391,11 @@ function webReviewQuizType(cardData) {
   const deck = cardData.deckName || '';
   const isVocab = model === '英语学习-词汇' || /::词汇\s*$/.test(deck);
   // 非生词卡：薄弱点模型用 Question/Answer，Basic 卡（拓展/纠错）用 Front/Back
-  const qText = webReviewFieldText(cardData, 'Question') || webReviewFieldText(cardData, 'Front');
-  const aText = (webReviewFieldText(cardData, 'Answer') || webReviewFieldText(cardData, 'Back')).trim();
-  const exp = webReviewFieldText(cardData, 'Explanation').trim();
+  const qRaw = webReviewFieldRaw(cardData, 'Question');
+  const structuredMc = webReviewStructuredQuiz(qRaw);
+  const qText = structuredMc ? '' : (webReviewTextFromHTML(qRaw) || webReviewFieldText(cardData, 'Front'));
+  let aText = '';
+  let exp = '';
   if (isVocab) {
     const meaning = webReviewFieldText(cardData, 'Front').trim();
     const backRaw = webReviewFieldText(cardData, 'Back').replace(/\[sound:[^\]]*\]/g, '').trim();
@@ -368,6 +407,12 @@ function webReviewQuizType(cardData) {
       return { type: 'dictation', word, meaning, example, explanation: '' };
     }
     return { type: 'recall', word, meaning, example, explanation: '' };
+  }
+  aText = (webReviewFieldText(cardData, 'Answer') || webReviewFieldText(cardData, 'Back')).trim();
+  exp = webReviewFieldText(cardData, 'Explanation').trim();
+  if (structuredMc) {
+    const am = aText.match(/([A-D])/);
+    return { type: 'mc', stem: structuredMc.stem, options: structuredMc.options, answer: am ? am[1] : '', answerRaw: aText, explanation: exp };
   }
   const lines = qText.split('\n').map(s => s.trim()).filter(Boolean);
   const optRe = /^([A-D])[\.、\)]\s*(.+)$/;
@@ -582,9 +627,8 @@ function modalOptionMark(chosen, answer) {
   document.querySelectorAll('[data-wr-opt]').forEach(b => {
     const L = b.getAttribute('data-wr-opt');
     b.disabled = true;
-    b.style.cursor = 'default';
-    if (L === answer) { b.style.background = '#f0fdf4'; b.style.borderColor = '#22c55e'; }
-    else if (L === chosen) { b.style.background = '#fef2f2'; b.style.borderColor = '#ef4444'; }
+    b.classList.toggle('is-correct', L === answer);
+    b.classList.toggle('is-wrong', L === chosen && L !== answer);
   });
 }
 
@@ -710,6 +754,8 @@ async function webReviewPrev() {
     const r = await ankiPostCall({ action: 'guiUndo', version: 6 });
     const ok = r && r.ok && r.result && r.result.result;
     if (!ok) { toastMsg('已经是第一张了'); return; }
+    const graded = Array.isArray(st.history) ? st.history.pop() : null;
+    if (graded && graded.correct) st.correct = Math.max(0, st.correct - 1);
     await new Promise(res => setTimeout(res, 600));
     const card = await ankiPostCall({ action: 'guiCurrentCard', version: 6 });
     const cardData = card && card.result && card.result.result;
@@ -717,8 +763,6 @@ async function webReviewPrev() {
     if (!cardData) { toastMsg('已经是第一张了'); return; }
     if (!webReviewDeckMatches(cardData)) { showWebReviewDeckMismatch(cardData); return; }
     if (cardData.cardId === st.cardId) {
-      // 撤销成功但 Anki 未移动当前位置：重置本卡作答状态，被撤销的卡会再次出现
-      if (st.judgedCorrect === true) st.correct = Math.max(0, st.correct - 1);
       toastMsg('已撤销上一张的评分，它稍后会再次出现');
     } else {
       st.current = Math.max(1, st.current - 1);
@@ -738,23 +782,26 @@ async function webReviewCommit(ease) {
   const st = webReviewState;
   if (!st || st.committing) return;
   st.committing = true;
+  let gradedCorrect = false;
   try {
-    // 自评类（回想/问答）：正确性由档位决定
-    if (st.selfGraded && ease >= 3) st.correct++;
-    // 生词阶段推进（阶段 1 连续良好/简单 → 升入默写阶段）
-    if (st.quiz && st.quiz.type === 'recall') {
-      const promoted = webReviewVocabRecord(st.quiz.word, ease);
-      if (promoted) toastMsg('🎯 「' + st.quiz.word + '」已熟练，以后改为看中文默写英文');
-    }
+    gradedCorrect = st.selfGraded ? ease >= 3 : st.judgedCorrect === true;
+    if (gradedCorrect) st.correct++;
     await ankiPostCall({ action: 'guiShowAnswer', version: 6 });
     await new Promise(r => setTimeout(r, 120));
     st.prevCardId = st.cardId;
     await ankiPostCall({ action: 'guiAnswerCard', version: 6, params: { ease } });
+    if (!Array.isArray(st.history)) st.history = [];
+    st.history.push({ cardId: st.cardId, correct: gradedCorrect });
+    if (st.quiz && st.quiz.type === 'recall') {
+      const promoted = webReviewVocabRecord(st.quiz.word, ease);
+      if (promoted) toastMsg('🎯 「' + st.quiz.word + '」已熟练，以后改为看中文默写英文');
+    }
     await new Promise(r => setTimeout(r, 250));
     syncAnkiReviewData().catch(() => {});
     fetchNextWebReviewCard();
   } catch (e) {
     st.committing = false;
+    if (gradedCorrect) st.correct = Math.max(0, st.correct - 1);
     dbg('ANKI_ANSWER', e.message);
     const modal = document.getElementById('ankiReviewModal');
     if (modal) modal.innerHTML = '<div style="text-align:center;padding:20px;color:var(--red)">❌ 答题提交失败：' + esc(e.message) + '<br><br><button data-action="close-web-review" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">关闭</button></div>';

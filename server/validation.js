@@ -7,7 +7,7 @@
 
 const {
   USER_DATA_KEYS,
-  ANKI_DECK_PREFIX, ANKI_ALLOWED_MODELS,
+  ANKI_DECK_PREFIX, ANKI_ALLOWED_MODELS, ANKI_TEMPLATE_MODELS,
   ANKI_MAX_NOTES, ANKI_MAX_CARDS, ANKI_MAX_MEDIA_B64,
   ANKI_READONLY_ACTIONS, ANKI_GUI_ACTIONS, ANKI_GUARDED_ACTIONS
 } = require('./config');
@@ -190,9 +190,11 @@ function ankiGuard(payload, username) {
       return null;
     }
     case 'createModel':
-    case 'updateModelStyling': {
+    case 'updateModelStyling':
+    case 'updateModelTemplates': {
       const name = action === 'createModel' ? p.modelName : (p.model && p.model.name);
-      if (!ANKI_ALLOWED_MODELS.has(name)) {
+      const allowedModels = action === 'updateModelTemplates' ? ANKI_TEMPLATE_MODELS : ANKI_ALLOWED_MODELS;
+      if (!allowedModels.has(name)) {
         return { status: 403, error: 'model not allowed: ' + String(name).slice(0, 40) };
       }
       return null;

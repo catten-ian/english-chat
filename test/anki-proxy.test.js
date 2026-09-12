@@ -174,6 +174,8 @@ describe('Anki 代理：白名单与归属', () => {
     assertDenied(await call({ action: 'createModel', version: 6, params: { modelName: 'Evil', inOrderFields: [], cardTemplates: [] } }), 'createModel 非白名单');
     assertPassedGuard(await call({ action: 'updateModelStyling', version: 6, params: { model: { name: '英语学习-词汇', css: '' } } }), 'updateModelStyling 允许');
     assertDenied(await call({ action: 'updateModelStyling', version: 6, params: { model: { name: 'Basic-Other', css: '' } } }), 'updateModelStyling 非白名单');
+    assertPassedGuard(await call({ action: 'updateModelTemplates', version: 6, params: { model: { name: '英语学习-薄弱点问答', templates: {} } } }), 'updateModelTemplates 自定义模型允许');
+    assertDenied(await call({ action: 'updateModelTemplates', version: 6, params: { model: { name: 'Basic', templates: {} } } }), 'updateModelTemplates 不改内置 Basic');
   });
 
   test('storeMediaFile 只允许应用自己的文件名，禁止 path/url', async () => {

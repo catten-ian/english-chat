@@ -779,16 +779,31 @@ body {
 #ankiReviewModal .wr-review-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
 #ankiReviewModal .wr-review-head-main { min-width: 0; }
 #ankiReviewModal .wr-queue-strip { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
-#ankiReviewModal .wr-queue-count { display: inline-flex; align-items: baseline; gap: 5px; padding: 5px 8px 6px; border-bottom: 2px solid transparent; color: var(--wr-queue-color); white-space: nowrap; }
+#ankiReviewModal .wr-queue-count { display: inline-flex; align-items: baseline; gap: 5px; padding: 5px 8px 6px; border-bottom: 2px solid transparent; white-space: nowrap; }
 #ankiReviewModal .wr-queue-count b { font-size: 18px; line-height: 1; font-variant-numeric: tabular-nums; }
 #ankiReviewModal .wr-queue-count small { font-size: 11px; font-weight: 700; }
-#ankiReviewModal .wr-queue-count.is-current { border-bottom-color: var(--wr-queue-color); }
+#ankiReviewModal .wr-queue-new { color: #2563eb; }
+#ankiReviewModal .wr-queue-learn { color: #dc2626; }
+#ankiReviewModal .wr-queue-review { color: #16a34a; }
+#ankiReviewModal .wr-queue-new.is-current { border-bottom-color: #2563eb; }
+#ankiReviewModal .wr-queue-learn.is-current { border-bottom-color: #dc2626; }
+#ankiReviewModal .wr-queue-review.is-current { border-bottom-color: #16a34a; }
 #ankiReviewModal .wr-review-type { display: block; margin-top: 9px; color: var(--text2); font-size: 12px; font-weight: 600; }
 #ankiReviewModal .wr-review-score { flex-shrink: 0; color: var(--text2); font-size: 12px; padding-top: 6px; }
+@media (max-width: 560px) {
+  #ankiReviewModal.wr-modal { padding: 16px; }
+  #ankiReviewModal .wr-review-head { flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  #ankiReviewModal .wr-review-score { padding-top: 0; }
+}
 #ankiReviewModal .wr-stem { font-size: 17px; line-height: 1.8; padding: 18px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 16px; text-align: left; white-space: pre-wrap; }
 #ankiReviewModal .wr-options { display: grid; gap: 10px; margin-bottom: 14px; }
 #ankiReviewModal .wr-option { display: grid; grid-template-columns: 32px 1fr; gap: 10px; align-items: start; width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); text-align: left; font: inherit; font-size: 15px; line-height: 1.6; cursor: pointer; transition: border-color .15s, background .15s, transform .15s; }
 #ankiReviewModal .wr-option:hover { border-color: var(--primary); background: var(--primary-bg); transform: translateY(-1px); }
+#ankiReviewModal .wr-option:disabled { cursor: default; transform: none; opacity: .82; }
+#ankiReviewModal .wr-option.is-correct { border-color: #22c55e; background: #f0fdf4; }
+#ankiReviewModal .wr-option.is-correct b { background: #dcfce7; color: #15803d; }
+#ankiReviewModal .wr-option.is-wrong { border-color: #ef4444; background: #fef2f2; }
+#ankiReviewModal .wr-option.is-wrong b { background: #fee2e2; color: #dc2626; }
 #ankiReviewModal .wr-option b { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 8px; background: var(--primary-bg); color: var(--primary); }
 #ankiReviewModal .wr-vocab-card { padding: 20px 18px; margin-bottom: 16px; border: 1px solid #dbeafe; border-radius: 16px; background: linear-gradient(145deg, #eff6ff, #f8fafc 65%, #ecfdf5); text-align: center; }
 #ankiReviewModal .wr-vocab-label { color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
@@ -807,6 +822,7 @@ body {
 #ankiReviewModal .wr-vocab-inflection { margin-top: 10px; padding: 8px 10px; border-radius: 9px; background: rgba(255,255,255,.65); color: var(--text2); font-size: 12px; line-height: 1.5; }
 #ankiReviewModal .wr-vocab-inflection span, #ankiReviewModal .wr-vocab-details summary, #ankiReviewModal .wr-vocab-example span { color: var(--text3); font-weight: 700; margin-right: 6px; }
 #ankiReviewModal .wr-vocab-details { margin-top: 10px; color: var(--text2); font-size: 12px; line-height: 1.6; }
+#ankiReviewModal .wr-vocab-details div { white-space: pre-wrap; }
 #ankiReviewModal .wr-vocab-details summary { cursor: pointer; }
 #ankiReviewModal .wr-vocab-example { margin-top: 10px; padding: 10px 12px; border-left: 3px solid #34d399; border-radius: 8px; background: #ecfdf5; color: var(--text2); font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
 #ankiReviewModal audio { max-width: 100%; margin: 6px auto; display: block; }

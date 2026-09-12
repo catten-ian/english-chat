@@ -136,3 +136,62 @@ test('网页复习头部显示三类队列并标记当前类别', () => {
   assert.match(html, /待复习/);
   assert.match(html, /wr-queue-learn is-current/);
 });
+
+test('网页复习队列统计按用户牌组请求并汇总三色数量', async () => {
+  const card = { cardId: 1001, queue: 0 };
+  const requests = [];
+  const sandbox = {
+    ankiBaseDeck: () => '英语学习::test',
+    dbg() {},
+    ankiPostCall: async (payload) => {
+      requests.push(payload);
+      if (payload.action === 'getDeckStats') return { result: { result: { 1: { name: '英语学习::test', new_count: 3, learn_count: 2, review_count: 7 } } } };
+      if (payload.action === 'cardsInfo') return { result: { result: [card] } };
+      throw new Error('unexpected action');
+    }
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8'), sandbox, { filename: '22-web-review.js' });
+  vm.runInContext("webReviewState = { currentQueue: null };", sandbox);
+  await sandbox.webReviewRefreshQueueStats(card);
+  assert.strictEqual(requests.find(r => r.action === 'getDeckStats').params.decks.join('|'), '英语学习::test');
+  assert.strictEqual(vm.runInContext('webReviewState.queueStats.new', sandbox), 3);
+  assert.strictEqual(vm.runInContext('webReviewState.queueStats.learn', sandbox), 2);
+  assert.strictEqual(vm.runInContext('webReviewState.queueStats.review', sandbox), 7);
+  assert.strictEqual(vm.runInContext('webReviewState.currentQueue', sandbox), 'new');
+});
+
+test('生词释义解析多词性、变形和多条释义', () => {
+  const sandbox = {};
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  const source = fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8');
+  vm.runInContext(source, sandbox, { filename: '22-web-review.js' });
+  const raw = 'adrift/əˈdrɪft/adj./adv.变形: more adrift · most adrift•（人）漂泊的；漫无目的的•（船）漂浮着，漂流着';
+  const parsed = sandbox.webReviewParseVocabMeaning(raw, 'adrift');
+  assert.strictEqual(parsed.phonetic, '/əˈdrɪft/');
+  assert.strictEqual(parsed.pos, 'adj./adv.');
+  assert.strictEqual(parsed.inflection, 'more adrift · most adrift');
+  assert.strictEqual(parsed.meanings.join('|'), '（人）漂泊的；漫无目的的|（船）漂浮着，漂流着');
+});
+
+test('网页复习能解析结构化 Anki 选择题字段', () => {
+  const sandbox = {};
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  const source = fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8');
+  vm.runInContext(source, sandbox, { filename: '22-web-review.js' });
+  const generatorSandbox = { esc: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') };
+  generatorSandbox.globalThis = generatorSandbox;
+  vm.createContext(generatorSandbox);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '06-anki.js'), 'utf8'), generatorSandbox, { filename: '06-anki.js' });
+  const raw = generatorSandbox.ankiQuizQuestionFieldHTML({
+    question: 'Choose the correct sentence.',
+    options: ['A. First option', 'B. Second option', 'C. Third option', 'D. Fourth option']
+  });
+  const quiz = sandbox.webReviewStructuredQuiz(raw);
+  assert.strictEqual(quiz.stem, 'Choose the correct sentence.');
+  assert.deepStrictEqual(quiz.options.map(o => o.letter).join(''), 'ABCD');
+  assert.strictEqual(quiz.options[1].text, 'Second option');
+});

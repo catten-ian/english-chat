@@ -141,6 +141,7 @@ async function ankiAddNotesBatch(notes) {
 
 // ---- 创建/确保笔记类型 + 牌组 ----
 const VOCAB_MODEL = '英语学习-词汇'; // 词汇默写卡片专用模型：Front=中文释义，Back=英文单词
+const ANKI_QUIZ_TEMPLATE = '薄弱点问答';
 
 const ANKI_QUIZ_CSS = `.card {
   font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
@@ -151,8 +152,8 @@ const ANKI_QUIZ_CSS = `.card {
 .quiz-options { display: grid; gap: 10px; }
 .quiz-option { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; padding: 12px 14px; border: 1px solid #dbe3ef; border-radius: 12px; background: #fff; }
 .quiz-option .letter { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 8px; background: #eff6ff; color: #2563eb; font-weight: 800; }
-.quiz-answer { margin-top: 18px; padding: 14px 16px; border-radius: 12px; background: #ecfdf5; border: 1px solid #bbf7d0; color: #166534; font-size: 19px; font-weight: 750; }
-.quiz-explanation { margin-top: 12px; padding: 12px 14px; border-left: 3px solid #93c5fd; border-radius: 8px; background: #f8fafc; color: #475569; font-size: 14px; line-height: 1.7; }
+.quiz-answer, .answer { margin-top: 18px; padding: 14px 16px; border-radius: 12px; background: #ecfdf5; border: 1px solid #bbf7d0; color: #166534; font-size: 19px; font-weight: 750; }
+.quiz-explanation, .explanation { margin-top: 12px; padding: 12px 14px; border-left: 3px solid #93c5fd; border-radius: 8px; background: #f8fafc; color: #475569; font-size: 14px; line-height: 1.7; }
 .quiz-raw { white-space: pre-wrap; }`;
 
 function ankiQuizQuestionHTML() {
@@ -161,6 +162,10 @@ function ankiQuizQuestionHTML() {
 
 function ankiQuizBackHTML() {
   return `{{FrontSide}}<hr id="answer"><div class="quiz-answer">✅ {{Answer}}</div><div class="quiz-explanation">{{Explanation}}</div>`;
+}
+
+function ankiQuizTemplates() {
+  return { [ANKI_QUIZ_TEMPLATE]: { Front: ankiQuizQuestionHTML(), Back: ankiQuizBackHTML() } };
 }
 
 function ankiQuizQuestionFieldHTML(q) {
@@ -266,27 +271,31 @@ async function ensureQuizModelAndDeck() {
       }});
     } catch (e) { dbg('ANKI_MODEL_VOCAB_STYLE', e.message || e); }
   }
-  // 创建专用笔记类型（薄弱点出题用）
   if (!(Array.isArray(models) && models.includes(ANKI_QUIZ_MODEL))) {
     try {
       await ankiPostCall({ action: 'createModel', version: 6, params: {
         modelName: ANKI_QUIZ_MODEL,
         inOrderFields: ANKI_QUIZ_FIELDS,
-         css: ANKI_QUIZ_CSS,
-         cardTemplates: [{
-           Name: '薄弱点问答',
-           Front: ankiQuizQuestionHTML(),
-           Back: ankiQuizBackHTML()
-         }]
-       }});
-     } catch (e) { dbg('ANKI_MODEL', e.message || e); }
-   } else {
-     try {
-       await ankiPostCall({ action: 'updateModelStyling', version: 6, params: {
-         model: { name: ANKI_QUIZ_MODEL, css: ANKI_QUIZ_CSS }
-       }});
-     } catch (e) { dbg('ANKI_MODEL_QUIZ_STYLE', e.message || e); }
-   }
+        css: ANKI_QUIZ_CSS,
+        cardTemplates: [{
+          Name: ANKI_QUIZ_TEMPLATE,
+          Front: ankiQuizQuestionHTML(),
+          Back: ankiQuizBackHTML()
+        }]
+      }});
+    } catch (e) { dbg('ANKI_MODEL', e.message || e); }
+  } else {
+    try {
+      await ankiPostCall({ action: 'updateModelStyling', version: 6, params: {
+        model: { name: ANKI_QUIZ_MODEL, css: ANKI_QUIZ_CSS }
+      }});
+    } catch (e) { dbg('ANKI_MODEL_QUIZ_STYLE', e.message || e); }
+    try {
+      await ankiPostCall({ action: 'updateModelTemplates', version: 6, params: {
+        model: { name: ANKI_QUIZ_MODEL, templates: ankiQuizTemplates() }
+      }});
+    } catch (e) { dbg('ANKI_MODEL_QUIZ_TEMPLATE', e.message || e); }
+  }
   // 确保牌组存在
   if (Array.isArray(decks)) {
     for (const d of [ankiBaseDeck(), ankiWeakDeck(), ankiVocabDeck(), ankiCorrDeck(), ankiExtDeck()]) {
@@ -509,7 +518,7 @@ async function autoGenerateQuizQuestions(wpList) {
     return {
       deckName: ankiWeakDeck(),
       modelName: ANKI_QUIZ_MODEL,
-      fields: { Question: qText, Answer: q.answer || '', Explanation: q.explanation || '' },
+      fields: { Question: qText, Answer: esc(q.answer || ''), Explanation: esc(q.explanation || '') },
       tags: [ankiUserTag(), 'weak-point', ...(q.weak_point_ids || []).map(wpTag)]
     };
   });
