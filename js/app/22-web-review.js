@@ -22,7 +22,9 @@ const VOCAB_REC_STREAK = 3;
 
 function startWebReview() {
   removeAllModals();
-  webReviewState = { cardId: null, total: 0, current: 0, correct: 0 };
+  if (webReviewState && webReviewState.keyHandler) document.removeEventListener('keydown', webReviewState.keyHandler);
+  webReviewState = { cardId: null, total: 0, current: 0, correct: 0, queueStats: null, currentQueue: null };
+  const session = webReviewState;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.setAttribute('role', 'dialog');
@@ -31,7 +33,7 @@ function startWebReview() {
   overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
   const modal = document.createElement('div');
   modal.id = 'ankiReviewModal';
-  modal.style.cssText = 'background:#fff;border-radius:14px;padding:24px;max-width:560px;width:94%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);';
+  modal.className = 'wr-modal';
   modal.innerHTML = `<div style="text-align:center;padding:20px">
     <div style="font-size:16px;margin-bottom:12px">⏳ 启动 Anki 复习会话...</div>
     <div class="spinner" style="width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto"></div>
@@ -43,10 +45,13 @@ function startWebReview() {
     try {
       // 先检查 Anki 连接
       const ver = await ankiPostCall({ action: 'version', version: 6 });
+      if (webReviewState !== session) return;
       if (!ver || !ver.ok || !ver.result || !ver.result.result) {
         modal.innerHTML = '<div style="text-align:center;padding:20px;color:var(--orange)">⚠️ Anki 未运行或 AnkiConnect 未连接<br><br>请先打开 Anki（可最小化），然后重新点击「✅ 复习」<br><br><button data-action="close-overlay" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">关闭</button></div>';
         return;
       }
+      await ensureQuizModelAndDeck();
+      if (webReviewState !== session) return;
       // 复习整个用户牌组（薄弱点 + 词汇 + 其他子牌组一起复习）
       const result = await ankiPostCall({ action: 'guiDeckReview', version: 6, params: { name: ankiBaseDeck() } });
       // guiDeckReview 返回 true/false
@@ -64,7 +69,7 @@ function startWebReview() {
         return;
       }
       await new Promise(r => setTimeout(r, 500));
-      fetchNextWebReviewCard();
+      if (webReviewState === session) fetchNextWebReviewCard();
     } catch (e) {
       modal.innerHTML = '<div style="text-align:center;padding:20px;color:var(--red)">❌ 启动复习失败：' + esc(e.message || e) + '<br><br>请确认 Anki 已运行且 AnkiConnect 插件已安装（默认端口 8765）<br><br><button data-action="close-overlay" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">关闭</button></div>';
     }
@@ -75,7 +80,65 @@ function startWebReview() {
 function webReviewDeckMatches(cardData) {
   const deck = String(cardData && cardData.deckName || '');
   const base = ankiBaseDeck();
+  const decks = [base, base + '::薄弱点', base + '::词汇', base + '::纠错', base + '::拓展'];
   return deck === base || deck.startsWith(base + '::');
+}
+
+function webReviewQueueKind(cardData) {
+  if (!cardData) return null;
+  const queue = cardData.queue;
+  if (queue === 0) return 'new';
+  if (queue === 1 || queue === 3 || queue === 4) return 'learn';
+  if (queue === 2) return 'review';
+  if (queue !== undefined && queue !== null) return null;
+  return ({ 0: 'new', 1: 'learn', 2: 'review', 3: 'learn' })[cardData.type] || null;
+}
+
+async function webReviewRefreshQueueStats(cardData) {
+  const st = webReviewState;
+  if (!st) return;
+  const request = (st.statsRequest || 0) + 1;
+  st.statsRequest = request;
+  const base = ankiBaseDeck();
+  st.queueStats = null;
+  st.currentQueue = webReviewQueueKind(cardData);
+  try {
+    // Deck statistics respect Anki's daily limits; raw is:new counts do not.
+    const [statsResult, infoResult] = await Promise.all([
+      ankiPostCall({ action: 'getDeckStats', version: 6, params: { decks } }),
+      cardData ? ankiPostCall({ action: 'cardsInfo', version: 6, params: { cards: [cardData.cardId] } }) : null
+    ]);
+    if (webReviewState !== st || st.statsRequest !== request) return;
+    const rows = Object.values(statsResult && statsResult.result && statsResult.result.result || {});
+    if (!rows.length || rows.some(row => !['new_count', 'learn_count', 'review_count'].every(k => Number.isFinite(row[k]) && row[k] >= 0))) {
+      throw new Error('Anki queue counts unavailable');
+    }
+    st.queueStats = rows.reduce((sum, row) => ({
+      new: sum.new + row.new_count,
+      learn: sum.learn + row.learn_count,
+      review: sum.review + row.review_count
+    }), { new: 0, learn: 0, review: 0 });
+    const cards = infoResult && infoResult.result && infoResult.result.result;
+    const current = Array.isArray(cards) && cards.find(card => card.cardId === cardData.cardId);
+    st.currentQueue = cardData ? webReviewQueueKind(current || cardData) : null;
+  } catch (e) {
+    dbg('ANKI_QUEUE_STATS', e.message);
+  }
+}
+
+function webReviewQueueHeader(typeLabel) {
+  const stats = webReviewState.queueStats;
+  const current = webReviewState.currentQueue;
+  const item = (kind, label) => `<span class="wr-queue-count wr-queue-${kind}${current === kind ? ' is-current' : ''}"${current === kind ? ' aria-current="true"' : ''} title="${label}${current === kind ? ' · 当前卡片' : ''}"><b>${stats ? stats[kind] : '—'}</b><small>${label}</small></span>`;
+  return `<div class="wr-review-head">
+    <div class="wr-review-head-main">
+      <div class="wr-queue-strip" aria-label="Anki 今日队列；待重来包含学习中和重新学习的卡片">
+        ${item('new', '待新学')}${item('learn', '待重来')}${item('review', '待复习')}
+      </div>
+      <span class="wr-review-type">📝 ${esc(typeLabel)}</span>
+    </div>
+    <span class="wr-review-score" id="wrScore">答对 ${webReviewState.correct} 次</span>
+  </div>`;
 }
 
 function showWebReviewDeckMismatch(cardData) {
@@ -96,9 +159,12 @@ function showWebReviewDeckMismatch(cardData) {
 }
 
 function fetchNextWebReviewCard() {
+  const st = webReviewState;
+  if (!st) return;
   (async () => {
     try {
       const card = await ankiPostCall({ action: 'guiCurrentCard', version: 6 });
+      if (webReviewState !== st) return;
       const cardData = card && card.result && card.result.result;
       if (!cardData) {
         // 没有更多卡片 — 检查是否 Anki 已退出复习模式
@@ -119,6 +185,8 @@ function fetchNextWebReviewCard() {
       webReviewState.cardId = cardData.cardId;
       webReviewState.current++;
       webReviewState.total = Math.max(webReviewState.total, webReviewState.current);
+      await webReviewRefreshQueueStats(cardData);
+      if (webReviewState !== st) return;
       showWebReviewQuestion(cardData);
     } catch (e) {
       const modal = document.getElementById('ankiReviewModal');
@@ -217,7 +285,12 @@ function webReviewFieldText(cardData, name) {
   let raw = (f && (f.value !== undefined ? f.value : f)) || '';
   const d = document.createElement('div');
   d.innerHTML = String(raw);
-  return (d.textContent || '').replace(/\r/g, '');
+  d.querySelectorAll('script, style, template').forEach(el => el.remove());
+  d.querySelectorAll('br').forEach(el => el.replaceWith('\n'));
+  d.querySelectorAll('div, p, li, ul, ol, h1, h2, h3, h4, blockquote').forEach(el => {
+    el.prepend('\n'); el.append('\n');
+  });
+  return (d.textContent || '').replace(/\r/g, '').replace(/\u00a0/g, ' ').replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n');
 }
 
 function webReviewVocabPhaseMap() {
@@ -228,6 +301,36 @@ function webReviewVocabPhase(word) {
   const key = String(word || '').trim().toLowerCase();
   const rec = webReviewVocabPhaseMap()[key];
   return rec && rec.p === 2 ? 2 : 1;
+}
+
+function webReviewParseVocabMeaning(raw, expectedWord) {
+  let text = String(raw || '').replace(/\r/g, '').trim();
+  let word = '', phonetic = '', pos = '', inflection = '';
+  const expected = String(expectedWord || '').trim();
+  const escaped = expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const head = expected ? text.match(new RegExp('^' + escaped + '(?=\\s|/|$)', 'i')) : text.match(/^([a-z][a-z '\u2019-]*?)(?=\s*\/[^/\n]+\/)/i);
+  if (head) { word = expected || head[0].trim(); text = text.slice(head[0].length).trim(); }
+  const ipa = text.match(/^\/([^/\n]+)\/\s*/);
+  if (ipa) { phonetic = '/' + ipa[1] + '/'; text = text.slice(ipa[0].length).trim(); }
+  const part = text.match(/^(?:(?:adj|adv|vt|vi|n|v|prep|pron|conj|interj|det|phrase)\.(?:\s*\/\s*)?)+|^(?:形容词|副词|名词|动词|介词|短语)(?:\s*[\/、]\s*(?:形容词|副词|名词|动词|介词|短语))*/i);
+  if (part) { pos = part[0].trim(); text = text.slice(part[0].length).trim(); }
+  const forms = text.match(/^变形\s*[:：]\s*([^•\n]*)/);
+  if (forms) { inflection = forms[1].trim(); text = text.slice(forms[0].length).trim(); }
+  const section = text.search(/(?:^|\n)(?:例句|常见搭配|相关搭配|同义词辨析|近义表达|📜\s*词源|词源)\s*[:：]?/);
+  const details = section >= 0 ? text.slice(section).trim() : '';
+  const definitions = section >= 0 ? text.slice(0, section) : text;
+  const meanings = definitions.split(/\s*[•\n]\s*/).map(s => s.trim()).filter(Boolean);
+  return { word, phonetic, pos, inflection, meanings, details };
+}
+
+function webReviewVocabMeaningBlock(raw, expectedWord, hideAnswer) {
+  const p = webReviewParseVocabMeaning(raw, expectedWord);
+  return `<div class="wr-vocab-meaning">
+    ${(!hideAnswer && p.phonetic) || p.pos ? `<div class="wr-vocab-head">${!hideAnswer && p.phonetic ? `<span class="wr-vocab-phonetic">${esc(p.phonetic)}</span>` : ''}${p.pos ? `<span class="wr-vocab-pos">${esc(p.pos)}</span>` : ''}</div>` : ''}
+    <ol class="wr-vocab-defs">${p.meanings.map(m => `<li>${esc(m)}</li>`).join('') || '<li>暂无中文释义，请在 Anki 中补充</li>'}</ol>
+    ${!hideAnswer && p.inflection ? `<div class="wr-vocab-inflection"><span>词形变化</span>${esc(p.inflection)}</div>` : ''}
+    ${!hideAnswer && p.details ? `<details class="wr-vocab-details"><summary>更多词典信息</summary><div>${esc(p.details)}</div></details>` : ''}
+  </div>`;
 }
 // 生词复习评分后更新阶段；返回是否升入阶段 2
 function webReviewVocabRecord(word, ease) {
@@ -257,9 +360,9 @@ function webReviewQuizType(cardData) {
   if (isVocab) {
     const meaning = webReviewFieldText(cardData, 'Front').trim();
     const backRaw = webReviewFieldText(cardData, 'Back').replace(/\[sound:[^\]]*\]/g, '').trim();
-    const parts = backRaw.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
-    const word = (parts[0] || '').split('\n')[0].trim();
-    const example = parts.slice(1).join('\n\n').trim();
+    const parts = backRaw.split('\n').map(s => s.trim()).filter(Boolean);
+    const word = parts.shift() || '';
+    const example = parts.join('\n').trim();
     const phase = webReviewVocabPhase(word);
     if (phase === 2) {
       return { type: 'dictation', word, meaning, example, explanation: '' };
@@ -327,24 +430,22 @@ function showWebReviewQuestion(cardData) {
   webReviewState.quiz = quiz;
   webReviewState.stage = 'question';
   webReviewState.locked = false;
+  webReviewState.judgedCorrect = null;
   webReviewState.committing = false; // 上一张评分提交已结束，允许再次提交
   webReviewState.selfGraded = (quiz.type === 'recall' || quiz.type === 'manual');
   webReviewBindKeys();
 
   const typeLabel = { mc: '选择题', fill: '填空题', manual: '问答题', recall: '生词 · 看英文想中文', dictation: '生词 · 看中文默写英文' }[quiz.type] || '';
-  const head = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <span style="font-size:13px;font-weight:600">📝 ${esc(typeLabel)} (${webReviewState.current}/${webReviewState.total})</span>
-    <span style="font-size:12px;color:var(--text2)">✅ ${webReviewState.correct}/${webReviewState.current}</span>
-  </div>`;
+  const head = webReviewQueueHeader(typeLabel);
 
   if (quiz.type === 'mc') {
     const btns = quiz.options.map(o =>
-      `<button data-wr-opt="${o.letter}" style="display:block;width:100%;text-align:left;margin-bottom:8px;padding:10px 14px;border-radius:10px;border:1.5px solid var(--border);background:#fff;font-size:15px;cursor:pointer;line-height:1.5">
-        <b style="color:var(--primary);margin-right:8px">${o.letter}.</b>${esc(o.text)}
+      `<button class="wr-option" data-wr-opt="${o.letter}">
+        <b>${o.letter}</b><span>${esc(o.text)}</span>
       </button>`).join('');
     modal.innerHTML = head +
-      `<div id="wrStem" style="font-size:16px;line-height:1.8;padding:16px;background:var(--bg);border-radius:10px;margin-bottom:14px;text-align:left;white-space:pre-wrap">${esc(quiz.stem)}</div>` +
-      `<div id="wrOptions" style="margin-bottom:10px">${btns}</div>` +
+      `<div id="wrStem" class="wr-stem">${esc(quiz.stem)}</div>` +
+      `<div id="wrOptions" class="wr-options">${btns}</div>` +
       `<div id="wrResult"></div>` +
       webReviewFooter('点击选项，或按 1-4 / A-D');
     modal.querySelectorAll('[data-wr-opt]').forEach(b => b.addEventListener('click', () => webReviewChoose(b.getAttribute('data-wr-opt'))));
@@ -353,9 +454,10 @@ function showWebReviewQuestion(cardData) {
     webReviewBindFillSubmit(modal);
   } else if (quiz.type === 'recall') {
     modal.innerHTML = head +
-      `<div style="padding:24px 16px;background:var(--bg);border-radius:10px;margin-bottom:14px;text-align:center">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">看到英文，先在脑中回想它的中文意思，再看答案自评</div>
-        <div id="wrWord" style="font-size:34px;font-weight:800;color:var(--primary);letter-spacing:0.5px">${esc(quiz.word)}</div>
+      `<div class="wr-vocab-card">
+        <div class="wr-vocab-label">生词回想</div>
+        <div id="wrWord" class="wr-vocab-question-word">${esc(quiz.word)}</div>
+        <div class="wr-vocab-instruction">看到英文，先回想中文意思，再翻答案自评</div>
       </div>
       <div id="wrRecallBody" style="text-align:center;margin-bottom:10px">
         <button id="wrReveal" style="padding:10px 28px;border-radius:10px;border:none;background:var(--primary);color:#fff;font-size:15px;cursor:pointer">👁 显示中文意思</button>
@@ -364,9 +466,10 @@ function showWebReviewQuestion(cardData) {
     modal.querySelector('#wrReveal').addEventListener('click', () => webReviewReveal());
   } else if (quiz.type === 'dictation') {
     modal.innerHTML = head +
-      `<div style="padding:20px 16px;background:var(--bg);border-radius:10px;margin-bottom:14px;text-align:center">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">看中文，默写对应的英文单词</div>
-        <div id="wrMeaning" style="font-size:26px;font-weight:700;color:var(--text)">${esc(quiz.meaning)}</div>
+      `<div class="wr-vocab-card wr-vocab-dictation">
+        <div class="wr-vocab-label">默写阶段</div>
+        <div class="wr-vocab-instruction">看中文，写出对应的英文单词</div>
+        <div id="wrMeaning">${webReviewVocabMeaningBlock(quiz.meaning, quiz.word, true)}</div>
       </div>
       <input id="wrFill" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
         style="width:100%;padding:12px 14px;border:1.5px solid var(--primary);border-radius:10px;font-size:18px;margin-bottom:10px;box-sizing:border-box;text-align:center"
@@ -544,8 +647,8 @@ function webReviewReveal() {
   if (res) {
     let answerBlock = '';
     if (quiz.type === 'recall') {
-      answerBlock = `<div style="font-size:24px;font-weight:800;color:#15803d;margin-bottom:6px">${esc(quiz.meaning)}</div>`;
-      if (quiz.example) answerBlock += `<div style="font-size:13px;color:var(--text2);line-height:1.7;text-align:left;white-space:pre-wrap">💬 ${esc(quiz.example)}</div>`;
+      answerBlock = webReviewVocabMeaningBlock(quiz.meaning, quiz.word);
+      if (quiz.example) answerBlock += `<div class="wr-vocab-example"><span>例句与语境</span>${esc(quiz.example)}</div>`;
     } else {
       answerBlock = quiz.answer ? `<div style="font-size:16px;font-weight:700;color:#15803d;margin-bottom:6px;white-space:pre-wrap">✅ ${esc(quiz.answer)}</div>` : '';
       if (quiz.explanation) answerBlock += `<div style="font-size:13px;color:var(--text2);line-height:1.7;text-align:left;white-space:pre-wrap">💡 ${esc(quiz.explanation)}</div>`;
@@ -610,18 +713,20 @@ async function webReviewPrev() {
     await new Promise(res => setTimeout(res, 600));
     const card = await ankiPostCall({ action: 'guiCurrentCard', version: 6 });
     const cardData = card && card.result && card.result.result;
+    if (webReviewState !== st) return;
     if (!cardData) { toastMsg('已经是第一张了'); return; }
+    if (!webReviewDeckMatches(cardData)) { showWebReviewDeckMismatch(cardData); return; }
     if (cardData.cardId === st.cardId) {
       // 撤销成功但 Anki 未移动当前位置：重置本卡作答状态，被撤销的卡会再次出现
       if (st.judgedCorrect === true) st.correct = Math.max(0, st.correct - 1);
       toastMsg('已撤销上一张的评分，它稍后会再次出现');
-      showWebReviewQuestion(cardData);
     } else {
       st.current = Math.max(1, st.current - 1);
       st.total = Math.max(st.total, st.current);
       st.cardId = cardData.cardId;
-      showWebReviewQuestion(cardData);
     }
+    await webReviewRefreshQueueStats(cardData);
+    if (webReviewState === st) showWebReviewQuestion(cardData);
   } catch (e) {
     dbg('ANKI_UNDO', e.message);
     toastMsg('上一题操作失败：' + e.message);
@@ -659,6 +764,9 @@ async function webReviewCommit(ease) {
 function finishWebReview() {
   const modal = document.getElementById('ankiReviewModal');
   if (!modal) return;
+  webReviewState.stage = 'finished';
+  webReviewState.committing = false;
+  webReviewState.currentQueue = null;
   const pct = webReviewState.total > 0 ? Math.round((webReviewState.correct / webReviewState.total) * 100) : 0;
   modal.innerHTML = `<div style="text-align:center;padding:20px">
     <div style="font-size:40px;margin-bottom:12px">🎉</div>

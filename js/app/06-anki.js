@@ -142,6 +142,37 @@ async function ankiAddNotesBatch(notes) {
 // ---- 创建/确保笔记类型 + 牌组 ----
 const VOCAB_MODEL = '英语学习-词汇'; // 词汇默写卡片专用模型：Front=中文释义，Back=英文单词
 
+const ANKI_QUIZ_CSS = `.card {
+  font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  font-size: 18px; line-height: 1.65; color: #1e293b; background: #f8fafc;
+  padding: 24px 18px; text-align: left; white-space: pre-wrap;
+}
+.quiz-stem { padding: 16px 18px; border: 1px solid #dbeafe; border-radius: 14px; background: #fff; margin-bottom: 16px; }
+.quiz-options { display: grid; gap: 10px; }
+.quiz-option { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; padding: 12px 14px; border: 1px solid #dbe3ef; border-radius: 12px; background: #fff; }
+.quiz-option .letter { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 8px; background: #eff6ff; color: #2563eb; font-weight: 800; }
+.quiz-answer { margin-top: 18px; padding: 14px 16px; border-radius: 12px; background: #ecfdf5; border: 1px solid #bbf7d0; color: #166534; font-size: 19px; font-weight: 750; }
+.quiz-explanation { margin-top: 12px; padding: 12px 14px; border-left: 3px solid #93c5fd; border-radius: 8px; background: #f8fafc; color: #475569; font-size: 14px; line-height: 1.7; }
+.quiz-raw { white-space: pre-wrap; }`;
+
+function ankiQuizQuestionHTML() {
+  return `<div class="quiz-stem">{{Question}}</div>`;
+}
+
+function ankiQuizBackHTML() {
+  return `{{FrontSide}}<hr id="answer"><div class="quiz-answer">✅ {{Answer}}</div><div class="quiz-explanation">{{Explanation}}</div>`;
+}
+
+function ankiQuizQuestionFieldHTML(q) {
+  const stem = esc(q.question || '');
+  const options = Array.isArray(q.options) && q.options.length ?
+    `<div class="quiz-options">${q.options.map(option => {
+      const m = String(option).match(/^([A-D])[\.、\)]\s*(.*)$/);
+      return m ? `<div class="quiz-option"><span class="letter">${esc(m[1])}</span><span>${esc(m[2])}</span></div>` : `<div class="quiz-option"><span>${esc(option)}</span></div>`;
+    }).join('')}</div>` : '';
+  return `<div class="quiz-stem">${stem}</div>${options}`;
+}
+
 async function ensureQuizModelAndDeck() {
   const [models, decks] = await Promise.all([
     ankiPostCall({ action: 'modelNames', version: 6 }).then(d => d.result && d.result.result).catch(() => null),
@@ -166,10 +197,11 @@ async function ensureQuizModelAndDeck() {
         inOrderFields: ['Front', 'Back'],
         css: `.card {
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
-  text-align: center; padding: 24px 16px;
+  text-align: left; padding: 24px 16px; white-space: pre-wrap;
   background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
   color: #1e293b;
 }
+.front-hint, .front-meaning, .front-prompt { text-align: center; }
 .front-hint {
   font-size: 12px; color: #94a3b8; letter-spacing: 2px;
   margin-bottom: 20px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 8px;
@@ -182,7 +214,7 @@ async function ensureQuizModelAndDeck() {
   font-size: 13px; color: #94a3b8; margin-top: 24px;
 }
 .back-word {
-  font-size: 30px; font-weight: 800; color: #0f766e;
+  font-size: 22px; font-weight: 800; color: #0f766e;
   margin: 12px 0; line-height: 1.4;
 }
 .back-phonetic {
@@ -218,14 +250,15 @@ async function ensureQuizModelAndDeck() {
       await ankiPostCall({ action: 'updateModelStyling', version: 6, params: {
         model: { name: VOCAB_MODEL, css: `.card {
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
-  text-align: center; padding: 24px 16px;
+  text-align: left; padding: 24px 16px; white-space: pre-wrap;
   background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
   color: #1e293b;
 }
+.front-hint, .front-meaning, .front-prompt { text-align: center; }
 .front-hint { font-size: 12px; color: #94a3b8; letter-spacing: 2px; margin-bottom: 20px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 8px; }
 .front-meaning { font-size: 26px; font-weight: 700; color: #0f172a; line-height: 1.6; margin: 20px 0; }
 .front-prompt { font-size: 13px; color: #94a3b8; margin-top: 24px; }
-.back-word { font-size: 30px; font-weight: 800; color: #0f766e; margin: 12px 0; line-height: 1.4; }
+.back-word { font-size: 22px; font-weight: 800; color: #0f766e; margin: 12px 0; line-height: 1.55; }
 .back-phonetic { font-size: 16px; color: #64748b; margin: 6px 0; font-family: "IPAexMincho", "Times New Roman", serif; }
 .back-example { font-size: 15px; color: #334155; line-height: 1.7; margin: 16px 0 6px; padding: 12px; background: #f1f5f9; border-radius: 10px; text-align: left; }
 .back-context { font-size: 13px; color: #94a3b8; margin-top: 8px; font-style: italic; }
@@ -239,15 +272,21 @@ async function ensureQuizModelAndDeck() {
       await ankiPostCall({ action: 'createModel', version: 6, params: {
         modelName: ANKI_QUIZ_MODEL,
         inOrderFields: ANKI_QUIZ_FIELDS,
-        css: '.card { font-family: Arial, sans-serif; font-size: 18px; text-align: center; color: #333; } .answer { font-size: 20px; font-weight: bold; color: #15803d; } .explanation { font-size: 14px; color: #888; margin-top: 8px; }',
-        cardTemplates: [{
-          Name: '薄弱点问答',
-          Front: '{{Question}}',
-          Back: '{{FrontSide}}<hr id=answer><div class="answer">✅ {{Answer}}</div><div class="explanation">{{Explanation}}</div>'
-        }]
-      }});
-    } catch (e) { dbg('ANKI_MODEL', e.message || e); }
-  }
+         css: ANKI_QUIZ_CSS,
+         cardTemplates: [{
+           Name: '薄弱点问答',
+           Front: ankiQuizQuestionHTML(),
+           Back: ankiQuizBackHTML()
+         }]
+       }});
+     } catch (e) { dbg('ANKI_MODEL', e.message || e); }
+   } else {
+     try {
+       await ankiPostCall({ action: 'updateModelStyling', version: 6, params: {
+         model: { name: ANKI_QUIZ_MODEL, css: ANKI_QUIZ_CSS }
+       }});
+     } catch (e) { dbg('ANKI_MODEL_QUIZ_STYLE', e.message || e); }
+   }
   // 确保牌组存在
   if (Array.isArray(decks)) {
     for (const d of [ankiBaseDeck(), ankiWeakDeck(), ankiVocabDeck(), ankiCorrDeck(), ankiExtDeck()]) {
@@ -466,7 +505,7 @@ async function autoGenerateQuizQuestions(wpList) {
   }
   // 构建 Anki 笔记
   const notes = validQuestions.map(q => {
-    const qText = q.question + (q.options && q.options.length ? '\n\n' + q.options.join('\n') : '');
+    const qText = ankiQuizQuestionFieldHTML(q);
     return {
       deckName: ankiWeakDeck(),
       modelName: ANKI_QUIZ_MODEL,

@@ -774,7 +774,41 @@ body {
 .anki-badge { display: inline-block; font-size: 11px; padding: 2px 6px; border-radius: 10px; }
 
 /* ============ Anki Review Modal ============ */
+#ankiReviewModal.wr-modal { background: var(--surface); border-radius: 18px; padding: 22px; max-width: 620px; width: 94%; max-height: 88vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
 #ankiReviewModal .card-q { font-size: 16px; line-height: 1.8; padding: 16px; background: var(--bg); border-radius: 10px; margin-bottom: 14px; text-align: center; }
+#ankiReviewModal .wr-review-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
+#ankiReviewModal .wr-review-head-main { min-width: 0; }
+#ankiReviewModal .wr-queue-strip { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+#ankiReviewModal .wr-queue-count { display: inline-flex; align-items: baseline; gap: 5px; padding: 5px 8px 6px; border-bottom: 2px solid transparent; color: var(--wr-queue-color); white-space: nowrap; }
+#ankiReviewModal .wr-queue-count b { font-size: 18px; line-height: 1; font-variant-numeric: tabular-nums; }
+#ankiReviewModal .wr-queue-count small { font-size: 11px; font-weight: 700; }
+#ankiReviewModal .wr-queue-count.is-current { border-bottom-color: var(--wr-queue-color); }
+#ankiReviewModal .wr-review-type { display: block; margin-top: 9px; color: var(--text2); font-size: 12px; font-weight: 600; }
+#ankiReviewModal .wr-review-score { flex-shrink: 0; color: var(--text2); font-size: 12px; padding-top: 6px; }
+#ankiReviewModal .wr-stem { font-size: 17px; line-height: 1.8; padding: 18px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 16px; text-align: left; white-space: pre-wrap; }
+#ankiReviewModal .wr-options { display: grid; gap: 10px; margin-bottom: 14px; }
+#ankiReviewModal .wr-option { display: grid; grid-template-columns: 32px 1fr; gap: 10px; align-items: start; width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); text-align: left; font: inherit; font-size: 15px; line-height: 1.6; cursor: pointer; transition: border-color .15s, background .15s, transform .15s; }
+#ankiReviewModal .wr-option:hover { border-color: var(--primary); background: var(--primary-bg); transform: translateY(-1px); }
+#ankiReviewModal .wr-option b { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 8px; background: var(--primary-bg); color: var(--primary); }
+#ankiReviewModal .wr-vocab-card { padding: 20px 18px; margin-bottom: 16px; border: 1px solid #dbeafe; border-radius: 16px; background: linear-gradient(145deg, #eff6ff, #f8fafc 65%, #ecfdf5); text-align: center; }
+#ankiReviewModal .wr-vocab-label { color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
+#ankiReviewModal .wr-vocab-question-word { margin: 16px 0 10px; color: #0f766e; font-size: clamp(28px, 7vw, 42px); font-weight: 850; letter-spacing: .3px; }
+#ankiReviewModal .wr-vocab-instruction { color: var(--text2); font-size: 12px; line-height: 1.6; }
+#ankiReviewModal .wr-vocab-meaning { text-align: left; }
+#ankiReviewModal .wr-vocab-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
+#ankiReviewModal .wr-vocab-phonetic { color: var(--text2); font-family: Georgia, serif; font-size: 17px; }
+#ankiReviewModal .wr-vocab-pos { padding: 3px 8px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-size: 11px; font-weight: 800; }
+#ankiReviewModal .wr-vocab-defs { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+#ankiReviewModal .wr-vocab-defs li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 8px 10px; border-radius: 9px; background: rgba(255,255,255,.72); color: var(--text); font-size: 14px; line-height: 1.65; }
+#ankiReviewModal .wr-vocab-defs li::before { content: counter(wr-def); }
+#ankiReviewModal .wr-vocab-defs { counter-reset: wr-def; }
+#ankiReviewModal .wr-vocab-defs li { counter-increment: wr-def; }
+#ankiReviewModal .wr-vocab-defs li::before { color: var(--primary); font-weight: 800; }
+#ankiReviewModal .wr-vocab-inflection { margin-top: 10px; padding: 8px 10px; border-radius: 9px; background: rgba(255,255,255,.65); color: var(--text2); font-size: 12px; line-height: 1.5; }
+#ankiReviewModal .wr-vocab-inflection span, #ankiReviewModal .wr-vocab-details summary, #ankiReviewModal .wr-vocab-example span { color: var(--text3); font-weight: 700; margin-right: 6px; }
+#ankiReviewModal .wr-vocab-details { margin-top: 10px; color: var(--text2); font-size: 12px; line-height: 1.6; }
+#ankiReviewModal .wr-vocab-details summary { cursor: pointer; }
+#ankiReviewModal .wr-vocab-example { margin-top: 10px; padding: 10px 12px; border-left: 3px solid #34d399; border-radius: 8px; background: #ecfdf5; color: var(--text2); font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
 #ankiReviewModal audio { max-width: 100%; margin: 6px auto; display: block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

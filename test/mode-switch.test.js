@@ -122,3 +122,17 @@ test('AI 不应把合法句子生成成自相矛盾的纠错题', () => {
     explanation: '第三人称单数主语后使用 has。'
   }), true);
 });
+
+test('网页复习头部显示三类队列并标记当前类别', () => {
+  const sandbox = { esc: s => String(s) };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  const source = fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8');
+  vm.runInContext(source, sandbox, { filename: '22-web-review.js' });
+  vm.runInContext("webReviewState = { queueStats: { new: 4, learn: 2, review: 7 }, currentQueue: 'learn', correct: 1, current: 3 };", sandbox);
+  const html = sandbox.webReviewQueueHeader('生词 · 看英文想中文');
+  assert.match(html, /待新学/);
+  assert.match(html, /待重来/);
+  assert.match(html, /待复习/);
+  assert.match(html, /wr-queue-learn is-current/);
+});
