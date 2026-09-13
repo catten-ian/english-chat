@@ -386,11 +386,11 @@ function webReviewVocabRecord(word, ease) {
 
 function webReviewQuizType(cardData) {
   // 生词卡：词汇模型或词汇牌组（Front=中文释义，Back=英文单词+例句）；
-  // 拓展/纠错卡是 Basic 模型（Front/Back），按问答题处理，不能靠 Front/Back 字段猜生词
+  // 拓展/纠错卡是英语学习-基础卡模型（Front/Back），按问答题处理，不能靠 Front/Back 字段猜生词
   const model = cardData.modelName || '';
   const deck = cardData.deckName || '';
   const isVocab = model === '英语学习-词汇' || /::词汇\s*$/.test(deck);
-  // 非生词卡：薄弱点模型用 Question/Answer，Basic 卡（拓展/纠错）用 Front/Back
+  // 非生词卡：薄弱点模型用 Question/Answer，基础卡（拓展/纠错）用 Front/Back
   const qRaw = webReviewFieldRaw(cardData, 'Question');
   const structuredMc = webReviewStructuredQuiz(qRaw);
   const qText = structuredMc ? '' : (webReviewTextFromHTML(qRaw) || webReviewFieldText(cardData, 'Front'));
@@ -409,7 +409,7 @@ function webReviewQuizType(cardData) {
     return { type: 'recall', word, meaning, example, explanation: '' };
   }
   aText = (webReviewFieldText(cardData, 'Answer') || webReviewFieldText(cardData, 'Back')).trim();
-  exp = webReviewFieldText(cardData, 'Explanation').trim();
+  exp = webReviewFieldText(cardData, 'Explanation').replace(/[。.！!？?]?\s*(?:测试点|测试點)\s*[:：][\s\S]*$/, '').trim();
   if (structuredMc) {
     const am = aText.match(/([A-D])/);
     return { type: 'mc', stem: structuredMc.stem, options: structuredMc.options, answer: am ? am[1] : '', answerRaw: aText, explanation: exp };

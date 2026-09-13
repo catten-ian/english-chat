@@ -708,8 +708,8 @@ Practice 模式显示：
 | 分类 | 来源 | 牌组 | 笔记类型 |
 |---|---|---|---|
 | 📖 词汇卡片 | 分析结果中的 `new_words` | `英语学习::<用户名>::词汇` | `英语学习-词汇`（默写） |
-| 🔧 纠错卡片 | 分析结果中的 `corrections` | `英语学习::<用户名>::纠错` | Basic |
-| 💡 拓展卡片 | 分析结果中的 `extensions` | `英语学习::<用户名>::拓展` | Basic |
+| 🔧 纠错卡片 | 分析结果中的 `corrections` | `英语学习::<用户名>::纠错` | `英语学习-基础卡` |
+| 💡 拓展卡片 | 分析结果中的 `extensions` | `英语学习::<用户名>::拓展` | `英语学习-基础卡` |
 | 🎯 薄弱点题目 | 薄弱点自动出题（见下文） | `英语学习::<用户名>::薄弱点` | `英语学习-薄弱点问答` |
 
 ### AI 自动出题（薄弱点 → 题目）
@@ -728,9 +728,9 @@ Practice 模式显示：
 - 生成的题目推送到 `英语学习::<用户名>::薄弱点` 牌组
 
 **笔记类型**（自动创建）：
-- 模型名：`英语学习-薄弱点问答`
-- 字段：`Question` / `Answer` / `Explanation`
-- 正反面模板：题目 → 答案 + 解析
+- `英语学习-薄弱点问答`：`Question` / `Answer` / `Explanation`，正反面模板为题目 → 答案 + 解析
+- `英语学习-词汇`：`Front` / `Back`，兼容中文释义卡与词典长文本卡
+- `英语学习-基础卡`：`Front` / `Back`，用于纠错与拓展笔记
 
 ### 网页答题复习（Web Review）
 
@@ -758,7 +758,7 @@ Anki 集成支持在浏览器中直接进行复习，无需切换到 Anki 桌面
 
 4. 点击具体评分、按 1-4，或用 Enter/→ 接受默认评分后进入下一张；← 可撤销上一张评分
 
-Anki 桌面端的「英语学习-薄弱点问答」模型也会使用同一套题干、选项和答案样式；已存在的模型会在开始网页复习时自动更新 CSS 与模板。
+Anki 桌面端的「英语学习-薄弱点问答」「英语学习-词汇」「英语学习-基础卡」均使用应用专用样式；已存在的模型会在同步 Anki 模型时自动更新 CSS 与模板。旧纯文本选择题会由模板脚本拆成独立选项行，旧词汇字段也会自动适配中文释义卡和词典长文本卡。
 
 **复习数据同步**：
 - 复习后自动同步 `syncAnkiReviewData()`
@@ -795,12 +795,12 @@ Anki 桌面端的「英语学习-薄弱点问答」模型也会使用同一套�
 ### 技术细节
 
 - 所有 Anki 请求通过后端代理 `/api/proxy/anki` 转发（绕过浏览器 CORS 限制）
-- 自动探测可用笔记类型，优先使用 Basic / Basic (and reversed card)
+- 自动创建并更新三个应用专用笔记类型：`英语学习-基础卡`、`英语学习-词汇`、`英语学习-薄弱点问答`，不修改 Anki 内置 Basic 模板
 - 牌组不存在时自动创建
 - 连接失败时显示 toast 提示
 - 支持批量添加卡片（`addNotes` API），减少请求次数
 - **addNote/addNotes 兜底**：AnkiConnect 部分版本的 `addNote` 不接受 `deckName` 参数（卡片落到默认牌组），前端在添加卡片后会自动调用 `changeDeck` 移动到正确牌组
-- **词汇默写题型**：词汇卡使用专用模型 `英语学习-词汇`（Front=中文释义，Back=英文单词），模板美观（渐变背景、大字号、虚线分隔）
+- **词汇默写题型**：词汇卡使用专用模型 `英语学习-词汇`（Front=中文释义或词典释义，Back=英文单词/例句/语境），模板在 Anki 桌面端结构化展示释义、词性、变形、例句和音频
 
 ### 代理安全约束
 
@@ -812,13 +812,13 @@ AnkiConnect 是**本机无鉴权**的高权限接口，能读写整个 Anki 集�
 |---|---|
 | 只读 | `version` `deckNames` `modelNames` `getNumCardsReviewedToday` `getNumCardsReviewedByDay` |
 | GUI 复习 | `guiCurrentCard` `guiShowAnswer` `guiAnswerCard` |
-| 受校验 | `addNote` `addNotes` `canAddNotes` `createDeck` `changeDeck` `findCards` `cardsInfo` `getDeckStats` `guiDeckReview` `findNotes` `notesInfo` `createModel` `updateModelStyling` `storeMediaFile` |
+| 受校验 | `addNote` `addNotes` `canAddNotes` `createDeck` `changeDeck` `findCards` `cardsInfo` `getDeckStats` `guiDeckReview` `findNotes` `notesInfo` `createModel` `updateModelStyling` `updateModelTemplates` `storeMediaFile` |
 
 其余一律 **403**，包括 `deleteDecks`、`deleteNotes`、`sync`、`exportPackage`、`importPackage`、`multi`、`guiExitAnki` 等。
 
 **2. 牌组归属** —— 所有涉及牌组的操作强制限定在 `英语学习::<当前登录用户>` 子树内：
 
-- `addNote` / `addNotes` / `canAddNotes`：每条 note 的 `deckName` 都要在本人子树内，且 `modelName` 必须是本应用的四个模型之一
+- `addNote` / `addNotes` / `canAddNotes`：每条 note 的 `deckName` 都要在本人子树内，且 `modelName` 必须在白名单内；新纠错/拓展卡只使用 `英语学习-基础卡`，不修改其他 Basic 卡
 - `createDeck` / `guiDeckReview` / `getDeckStats` / `changeDeck`：目标牌组必须属于本人
 - `findCards` / `findNotes`：查询必须含 `deck:英语学习::<用户>`（`findCards` 另允许纯 `nid:` 列表，用于新增卡片后归位牌组）
 - `cardsInfo` / `notesInfo` / `changeDeck`：id 必须是正整数，单次最多 500 个

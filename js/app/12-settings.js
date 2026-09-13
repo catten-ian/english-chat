@@ -492,7 +492,7 @@ async function ankiProbeAndEnsureDeck() {
     await ensureQuizModelAndDeck();
     const models = await ankiPostCall({ action: 'modelNames', version: 6 }).then(d => d.result && d.result.result).catch(() => null);
     if (Array.isArray(models) && models.length) {
-      const preferred = ['Basic', 'Basic (and reversed card)', 'Front-Back'];
+      const preferred = [ANKI_BASIC_MODEL, 'Basic', 'Basic (and reversed card)', 'Front-Back'];
       ankiModelCache = preferred.find(m => models.includes(m)) || models[0];
     }
   } catch (e) { /* ignore */ }
@@ -978,4 +978,4 @@ function handleSlashCommand(text) {
   }
   return false;
 }
-
+

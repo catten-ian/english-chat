@@ -28,7 +28,7 @@ async function addToAnki(front, back, tags, deckName) {
       action: 'addNote', version: 6,
       params: { note: {
         deckName: deckName,
-        modelName: 'Basic',
+        modelName: ANKI_BASIC_MODEL,
         fields: { Front: front, Back: back },
         tags: tags || [ankiUserTag()]
       } }
@@ -120,7 +120,7 @@ async function ankiAddNotesBatch(notes) {
       try {
         const d = await ankiPostCall({
           action: 'addNote', version: 6,
-          params: { note: { deckName: n.deckName, modelName: n.modelName || 'Basic', fields: n.fields, tags: n.tags || [] } }
+          params: { note: { deckName: n.deckName, modelName: n.modelName || ANKI_BASIC_MODEL, fields: n.fields, tags: n.tags || [] } }
         });
         if (d && d.result && d.result.result && !d.result.error) {
           added++;
@@ -140,162 +140,37 @@ async function ankiAddNotesBatch(notes) {
 }
 
 // ---- 创建/确保笔记类型 + 牌组 ----
-const VOCAB_MODEL = '英语学习-词汇'; // 词汇默写卡片专用模型：Front=中文释义，Back=英文单词
-const ANKI_QUIZ_TEMPLATE = '薄弱点问答';
-
-const ANKI_QUIZ_CSS = `.card {
-  font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
-  font-size: 18px; line-height: 1.65; color: #1e293b; background: #f8fafc;
-  padding: 24px 18px; text-align: left; white-space: pre-wrap;
-}
-.quiz-stem { padding: 16px 18px; border: 1px solid #dbeafe; border-radius: 14px; background: #fff; margin-bottom: 16px; }
-.quiz-options { display: grid; gap: 10px; }
-.quiz-option { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; padding: 12px 14px; border: 1px solid #dbe3ef; border-radius: 12px; background: #fff; }
-.quiz-option .letter { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 8px; background: #eff6ff; color: #2563eb; font-weight: 800; }
-.quiz-answer, .answer { margin-top: 18px; padding: 14px 16px; border-radius: 12px; background: #ecfdf5; border: 1px solid #bbf7d0; color: #166534; font-size: 19px; font-weight: 750; }
-.quiz-explanation, .explanation { margin-top: 12px; padding: 12px 14px; border-left: 3px solid #93c5fd; border-radius: 8px; background: #f8fafc; color: #475569; font-size: 14px; line-height: 1.7; }
-.quiz-raw { white-space: pre-wrap; }`;
-
-function ankiQuizQuestionHTML() {
-  return `<div class="quiz-stem">{{Question}}</div>`;
-}
-
-function ankiQuizBackHTML() {
-  return `{{FrontSide}}<hr id="answer"><div class="quiz-answer">✅ {{Answer}}</div><div class="quiz-explanation">{{Explanation}}</div>`;
-}
-
-function ankiQuizTemplates() {
-  return { [ANKI_QUIZ_TEMPLATE]: { Front: ankiQuizQuestionHTML(), Back: ankiQuizBackHTML() } };
-}
-
-function ankiQuizQuestionFieldHTML(q) {
-  const stem = esc(q.question || '');
-  const options = Array.isArray(q.options) && q.options.length ?
-    `<div class="quiz-options">${q.options.map(option => {
-      const m = String(option).match(/^([A-D])[\.、\)]\s*(.*)$/);
-      return m ? `<div class="quiz-option"><span class="letter">${esc(m[1])}</span><span>${esc(m[2])}</span></div>` : `<div class="quiz-option"><span>${esc(option)}</span></div>`;
-    }).join('')}</div>` : '';
-  return `<div class="quiz-stem">${stem}</div>${options}`;
-}
 
 async function ensureQuizModelAndDeck() {
   const [models, decks] = await Promise.all([
     ankiPostCall({ action: 'modelNames', version: 6 }).then(d => d.result && d.result.result).catch(() => null),
     ankiPostCall({ action: 'deckNames', version: 6 }).then(d => d.result && d.result.result).catch(() => null)
   ]);
-  // 确保 Basic 模型存在（纠错/拓展使用）
-  if (Array.isArray(models) && !models.includes('Basic')) {
+  const modelSpecs = [
+    { name: ANKI_BASIC_MODEL, fields: ANKI_BASIC_FIELDS, css: ANKI_BASIC_CSS, templates: ankiBasicTemplates() },
+    { name: VOCAB_MODEL, fields: ['Front', 'Back'], css: ANKI_VOCAB_CSS, templates: ankiVocabTemplates() },
+    { name: ANKI_QUIZ_MODEL, fields: ANKI_QUIZ_FIELDS, css: ANKI_QUIZ_CSS, templates: ankiQuizTemplates() }
+  ];
+  for (const spec of modelSpecs) {
     try {
-      await ankiPostCall({ action: 'createModel', version: 6, params: {
-        modelName: 'Basic',
-        inOrderFields: ['Front', 'Back'],
-        css: '.card { font-family: Arial; font-size: 18px; text-align: center; }',
-        cardTemplates: [{ Name: 'Card 1', Front: '{{Front}}', Back: '{{FrontSide}}<hr id=answer>{{Back}}' }]
-      }});
-    } catch (e) { dbg('ANKI_MODEL_BASIC', e.message || e); }
+      if (Array.isArray(models) && !models.includes(spec.name)) {
+        await ankiPostCall({ action: 'createModel', version: 6, params: {
+          modelName: spec.name,
+          inOrderFields: spec.fields,
+          css: spec.css,
+          cardTemplates: Object.entries(spec.templates).map(([Name, t]) => ({ Name, Front: t.Front, Back: t.Back }))
+        }});
+      } else {
+        await ankiPostCall({ action: 'updateModelStyling', version: 6, params: {
+          model: { name: spec.name, css: spec.css }
+        }});
+        await ankiPostCall({ action: 'updateModelTemplates', version: 6, params: {
+          model: { name: spec.name, templates: spec.templates }
+        }});
+      }
+    } catch (e) { dbg('ANKI_MODEL_' + spec.name, e.message || e); }
   }
-  // 创建词汇默写专用模型（美观模板：中文释义→默写英文）
-  if (!(Array.isArray(models) && models.includes(VOCAB_MODEL))) {
-    try {
-      await ankiPostCall({ action: 'createModel', version: 6, params: {
-        modelName: VOCAB_MODEL,
-        inOrderFields: ['Front', 'Back'],
-        css: `.card {
-  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
-  text-align: left; padding: 24px 16px; white-space: pre-wrap;
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-  color: #1e293b;
-}
-.front-hint, .front-meaning, .front-prompt { text-align: center; }
-.front-hint {
-  font-size: 12px; color: #94a3b8; letter-spacing: 2px;
-  margin-bottom: 20px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 8px;
-}
-.front-meaning {
-  font-size: 26px; font-weight: 700; color: #0f172a;
-  line-height: 1.6; margin: 20px 0;
-}
-.front-prompt {
-  font-size: 13px; color: #94a3b8; margin-top: 24px;
-}
-.back-word {
-  font-size: 22px; font-weight: 800; color: #0f766e;
-  margin: 12px 0; line-height: 1.4;
-}
-.back-phonetic {
-  font-size: 16px; color: #64748b; margin: 6px 0;
-  font-family: "IPAexMincho", "Times New Roman", serif;
-}
-.back-example {
-  font-size: 15px; color: #334155; line-height: 1.7;
-  margin: 16px 0 6px; padding: 12px; background: #f1f5f9;
-  border-radius: 10px; text-align: left;
-}
-.back-context {
-  font-size: 13px; color: #94a3b8; margin-top: 8px;
-  font-style: italic;
-}
-.back-divider {
-  border: none; border-top: 1px dashed #cbd5e0; margin: 18px 0;
-}`,
-        cardTemplates: [{
-          Name: '默写',
-          Front: `<div class="front-hint">🔤 看词义 · 默写单词</div>
-<div class="front-meaning">{{Front}}</div>
-<div class="front-prompt">点击显示答案</div>`,
-          Back: `{{FrontSide}}
-<hr class="back-divider">
-<div class="back-word">{{Back}}</div>`
-        }]
-      }});
-    } catch (e) { dbg('ANKI_MODEL_VOCAB', e.message || e); }
-  } else {
-    // 模型已存在，更新模板样式（确保美观）
-    try {
-      await ankiPostCall({ action: 'updateModelStyling', version: 6, params: {
-        model: { name: VOCAB_MODEL, css: `.card {
-  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
-  text-align: left; padding: 24px 16px; white-space: pre-wrap;
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-  color: #1e293b;
-}
-.front-hint, .front-meaning, .front-prompt { text-align: center; }
-.front-hint { font-size: 12px; color: #94a3b8; letter-spacing: 2px; margin-bottom: 20px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 8px; }
-.front-meaning { font-size: 26px; font-weight: 700; color: #0f172a; line-height: 1.6; margin: 20px 0; }
-.front-prompt { font-size: 13px; color: #94a3b8; margin-top: 24px; }
-.back-word { font-size: 22px; font-weight: 800; color: #0f766e; margin: 12px 0; line-height: 1.55; }
-.back-phonetic { font-size: 16px; color: #64748b; margin: 6px 0; font-family: "IPAexMincho", "Times New Roman", serif; }
-.back-example { font-size: 15px; color: #334155; line-height: 1.7; margin: 16px 0 6px; padding: 12px; background: #f1f5f9; border-radius: 10px; text-align: left; }
-.back-context { font-size: 13px; color: #94a3b8; margin-top: 8px; font-style: italic; }
-.back-divider { border: none; border-top: 1px dashed #cbd5e0; margin: 18px 0; }` }
-      }});
-    } catch (e) { dbg('ANKI_MODEL_VOCAB_STYLE', e.message || e); }
-  }
-  if (!(Array.isArray(models) && models.includes(ANKI_QUIZ_MODEL))) {
-    try {
-      await ankiPostCall({ action: 'createModel', version: 6, params: {
-        modelName: ANKI_QUIZ_MODEL,
-        inOrderFields: ANKI_QUIZ_FIELDS,
-        css: ANKI_QUIZ_CSS,
-        cardTemplates: [{
-          Name: ANKI_QUIZ_TEMPLATE,
-          Front: ankiQuizQuestionHTML(),
-          Back: ankiQuizBackHTML()
-        }]
-      }});
-    } catch (e) { dbg('ANKI_MODEL', e.message || e); }
-  } else {
-    try {
-      await ankiPostCall({ action: 'updateModelStyling', version: 6, params: {
-        model: { name: ANKI_QUIZ_MODEL, css: ANKI_QUIZ_CSS }
-      }});
-    } catch (e) { dbg('ANKI_MODEL_QUIZ_STYLE', e.message || e); }
-    try {
-      await ankiPostCall({ action: 'updateModelTemplates', version: 6, params: {
-        model: { name: ANKI_QUIZ_MODEL, templates: ankiQuizTemplates() }
-      }});
-    } catch (e) { dbg('ANKI_MODEL_QUIZ_TEMPLATE', e.message || e); }
-  }
+
   // 确保牌组存在
   if (Array.isArray(decks)) {
     for (const d of [ankiBaseDeck(), ankiWeakDeck(), ankiVocabDeck(), ankiCorrDeck(), ankiExtDeck()]) {
@@ -353,7 +228,7 @@ async function processAnalysisForAnki(parsed, userText) {
       const front = c.original || '';
       const back = (c.corrected ? '→ ' + c.corrected + '\n' : '') + (c.rule ? '规则：' + c.rule + '\n' : '') + (c.explanation || '');
       if (!front) continue;
-      notes.push({ deckName: ankiCorrDeck(), modelName: 'Basic', fields: { Front: front, Back: back }, tags: [ankiUserTag(), 'correction'] });
+      notes.push({ deckName: ankiCorrDeck(), modelName: ANKI_BASIC_MODEL, fields: { Front: front, Back: back }, tags: [ankiUserTag(), 'correction'] });
     }
     total += notes.length;
     if (notes.length) {
@@ -368,7 +243,7 @@ async function processAnalysisForAnki(parsed, userText) {
     for (const e of parsed.extensions) {
       const front = '💡 ' + (e.title || e.type || 'Knowledge');
       const back = (e.content || '') + (e.type ? '\n\n类型：' + e.type : '');
-      notes.push({ deckName: ankiExtDeck(), modelName: 'Basic', fields: { Front: front, Back: back }, tags: [ankiUserTag(), 'extension'] });
+      notes.push({ deckName: ankiExtDeck(), modelName: ANKI_BASIC_MODEL, fields: { Front: front, Back: back }, tags: [ankiUserTag(), 'extension'] });
     }
     total += notes.length;
     if (notes.length) {

@@ -170,10 +170,13 @@ describe('Anki 代理：白名单与归属', () => {
   });
 
   test('createModel / updateModelStyling 只允许本应用模型', async () => {
+    assertPassedGuard(await call({ action: 'createModel', version: 6, params: { modelName: '英语学习-基础卡', inOrderFields: ['Front', 'Back'], cardTemplates: [] } }), 'createModel 基础卡允许');
     assertPassedGuard(await call({ action: 'createModel', version: 6, params: { modelName: '英语学习-词汇', inOrderFields: ['Front', 'Back'], cardTemplates: [] } }), 'createModel 允许');
     assertDenied(await call({ action: 'createModel', version: 6, params: { modelName: 'Evil', inOrderFields: [], cardTemplates: [] } }), 'createModel 非白名单');
+    assertPassedGuard(await call({ action: 'updateModelStyling', version: 6, params: { model: { name: '英语学习-基础卡', css: '' } } }), 'updateModelStyling 基础卡允许');
     assertPassedGuard(await call({ action: 'updateModelStyling', version: 6, params: { model: { name: '英语学习-词汇', css: '' } } }), 'updateModelStyling 允许');
     assertDenied(await call({ action: 'updateModelStyling', version: 6, params: { model: { name: 'Basic-Other', css: '' } } }), 'updateModelStyling 非白名单');
+    assertPassedGuard(await call({ action: 'updateModelTemplates', version: 6, params: { model: { name: '英语学习-基础卡', templates: {} } } }), 'updateModelTemplates 基础卡允许');
     assertPassedGuard(await call({ action: 'updateModelTemplates', version: 6, params: { model: { name: '英语学习-薄弱点问答', templates: {} } } }), 'updateModelTemplates 自定义模型允许');
     assertDenied(await call({ action: 'updateModelTemplates', version: 6, params: { model: { name: 'Basic', templates: {} } } }), 'updateModelTemplates 不改内置 Basic');
   });

@@ -185,6 +185,7 @@ test('网页复习能解析结构化 Anki 选择题字段', () => {
   const generatorSandbox = { esc: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') };
   generatorSandbox.globalThis = generatorSandbox;
   vm.createContext(generatorSandbox);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '24-anki-templates.js'), 'utf8'), generatorSandbox, { filename: '24-anki-templates.js' });
   vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '06-anki.js'), 'utf8'), generatorSandbox, { filename: '06-anki.js' });
   const raw = generatorSandbox.ankiQuizQuestionFieldHTML({
     question: 'Choose the correct sentence.',
@@ -194,4 +195,100 @@ test('网页复习能解析结构化 Anki 选择题字段', () => {
   assert.strictEqual(quiz.stem, 'Choose the correct sentence.');
   assert.deepStrictEqual(quiz.options.map(o => o.letter).join(''), 'ABCD');
   assert.strictEqual(quiz.options[1].text, 'Second option');
+});
+
+test('网页复习解析题目时隐藏内部测试点标识', () => {
+  const sandbox = {
+    document: {
+      createElement: () => ({
+        set innerHTML(value) { this.textContent = value; },
+        get innerHTML() { return this.textContent || ''; },
+        querySelectorAll: () => [],
+        textContent: ''
+      })
+    }
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8'), sandbox, { filename: '22-web-review.js' });
+  const card = {
+    modelName: '英语学习-薄弱点问答',
+    deckName: '英语学习::test::薄弱点',
+    fields: {
+      Question: { value: 'Choose the best answer.\nA. one\nB. two\nC. three\nD. four' },
+      Answer: { value: 'B. two' },
+      Explanation: { value: '这里应选 two。测试点: wp_example（内部标签）。' }
+    }
+  };
+  const quiz = sandbox.webReviewQuizType(card);
+  assert.strictEqual(quiz.type, 'mc');
+  assert.strictEqual(quiz.explanation, '这里应选 two');
+  assert.doesNotMatch(quiz.explanation, /wp_example|测试点/);
+});
+
+test('Anki 桌面模板内联脚本均为合法 JavaScript', () => {
+  const sandbox = {};
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '24-anki-templates.js'), 'utf8'), sandbox, { filename: '24-anki-templates.js' });
+  const groups = vm.runInContext('({ basic: ankiBasicTemplates(), vocab: ankiVocabTemplates(), quiz: ankiQuizTemplates() })', sandbox);
+  for (const templates of Object.values(groups)) {
+    for (const sides of Object.values(templates)) {
+      for (const side of Object.values(sides)) {
+        for (const match of side.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
+          assert.doesNotThrow(() => new vm.Script(match[1]));
+        }
+      }
+    }
+  }
+});
+
+test('Anki 词汇模板正面可解析双音标词典文本', () => {
+  class FakeNode {
+    constructor(tag) {
+      this.tagName = tag;
+      this.children = [];
+      this.dataset = {};
+      this.className = '';
+      this._text = '';
+    }
+    get textContent() {
+      return this.children.length ? this.children.map(child => child.textContent).join('') : this._text;
+    }
+    set textContent(value) {
+      this._text = String(value);
+      this.children = [];
+    }
+    cloneNode() {
+      const node = new FakeNode(this.tag);
+      node._text = this._text;
+      node.className = this.className;
+      node.dataset = { ...this.dataset };
+      return node;
+    }
+    querySelectorAll() { return []; }
+    appendChild(child) { this.children.push(child); return child; }
+  }
+
+  const root = new FakeNode('div');
+  root.textContent = 'monastery /ˈmɑːnəsteri/ /ˈmɒnəstri/ n. • 修道院•寺院';
+  const documentMock = {
+    readyState: 'complete',
+    createElement: tag => new FakeNode(tag),
+    getElementById: id => id === 'aiVocabFront' ? root : null
+  };
+  const sandbox = { document: documentMock };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '24-anki-templates.js'), 'utf8'), sandbox, { filename: '24-anki-templates.js' });
+  const groups = vm.runInContext('({ vocab: ankiVocabTemplates() })', sandbox);
+  const script = Object.values(groups.vocab)[0].Front.match(/<script>([\s\S]*?)<\/script>/)[1];
+  vm.runInContext(script, sandbox, { filename: 'vocab-template-inline.js' });
+
+  const card = root.children[0];
+  const pos = card.children.find(node => node.className === 'vocab-pos');
+  const defs = card.children.find(node => node.className === 'vocab-defs');
+  assert.strictEqual(pos.textContent, 'n.');
+  assert.deepStrictEqual(defs.children.map(node => node.textContent), ['修道院', '寺院']);
+  assert.doesNotMatch(card.textContent, /[\/ˈ]|mɑː|mɒn/);
 });

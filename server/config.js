@@ -131,8 +131,8 @@ const ALLOWED_ORIGINS = new Set(['http://localhost:8091', 'http://127.0.0.1:8091
    注意：ANKI_DECK_PREFIX 需与 js/config.js 中的常量保持一致。 */
 const ANKI_DECK_PREFIX = '英语学习';
 // 允许创建/改样式的笔记类型（与 js/config.js、js/app.js 中的模型名对应）
-const ANKI_ALLOWED_MODELS = new Set(['Basic', 'Basic (and reversed card)', '英语学习-词汇', '英语学习-薄弱点问答']);
-const ANKI_TEMPLATE_MODELS = new Set(['英语学习-词汇', '英语学习-薄弱点问答']);
+const ANKI_ALLOWED_MODELS = new Set(['Basic', 'Basic (and reversed card)', '英语学习-基础卡', '英语学习-词汇', '英语学习-薄弱点问答']);
+const ANKI_TEMPLATE_MODELS = new Set(['英语学习-基础卡', '英语学习-词汇', '英语学习-薄弱点问答']);
 const ANKI_MAX_NOTES = 200;      // 单次 addNotes/canAddNotes 上限
 const ANKI_MAX_CARDS = 500;      // 单次 cardsInfo/changeDeck 卡片数上限
 const ANKI_MAX_MEDIA_B64 = 8 * 1024 * 1024;  // storeMediaFile base64 上限
