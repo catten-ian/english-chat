@@ -57,6 +57,22 @@ async function apiLogin(username, password) {
   setAuth(data.token, data.username);
   return data;
 }
+async function apiRegisterChallenge() {
+  const res = await fetch(BACKEND_URL + '/api/auth/register-challenge');
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || '无法获取人机校验');
+  return data;
+}
+async function apiRegister(username, password, challengeId, nonce) {
+  const res = await fetch(BACKEND_URL + '/api/auth/register', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, challenge_id: challengeId, nonce: String(nonce) })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || '注册失败（HTTP ' + res.status + '）');
+  setAuth(data.token, data.username);
+  return data;
+}
 async function apiLogout() {
   try { await fetch(BACKEND_URL + '/api/auth/logout', { method: 'POST', headers: authHeaders() }); } catch (e) {}
   logoutLocal();
@@ -101,6 +117,14 @@ async function _saveNow(key, data) {
       syncStatus.lastError = key + ': HTTP ' + res.status;
       console.warn('apiSave rejected:', key, res.status);
       return false;
+    }
+    if (key === 'conversations') {
+      const result = await res.json();
+      // Do not replace edits made while this request was in flight.
+      if (JSON.stringify(getAllConversations()) === JSON.stringify(data) && result.conversations) {
+        cacheConversations(result.conversations);
+        if (typeof renderSidebar === 'function') renderSidebar();
+      }
     }
     syncStatus.failedKeys.delete(key);
     if (syncStatus.failedKeys.size === 0) syncStatus.lastError = null;
@@ -171,8 +195,33 @@ async function flushLocalToServer() {
   if (weak && typeof weak === 'object') tasks.push(['weak', weak]);
   const settings = parse('ai_en_settings_backup', null);
   if (settings && typeof settings === 'object') tasks.push(['settings', settings]);
-  const results = await Promise.all(tasks.map(([k, d]) => _saveNow(k, d)));
-  return { flushed: results.filter(Boolean).length, total: tasks.length };
+  const deleted = parse('ai_en_conv_deletes', []);
+  const deleteIds = Array.isArray(deleted) ? deleted : [];
+  let deleteOk = true;
+  for (const id of deleteIds) {
+    if (!await apiDeleteConversation(id)) deleteOk = false;
+  }
+  const results = await Promise.all(tasks.map(([k, d]) => apiSave(k, d)));
+  return { flushed: results.filter(Boolean).length + Number(deleteOk && deleteIds.length > 0), total: tasks.length + Number(deleteIds.length > 0) };
+}
+
+async function apiDeleteConversation(id) {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/conversations/delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ id })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    let pending = [];
+    try { pending = JSON.parse(localStorage.getItem('ai_en_conv_deletes') || '[]'); } catch (e) {}
+    if (!Array.isArray(pending)) pending = [];
+    localStorage.setItem('ai_en_conv_deletes', JSON.stringify(pending.filter(item => item !== id)));
+    syncStatus.failedKeys.delete('conversation_deletions');
+    return true;
+  } catch (e) {
+    syncStatus.failedKeys.add('conversation_deletions');
+    syncStatus.lastError = 'conversation_deletions: ' + e.message;
+    return false;
+  }
 }
 
 /* ---------- 高考翻译题库 API ---------- */
@@ -239,7 +288,7 @@ async function apiPrivacy() {
 const CACHE_OWNER_KEY = 'ai_en_cache_owner';
 // 用户态缓存的固定 key（不含 ai_en_setting_* 前缀键，另行处理）
 const USER_CACHE_KEYS = [
-  'ai_en_convs', 'ai_en_vocab', 'ai_en_weak', 'ai_en_current_conv',
+  'ai_en_convs', 'ai_en_conv_deletes', 'ai_en_vocab', 'ai_en_weak', 'ai_en_current_conv',
   'ai_en_settings_backup', 'ai_en_backup_latest', 'ai_en_backup_history',
   'ai_en_dict_history', 'ai_en_mode', 'ai_en_game_tab', 'ai_en_practice_tab', 'ai_en_anki_tasks',
   // 作答草稿（15-modes.js DRAFT_KEYS）：不清会把上一个账户的作文/翻译原文恢复给下一个账户
@@ -275,8 +324,15 @@ function ensureCacheOwner(username) {
 async function loadUserData() {
   ensureCacheOwner(currentUser());
 
+  let pendingDeletes = [];
+  try { pendingDeletes = JSON.parse(localStorage.getItem('ai_en_conv_deletes') || '[]'); } catch (e) {}
+  if (!Array.isArray(pendingDeletes)) pendingDeletes = [];
+  for (const id of pendingDeletes) await apiDeleteConversation(id);
+  const cached = getAllConversations();
+  if (Object.keys(cached).length) await apiSave('conversations', cached);
   const convs = await apiLoad('conversations');
-  localStorage.setItem('ai_en_convs', JSON.stringify(convs && typeof convs === 'object' && !Array.isArray(convs) ? convs : {}));
+  if (convs && typeof convs === 'object' && !Array.isArray(convs) &&
+      !syncStatus.failedKeys.has('conversations') && !syncStatus.failedKeys.has('conversation_deletions')) cacheConversations(convs);
 
   const vocab = await apiLoad('vocab');
   localStorage.setItem('ai_en_vocab', JSON.stringify(Array.isArray(vocab) ? vocab : []));
@@ -512,7 +568,7 @@ function findKeyByName(w, category, point) {
 function getAllConversations() {
   try { return JSON.parse(localStorage.getItem('ai_en_convs') || '{}'); } catch(e) { return {}; }
 }
-function saveAllConversations(convs) {
+function cacheConversations(convs) {
   // 服务端是权威数据源：即使本地写入因配额失败，也必须把这次改动推上去，
   // 否则用户只看到「回复失败」而对话内容实际已丢。
   try {
@@ -530,7 +586,23 @@ function saveAllConversations(convs) {
       if (typeof dbg === 'function') dbg('LS_QUOTA', e2.message || String(e2));
     }
   }
+}
+function saveAllConversations(convs) {
+  cacheConversations(convs);
   apiSave('conversations', convs);
+}
+async function pullConversations() {
+  if (!isAuthed() || _saveInflight.conversations || syncStatus.failedKeys.has('conversations')) return;
+  let pending = [];
+  try { pending = JSON.parse(localStorage.getItem('ai_en_conv_deletes') || '[]'); } catch (e) {}
+  if (pending.length) return;
+  if (syncStatus.failedKeys.has('conversation_deletions')) return;
+  const remote = await apiLoad('conversations');
+  if (!remote || _saveInflight.conversations || syncStatus.failedKeys.has('conversations')) return;
+  if (JSON.stringify(remote) !== JSON.stringify(getAllConversations())) {
+    cacheConversations(remote);
+    if (typeof renderSidebar === 'function') renderSidebar();
+  }
 }
 function getCurrentConvId() {
   return localStorage.getItem('ai_en_current_conv') || null;
@@ -604,7 +676,13 @@ function findFirstUserContent(nodes) {
 function deleteConversation(id) {
   const convs = getAllConversations();
   delete convs[id];
-  saveAllConversations(convs);
+  cacheConversations(convs);
+  let pending = [];
+  try { pending = JSON.parse(localStorage.getItem('ai_en_conv_deletes') || '[]'); } catch (e) {}
+  if (!Array.isArray(pending)) pending = [];
+  if (!pending.includes(id)) pending.push(id);
+  localStorage.setItem('ai_en_conv_deletes', JSON.stringify(pending));
+  apiDeleteConversation(id);
   if (getCurrentConvId() === id) {
     setCurrentConvId(null);
   }

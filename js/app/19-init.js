@@ -417,7 +417,7 @@ function initSyncIndicator() {
             (syncStatus.lastError ? '（' + syncStatus.lastError + '）' : '');
     } else if (syncStatus.lastSavedAt) {
       cls = 'synced'; txt = '✓ 已同步 ' + fmt(syncStatus.lastSavedAt);
-      tip = '数据已保存到服务器 SQLite · 点击立即重传本地缓存';
+      tip = '聊天记录自动从服务器更新 · 点击立即同步本地缓存';
     } else {
       cls = 'idle'; txt = '💾 本地存储';
       tip = '登录后数据将同步到服务器';
@@ -432,15 +432,55 @@ function initSyncIndicator() {
       return;
     }
     const r = await flushLocalToServer();
+    await pullConversations();
     if (!r || r.offline || r.skipped) { render(); return; }
     if (r.flushed === r.total && syncStatus.failedKeys.size === 0) toastMsg('✅ 本地数据已同步到服务器');
     else toastMsg('同步完成 ' + r.flushed + '/' + r.total + '，仍有 ' + syncStatus.failedKeys.size + ' 项失败');
     render();
   });
-  window.addEventListener('online', () => { render(); flushLocalToServer().then(render); });
+  window.addEventListener('online', () => { render(); flushLocalToServer().then(pullConversations).then(render); });
   window.addEventListener('offline', render);
   setInterval(render, 800);
+  setInterval(pullConversations, 30000);
   render();
+}
+
+// Mobile soft keyboards resize the visual viewport without reliably moving
+// fixed/sticky controls. Keep the app height in sync and scroll the active
+// editor into the visible portion of the page.
+function initMobileViewport() {
+  if (!window.visualViewport) return;
+  const vv = window.visualViewport;
+  const root = document.documentElement;
+  let blurTimer = null;
+  // Some mobile browsers resize both innerHeight and visualViewport when the
+  // keyboard opens. Keep the largest recent viewport as the layout baseline;
+  // comparing against the current innerHeight alone misses that case.
+  let viewportBaseline = Math.max(window.innerHeight || 0, vv.height || 0);
+  function sync() {
+    root.style.setProperty('--vvh', Math.round(vv.height) + 'px');
+    const activeEditor = document.activeElement && /^(TEXTAREA|INPUT)$/.test(document.activeElement.tagName);
+    if (!activeEditor && vv.height > viewportBaseline * 0.9) viewportBaseline = vv.height;
+    const keyboard = activeEditor && vv.height < viewportBaseline * 0.82;
+    document.body.classList.toggle('keyboard-open', keyboard);
+    if (keyboard && activeEditor) {
+      window.requestAnimationFrame(() => document.activeElement.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+    }
+  }
+  vv.addEventListener('resize', sync);
+  vv.addEventListener('scroll', sync);
+  document.addEventListener('focusin', e => {
+    if (!/^(TEXTAREA|INPUT)$/.test(e.target.tagName)) return;
+    viewportBaseline = Math.max(viewportBaseline, window.innerHeight || 0, vv.height || 0);
+    clearTimeout(blurTimer);
+    window.setTimeout(() => e.target.scrollIntoView({ block: 'nearest', inline: 'nearest' }), 120);
+    sync();
+  });
+  document.addEventListener('focusout', () => {
+    clearTimeout(blurTimer);
+    blurTimer = window.setTimeout(sync, 180);
+  });
+  sync();
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -449,6 +489,7 @@ document.addEventListener('DOMContentLoaded', function() {
   initInteractiveA11y();
   initSyncIndicator();
   initMobileMore();
+  initMobileViewport();
   document.getElementById('difficulty').addEventListener('input', updateDifficulty);
   // 作文题目图片拖拽：dragover/drop 不是 click/change/input，需静态绑定。
   // 绑在整个 Writing 区——题目区（#wTopicDisplay）未确认题目前是隐藏的，
@@ -466,10 +507,44 @@ initResize('panelResize', 'sidePanel', 'panelW', 280, 720, true);
 
   const loginOverlay = document.getElementById('loginOverlay');
   const loginBtn = document.getElementById('loginBtn');
+  const registerBtn = document.getElementById('registerBtn');
+  const authModeBtn = document.getElementById('authModeBtn');
   const loginMsg = document.getElementById('loginMsg');
   const loginUser = document.getElementById('loginUser');
   const loginPass = document.getElementById('loginPass');
+  const registerPass2 = document.getElementById('registerPass2');
+  const registerProof = document.getElementById('registerProof');
   const userBadge = document.getElementById('userBadge');
+  let registerMode = false;
+  let registerChallenge = null;
+
+  function setRegisterMode(enabled) {
+    registerMode = enabled;
+    loginBtn.style.display = enabled ? 'none' : '';
+    registerBtn.style.display = enabled ? '' : 'none';
+    registerPass2.style.display = enabled ? '' : 'none';
+    loginPass.autocomplete = enabled ? 'new-password' : 'current-password';
+    authModeBtn.textContent = enabled ? '已有账户？登录' : '没有账户？注册';
+    loginMsg.textContent = '';
+    if (enabled) {
+      registerProof.style.display = '';
+      registerProof.textContent = '正在获取人机校验…';
+      apiRegisterChallenge().then(function(c) { registerChallenge = c; registerProof.textContent = '人机校验已准备'; }).catch(function(e) { registerProof.textContent = e.message || '人机校验获取失败'; });
+    } else { registerChallenge = null; registerProof.style.display = 'none'; }
+  }
+
+  async function solveRegisterProof(challenge) {
+    if (!challenge || !window.crypto || !window.crypto.subtle) throw new Error('当前浏览器不支持人机校验');
+    const encoder = new TextEncoder();
+    for (let nonce = 0; nonce <= 1000000000; nonce++) {
+      const raw = await crypto.subtle.digest('SHA-256', encoder.encode(challenge.salt + ':' + nonce));
+      const bytes = new Uint8Array(raw);
+      let hex = '';
+      for (const b of bytes) hex += b.toString(16).padStart(2, '0');
+      if (hex.startsWith('0'.repeat(challenge.difficulty))) return nonce;
+    }
+    throw new Error('人机校验失败，请重试');
+  }
 
   async function doLogin() {
     const u = loginUser.value.trim();
@@ -491,8 +566,28 @@ initResize('panelResize', 'sidePanel', 'panelW', 280, 720, true);
       loginBtn.disabled = false;
     }
   }
+  async function doRegister() {
+    const u = loginUser.value.trim();
+    const p = loginPass.value;
+    if (!u || !p || !registerPass2.value) { loginMsg.textContent = '请输入用户名、密码和确认密码'; return; }
+    if (p !== registerPass2.value) { loginMsg.textContent = '两次密码不一致'; return; }
+    if (!registerChallenge) { loginMsg.textContent = '人机校验尚未准备好'; return; }
+    registerBtn.disabled = true; loginMsg.textContent = '正在完成人机校验…';
+    try {
+      const nonce = await solveRegisterProof(registerChallenge);
+      loginMsg.textContent = '注册中…';
+      await apiRegister(u, p, registerChallenge.id, nonce);
+      ensureCacheOwner(currentUser());
+      if (userBadge) userBadge.textContent = currentUser();
+      loginOverlay.style.display = 'none';
+      bootApp();
+    } catch (e) { loginMsg.textContent = e.message || '注册失败'; registerChallenge = null; }
+    finally { registerBtn.disabled = false; }
+  }
   if (loginBtn) loginBtn.addEventListener('click', doLogin);
-  if (loginPass) loginPass.addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
+  if (registerBtn) registerBtn.addEventListener('click', doRegister);
+  if (authModeBtn) authModeBtn.addEventListener('click', function() { setRegisterMode(!registerMode); });
+  if (loginPass) loginPass.addEventListener('keydown', function(e) { if (e.key === 'Enter') registerMode ? doRegister() : doLogin(); });
   if (loginUser) loginUser.addEventListener('keydown', function(e) { if (e.key === 'Enter') { loginPass.focus(); } });
 
   // 应用主体初始化（登录成功后才执行）

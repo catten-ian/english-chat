@@ -244,7 +244,7 @@ You MUST respond with ONLY a valid JSON object (no markdown, no extra text, no t
     {"original": "user phrase with real error", "corrected": "corrected version", "type": "grammar|collocation|vocabulary|punctuation", "rule": "brief rule name", "explanation": "why it's wrong, in Chinese"}
   ],
   "extensions": [
-    {"type": "synonym|idiom|knowledge|grammar", "title": "short title", "content": "learning point with examples, partly in Chinese. Include 2-3 useful alternatives or phrases."}
+    {"type": "synonym|idiom|knowledge|grammar", "title": "short title", "content": "learning point with examples, partly in Chinese. Include 2-3 useful alternatives or phrases.", "answers": ["English word or phrase", "another expression"], "answer_type": "word|phrase|mixed"}
   ],
   "new_words": [
     {"word": "word", "meaning": "Chinese meaning", "example": "example sentence", "part": "n./v./adj./adv."}
@@ -256,7 +256,7 @@ You MUST respond with ONLY a valid JSON object (no markdown, no extra text, no t
 
 Score guide: 1-4 = needs improvement, 5-6 = acceptable, 7-8 = good, 9-10 = excellent.
 
-For extensions: provide advanced alternatives that are genuinely useful. For example, if the user says "I like", suggest "I'm fond of / I'm passionate about / I have a soft spot for" with usage examples. If the user describes something, suggest richer vocabulary and more vivid expressions. Focus on phrases and collocations, not just single words.`;
+For extensions: provide advanced alternatives that are genuinely useful. For example, if the user says "I like", suggest "I'm fond of / I'm passionate about / I have a soft spot for" with usage examples. If the user describes something, suggest richer vocabulary and more vivid expressions. Focus on phrases and collocations, not just single words. Put every target English word/phrase the learner should recall in the "answers" array and classify it as word, phrase, or mixed in "answer_type". The card front will show the Chinese title plus the number/type of expressions, so do not omit this metadata.`;
 }
 
 /* ---------- API ---------- */
@@ -398,4 +398,4 @@ const AudioManager = (function () {
 
   return { speakBlob, stopSpeech, isSpeaking };
 })();
-
+

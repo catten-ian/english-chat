@@ -29,6 +29,7 @@ const ANKI_QUIZ_CSS = `
   padding: 18px 20px; background: #ffffff; border: 1px solid #dbeafe;
   border-radius: 16px; box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
 }
+.quiz-question { white-space: pre-wrap; }
 .quiz-options { display: grid; gap: 12px; margin-top: 16px; }
 .quiz-option {
   display: grid; grid-template-columns: 38px 1fr; gap: 12px; align-items: start;
@@ -83,119 +84,81 @@ const ANKI_VOCAB_CSS = `
 * { box-sizing: border-box; }
 .card {
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
-  color: #0f172a; background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-  padding: 28px 24px; text-align: left; margin: 0 auto;
+  color: #172033; background: #f4f6f8;
+  padding: 24px 18px; text-align: left; margin: 0 auto;
 }
-.vocab-shell { max-width: 700px; margin: 0 auto; }
+.vocab-shell { width: 100%; max-width: 620px; margin: 0 auto; }
 .vocab-kicker {
-  text-align: center; color: #64748b; font-size: 12px; font-weight: 800;
-  letter-spacing: 2px; margin-bottom: 18px;
+  color: #576274; font-size: 12px; font-weight: 700;
+  letter-spacing: 0; margin-bottom: 18px;
 }
 .vocab-front-card, .vocab-back-card {
-  background: #ffffff; border: 1px solid #dbeafe; border-radius: 18px;
-  padding: 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, .07);
+  background: #ffffff; border: 1px solid #d9dee7; border-radius: 8px;
+  padding: 28px 26px; box-shadow: 0 4px 14px rgba(23, 32, 51, .07);
 }
 .vocab-front-meaning {
-  white-space: pre-wrap; text-align: center; font-size: 27px; line-height: 1.65;
-  font-weight: 800; color: #0f172a;
+  white-space: pre-wrap; text-align: left; font-size: 24px; line-height: 1.65;
+  font-weight: 700; color: #172033;
 }
-.vocab-prompt { text-align: center; color: #94a3b8; font-size: 13px; margin-top: 18px; }
+.vocab-front-text, .vocab-back-text {
+  white-space: pre-wrap; word-break: break-word;
+}
+.vocab-front-text {
+  font-size: 24px; line-height: 1.7; font-weight: 700; color: #172033;
+}
+.vocab-back-text {
+  font-size: 17px; line-height: 1.8; color: #334155;
+}
+.vocab-direction {
+  display: inline-block; margin-bottom: 18px; padding: 4px 8px;
+  border-radius: 4px; background: #e8f0ee; color: #176b5b;
+  font-size: 12px; font-weight: 700;
+}
+.vocab-prompt {
+  color: #738095; font-size: 13px; margin-top: 22px; padding-top: 14px;
+  border-top: 1px solid #edf0f4;
+}
 .vocab-word-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .vocab-audio { display: inline-flex; align-items: center; }
-.vocab-word { font-size: clamp(30px, 7vw, 42px); line-height: 1.25; font-weight: 850; color: #0f766e; letter-spacing: .2px; }
+.vocab-word { font-size: 38px; line-height: 1.25; font-weight: 800; color: #126b5d; letter-spacing: 0; }
 .vocab-phonetic { color: #64748b; font-family: Georgia, "Times New Roman", serif; font-size: 18px; }
 .vocab-pos {
-  display: inline-flex; padding: 4px 10px; border-radius: 999px;
-  background: #dbeafe; color: #1d4ed8; font-size: 12px; font-weight: 800;
+  display: inline-flex; padding: 3px 7px; border-radius: 4px;
+  background: #eef1f5; color: #526074; font-size: 12px; font-weight: 700;
 }
 .vocab-defs { display: grid; gap: 9px; margin: 14px 0 0; padding: 0; list-style: none; counter-reset: vocab-def; }
 .vocab-defs li {
   counter-increment: vocab-def; display: grid; grid-template-columns: 26px 1fr; gap: 9px;
-  padding: 10px 12px; border-radius: 11px; background: #f8fafc; line-height: 1.65;
+  padding: 10px 12px; border-radius: 6px; background: #f6f8fa; line-height: 1.65;
 }
 .vocab-defs li::before {
-  content: counter(vocab-def); width: 22px; height: 22px; border-radius: 7px;
+  content: counter(vocab-def); width: 22px; height: 22px; border-radius: 4px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: #ccfbf1; color: #0f766e; font-size: 12px; font-weight: 850;
+  background: #dceeea; color: #126b5d; font-size: 12px; font-weight: 800;
 }
-.vocab-inflection { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: #f8fafc; color: #64748b; font-size: 13px; }
+.vocab-inflection { margin-top: 12px; padding: 10px 12px; border-radius: 6px; background: #f6f8fa; color: #64748b; font-size: 13px; }
 .vocab-divider { border: none; border-top: 1px dashed #cbd5e1; margin: 24px 0; }
 .vocab-example, .vocab-context {
-  white-space: pre-wrap; margin-top: 10px; padding: 12px 14px; border-radius: 12px;
+  white-space: pre-wrap; margin-top: 10px; padding: 12px 14px; border-radius: 6px;
   font-size: 15px; line-height: 1.75;
 }
-.vocab-example { background: #f1f5f9; color: #334155; }
-.vocab-context { background: #ecfdf5; border-left: 4px solid #34d399; color: #475569; }
+.vocab-example { background: #f2f4f7; color: #334155; }
+.vocab-context { background: #edf6f3; border-left: 3px solid #3a927f; color: #475569; }
 .replay-button { text-decoration: none; margin-left: 6px; }
 .replay-button svg { width: 26px; height: 26px; }
+@media (max-width: 480px) {
+  .card { padding: 14px 10px; }
+  .vocab-front-card, .vocab-back-card { padding: 22px 18px; }
+  .vocab-front-meaning { font-size: 21px; }
+  .vocab-word { font-size: 32px; }
+}
 `;
 
-const ANKI_QUIZ_SCRIPT = `
-<script>
-(function () {
-  function fieldText(root) {
-    if (!root) return '';
-    var clone = root.cloneNode(true);
-    clone.querySelectorAll('br').forEach(function (node) { node.replaceWith(document.createTextNode('\\n')); });
-    clone.querySelectorAll('p,div,li').forEach(function (node) { node.appendChild(document.createTextNode('\\n')); });
-    return clone.textContent.replace(/\\r/g, '').replace(/[ \\t]+\\n/g, '\\n').replace(/\\n{3,}/g, '\\n\\n').trim();
-  }
-  function make(tag, className, text) {
-    var node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  }
-  function clean(value) {
-    return String(value || '').replace(/[。.！!？?]?\\s*(?:测试点|测试點)\\s*[:：][\\s\\S]*$/, '').trim();
-  }
-  function renderQuestion(root) {
-    if (!root || root.dataset.aiRendered === '1') return;
-    if (root.querySelector('.quiz-option')) { root.dataset.aiRendered = '1'; return; }
-    var lines = fieldText(root).split('\\n').map(function (line) { return line.trim(); }).filter(Boolean);
-    if (!lines.length) return;
-    var optionRe = /^([A-D])[\\.、\\)]\\s*(.+)$/;
-    var start = lines.findIndex(function (line) { return optionRe.test(line); });
-    var optionLines = start >= 0 ? lines.slice(start).filter(function (line) { return optionRe.test(line); }) : [];
-    root.textContent = '';
-    if (optionLines.length === 4) {
-      root.appendChild(make('div', 'quiz-stem', lines.slice(0, start).join('\\n')));
-      var options = make('div', 'quiz-options');
-      optionLines.forEach(function (line) {
-        var match = line.match(optionRe);
-        var option = make('div', 'quiz-option');
-        option.appendChild(make('span', 'letter', match[1]));
-        option.appendChild(make('span', 'option-text', match[2]));
-        options.appendChild(option);
-      });
-      root.appendChild(options);
-    } else {
-      root.className = 'quiz-stem';
-      root.textContent = lines.join('\\n');
-    }
-    root.dataset.aiRendered = '1';
-  }
-  function renderPlain(root, className, prefix) {
-    if (!root || root.dataset.aiRendered === '1') return;
-    root.className = className;
-    root.textContent = prefix ? prefix + ' ' + clean(fieldText(root)).replace(/^✅\\s*/, '') : clean(fieldText(root));
-    root.dataset.aiRendered = '1';
-  }
-  function init() {
-    renderQuestion(document.getElementById('aiQuizQuestion'));
-    renderPlain(document.getElementById('aiQuizAnswer'), 'quiz-answer', '✅');
-    renderPlain(document.getElementById('aiQuizExplanation'), 'quiz-explanation', '');
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
-})();
-</script>`;
-
 function ankiQuizQuestionHTML() {
-  return `<div class="quiz-shell"><div class="quiz-kicker">AI 英语练习</div><div id="aiQuizQuestion">{{Question}}</div></div>${ANKI_QUIZ_SCRIPT}`;
+  return `<div class="quiz-shell"><div class="quiz-kicker">AI 英语练习</div><div class="quiz-question">{{Question}}</div></div>`;
 }
 function ankiQuizBackHTML() {
-  return `{{FrontSide}}<div class="quiz-shell"><hr id="answer"><div id="aiQuizAnswer">{{Answer}}</div><div id="aiQuizExplanation">{{Explanation}}</div></div>${ANKI_QUIZ_SCRIPT}`;
+  return `{{FrontSide}}<div class="quiz-shell"><hr id="answer"><div class="quiz-answer">✅ {{Answer}}</div><div class="quiz-explanation">{{Explanation}}</div></div>`;
 }
 function ankiQuizTemplates() {
   return { [ANKI_QUIZ_TEMPLATE]: { Front: ankiQuizQuestionHTML(), Back: ankiQuizBackHTML() } };
@@ -210,146 +173,21 @@ function ankiQuizQuestionFieldHTML(q) {
   return `<div class="quiz-stem">${stem}</div>${options}`;
 }
 
-const ANKI_BASIC_SCRIPT = `
-<script>
-(function () {
-  function fieldText(root) {
-    if (!root) return '';
-    var clone = root.cloneNode(true);
-    clone.querySelectorAll('br').forEach(function (node) { node.replaceWith(document.createTextNode('\\n')); });
-    clone.querySelectorAll('p,div,li').forEach(function (node) { node.appendChild(document.createTextNode('\\n')); });
-    return clone.textContent.replace(/\\r/g, '').replace(/[ \\t]+\\n/g, '\\n').replace(/\\n{3,}/g, '\\n\\n').trim();
-  }
-  function render(root, className) {
-    if (!root || root.dataset.aiRendered === '1') return;
-    root.className = className;
-    root.textContent = fieldText(root);
-    root.dataset.aiRendered = '1';
-  }
-  function init() {
-    render(document.getElementById('aiBasicFront'), 'basic-front-text');
-    render(document.getElementById('aiBasicBack'), 'basic-back-text');
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
-})();
-</script>`;
-
 function ankiBasicQuestionHTML() {
-  return `<div class="basic-shell"><div class="basic-kicker">AI 英语笔记</div><div class="basic-front-card"><div id="aiBasicFront">{{Front}}</div></div></div>${ANKI_BASIC_SCRIPT}`;
+  return `<div class="basic-shell"><div class="basic-kicker">AI 英语笔记</div><div class="basic-front-card"><div class="basic-front-text">{{Front}}</div></div></div>`;
 }
 function ankiBasicBackHTML() {
-  return `{{FrontSide}}<div class="basic-shell"><hr class="basic-divider"><div class="basic-back-card"><div id="aiBasicBack">{{Back}}</div></div></div>${ANKI_BASIC_SCRIPT}`;
+  return `{{FrontSide}}<div class="basic-shell"><hr class="basic-divider"><div class="basic-back-card"><div class="basic-back-text">{{Back}}</div></div></div>`;
 }
 function ankiBasicTemplates() {
   return { [ANKI_BASIC_TEMPLATE]: { Front: ankiBasicQuestionHTML(), Back: ankiBasicBackHTML() } };
 }
 
-const ANKI_VOCAB_SCRIPT = `
-<script>
-(function () {
-  function fieldText(root) {
-    if (!root) return '';
-    var clone = root.cloneNode(true);
-    clone.querySelectorAll('br').forEach(function (node) { node.replaceWith(document.createTextNode('\\n')); });
-    clone.querySelectorAll('p,div,li').forEach(function (node) { node.appendChild(document.createTextNode('\\n')); });
-    return clone.textContent.replace(/\\[sound:[^\\]]*\\]/g, '').replace(/\\r/g, '').replace(/[ \\t]+\\n/g, '\\n').replace(/\\n{3,}/g, '\\n\\n').trim();
-  }
-  function make(tag, className, text) {
-    var node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  }
-  function parseDictionary(text) {
-    var wordMatch = text.match(/^([A-Za-z][A-Za-z0-9'’ .()-]{0,60}?)\\s*\\//);
-    if (!wordMatch) return null;
-    var rest = text.slice(wordMatch[0].length);
-    var phonetics = [];
-    while (true) {
-      var phonetic = rest.match(/^\\/?([^/\\n]+)\\/\\s*(?:\\((?:英音|美音|英|美|英式|美式|UK|US)\\)\\s*)?/i);
-      if (!phonetic) break;
-      phonetics.push('/' + phonetic[1] + '/');
-      rest = rest.slice(phonetic[0].length);
-    }
-    var pos = '';
-    while (true) {
-      var part = rest.match(/^(?:adj|adv|vt|vi|n|v|prep|pron|conj|interj|det|phrase)\\.(?:\\s*[\\/／、]\\s*)?/i);
-      if (!part) break;
-      pos += (pos ? '/' : '') + part[0].trim().replace(/[\\/／、]$/, '');
-      rest = rest.slice(part[0].length);
-    }
-    var inflection = '';
-    var forms = rest.match(/^变形\\s*[:：]\\s*([^•\\n]*)/);
-    if (forms) { inflection = forms[1].trim(); rest = rest.slice(forms[0].length); }
-    var section = rest.search(/(?:^|\\n)(?:例句|常见搭配|相关搭配|同义词辨析|近义表达|词源)\\s*[:：]?/);
-    var definitionText = section >= 0 ? rest.slice(0, section) : rest;
-    var meanings = definitionText.split(/\\s*[•\\n]\\s*/).map(function (s) { return s.trim(); }).filter(Boolean);
-    return { word: wordMatch[1].trim(), phonetics: phonetics, pos: pos, inflection: inflection, meanings: meanings };
-  }
-  function renderFront(root) {
-    if (!root || root.dataset.aiRendered === '1') return;
-    var sourceText = fieldText(root);
-    var parsed = parseDictionary(sourceText);
-    root.textContent = '';
-    var card = make('div', 'vocab-front-card');
-    card.appendChild(make('div', 'vocab-kicker', '看释义 · 想英文'));
-    if (parsed && parsed.meanings.length) {
-      if (parsed.pos) card.appendChild(make('div', 'vocab-pos', parsed.pos));
-      var defs = make('ol', 'vocab-defs');
-      parsed.meanings.forEach(function (meaning) { defs.appendChild(make('li', '', meaning)); });
-      card.appendChild(defs);
-    } else {
-      card.appendChild(make('div', 'vocab-front-meaning', sourceText));
-    }
-    card.appendChild(make('div', 'vocab-prompt', '先在脑中回忆英文，再点击显示答案'));
-    root.appendChild(card);
-    root.dataset.aiRendered = '1';
-  }
-  function renderBack(root) {
-    if (!root || root.dataset.aiRendered === '1') return;
-    var media = Array.prototype.slice.call(root.querySelectorAll('a.replay-button, audio, [onclick*="play"]')).map(function (node) { return node.cloneNode(true); });
-    var lines = fieldText(root).split('\\n').map(function (line) { return line.trim(); }).filter(Boolean);
-    var word = lines.shift() || '';
-    var examples = [];
-    var contexts = [];
-    var meanings = [];
-    lines.forEach(function (line) {
-      var context = line.match(/^💬?\\s*语境\\s*[:：]?\\s*([\\s\\S]*)$/);
-      if (context) contexts.push(context[1].trim());
-      else if (/[A-Za-z]/.test(line)) examples.push(line);
-      else meanings.push(line);
-    });
-    root.textContent = '';
-    var card = make('div', 'vocab-back-card');
-    var row = make('div', 'vocab-word-row');
-    row.appendChild(make('span', 'vocab-word', word));
-    media.forEach(function (node) { var wrap = make('span', 'vocab-audio'); wrap.appendChild(node); row.appendChild(wrap); });
-    card.appendChild(row);
-    if (meanings.length) {
-      var defs = make('ol', 'vocab-defs');
-      meanings.forEach(function (meaning) { defs.appendChild(make('li', '', meaning)); });
-      card.appendChild(defs);
-    }
-    examples.forEach(function (example) { card.appendChild(make('div', 'vocab-example', example)); });
-    contexts.forEach(function (context) { card.appendChild(make('div', 'vocab-context', '语境：' + context)); });
-    root.appendChild(card);
-    root.dataset.aiRendered = '1';
-  }
-  function init() {
-    renderFront(document.getElementById('aiVocabFront'));
-    renderBack(document.getElementById('aiVocabBack'));
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
-})();
-</script>`;
-
 function ankiVocabQuestionHTML() {
-  return `<div class="vocab-shell"><div id="aiVocabFront">{{Front}}</div></div>${ANKI_VOCAB_SCRIPT}`;
+  return `<div class="vocab-shell"><div class="vocab-front-card"><div class="vocab-kicker">中译英默写</div><div class="vocab-front-text">{{Front}}</div></div></div>`;
 }
 function ankiVocabBackHTML() {
-  return `{{FrontSide}}<div class="vocab-shell"><hr class="vocab-divider"><div id="aiVocabBack">{{Back}}</div></div>${ANKI_VOCAB_SCRIPT}`;
+  return `<div class="vocab-shell"><div class="vocab-kicker">正确答案</div><div class="vocab-back-card"><div class="vocab-back-text">{{Back}}</div></div></div>`;
 }
 function ankiVocabTemplates() {
   return { [VOCAB_TEMPLATE]: { Front: ankiVocabQuestionHTML(), Back: ankiVocabBackHTML() } };

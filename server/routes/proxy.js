@@ -15,7 +15,7 @@ const {
 } = require('../config');
 const { proxyRequest } = require('../services/proxy');
 const { ankiCall, ankiCache, parseAnkiBody } = require('../services/anki');
-const { ankiGuard } = require('../validation');
+const { ankiGuard, ankiUserDeckRoot } = require('../validation');
 const logger = require('../services/logger');
 const { recordUsage, parseChatUsage, parseStreamUsage } = require('../services/usage');
 
@@ -181,6 +181,40 @@ async function ankiProxy(req, res) {
   const denied = ankiGuard(payload, req.username);
   if (denied) { sendJson(res, denied.status, { ok: false, error: denied.error }, req); return; }
   const action = String(payload.action);
+
+  // 更新旧卡之前，先让 Anki 自己确认该 note 位于当前用户的牌组子树，
+  // 再按笔记类型限制可改字段：词汇/基础卡只能改 Front，薄弱点题只能改 Question。
+  if (action === 'updateNoteFields') {
+    const noteId = payload.params.note.id;
+    const ownedQuery = 'deck:' + ankiUserDeckRoot(req.username) + ' nid:' + noteId;
+    const checkBody = Buffer.from(JSON.stringify({ action: 'findNotes', version: 6, params: { query: ownedQuery } }));
+    const check = await ankiCall(8765, 'findNotes', checkBody);
+    if (!check.ok) { sendJson(res, 503, { ok: false, error: 'ankiconnect unreachable', last: check.err }, req); return; }
+    let owned = false;
+    try {
+      const parsed = JSON.parse(check.body);
+      owned = !parsed.error && Array.isArray(parsed.result) && parsed.result.includes(noteId);
+    } catch (e) {}
+    if (!owned) { sendJson(res, 403, { ok: false, error: 'note not owned by current user' }, req); return; }
+
+    const infoBody = Buffer.from(JSON.stringify({ action: 'notesInfo', version: 6, params: { notes: [noteId] } }));
+    const info = await ankiCall(8765, 'notesInfo', infoBody);
+    if (!info.ok) { sendJson(res, 503, { ok: false, error: 'ankiconnect unreachable', last: info.err }, req); return; }
+    let modelName = '';
+    try {
+      const parsed = JSON.parse(info.body);
+      const row = Array.isArray(parsed.result) ? parsed.result[0] : null;
+      modelName = row && typeof row.modelName === 'string' ? row.modelName : '';
+    } catch (e) {}
+    const fieldName = Object.keys(payload.params.note.fields || {})[0];
+    const expectedField = modelName === '英语学习-薄弱点问答' ? 'Question' :
+      (modelName === '英语学习-词汇' || modelName === '英语学习-基础卡') ? 'Front' : '';
+    if (!expectedField || fieldName !== expectedField) {
+      sendJson(res, 403, { ok: false, error: 'field does not match note model' }, req);
+      return;
+    }
+    ankiCache.set('http://127.0.0.1:8765');
+  }
 
   // 缓存命中：直接转发，不再每次探测 version（省一次往返）
   if (ankiCache.get()) {

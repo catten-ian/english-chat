@@ -10,6 +10,7 @@ const { USER_DATA_KEYS, MAX_USER_DATA } = require('../config');
 const { matchesType } = require('../validation');
 const { db } = require('../db');
 const logger = require('../services/logger');
+const conversations = require('../services/conversation-sync');
 
 /* key 是 dispatcher 解析出的 URL 段；返回 true 表示已处理 */
 async function dbKey(req, res, key) {
@@ -40,6 +41,16 @@ async function dbKey(req, res, key) {
     const expect = USER_DATA_KEYS[key];
     if (!matchesType(parsed, expect)) {
       sendJson(res, 400, { error: 'invalid shape', key, expected: expect }, req);
+      return;
+    }
+    if (key === 'conversations') {
+      try {
+        const merged = conversations.mergeForUser(uid, { conversations: parsed, deleted: {} });
+        conversations.schedulePeerSync();
+        sendJson(res, 200, { status: 'saved', key, conversations: merged.conversations }, req);
+      } catch (e) {
+        sendJson(res, 400, { error: 'invalid conversations', detail: e.message }, req);
+      }
       return;
     }
     db.prepare('INSERT INTO user_data (user_id, key, value, updated_at) VALUES (?,?,?, datetime(\'now\')) ON CONFLICT(user_id,key) DO UPDATE SET value=excluded.value, updated_at=datetime(\'now\')')

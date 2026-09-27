@@ -89,6 +89,11 @@ function loadEnvFile(p) {
   return out;
 }
 const env = { ...loadEnvFile(path.join(BASE, '.env')) };
+const CONVERSATION_SYNC_SECRET = (process.env.AI_EN_SYNC_SECRET ?? env.AI_EN_SYNC_SECRET ?? '').trim();
+const CONVERSATION_SYNC_PEER = (process.env.AI_EN_SYNC_PEER_URL ?? env.AI_EN_SYNC_PEER_URL ?? '').trim();
+if (CONVERSATION_SYNC_PEER && (!/^https:\/\//.test(CONVERSATION_SYNC_PEER) || CONVERSATION_SYNC_SECRET.length < 32)) {
+  throw new Error('conversation sync requires an HTTPS peer and a secret of at least 32 characters');
+}
 /* 密钥用可变量 + getter 暴露：设置面板里更换 key 后需要进程内立即生效
    （否则只能重启服务）。
    读取顺序：进程环境变量优先于 .env 文件。注意判断用 !== undefined
@@ -149,6 +154,7 @@ const ANKI_GUARDED_ACTIONS = new Set([
   'addNote', 'addNotes', 'canAddNotes', 'createDeck', 'changeDeck',
   'findCards', 'cardsInfo', 'getDeckStats', 'guiDeckReview',
   'findNotes', 'notesInfo',
+  'updateNoteFields',
   'createModel', 'updateModelStyling', 'updateModelTemplates', 'storeMediaFile'
 ]);
 
@@ -175,6 +181,7 @@ module.exports = {
   MAX_BODY, MAX_USER_DATA, MAX_ANKI_BODY,
   PROXY_TIMEOUT, STREAM_IDLE_TIMEOUT, STREAM_TOTAL_TIMEOUT, SESSION_TTL_DAYS,
   USER_DATA_KEYS,
+  CONVERSATION_SYNC_SECRET, CONVERSATION_SYNC_PEER,
   MINIMAX_KEY, ELEVEN_KEY, MINIMAX_BASE, ALLOWED_ORIGINS,
   KEY_SOURCES, setRuntimeKey, setMinimaxBase,
   ENV_FILE: process.env.AI_EN_ENV_FILE ? path.resolve(process.env.AI_EN_ENV_FILE) : path.join(BASE, '.env'),

@@ -24,6 +24,31 @@ describe('认证与会话', () => {
     assert.strictEqual(j.username, 'test');
   });
 
+  test('开放注册需要一次性工作量证明，并直接建立会话', async () => {
+    const challengeRes = await request({ port: srv.port, path: '/api/auth/register-challenge' });
+    assert.strictEqual(challengeRes.status, 200);
+    const challenge = JSON.parse(challengeRes.body);
+    assert.match(challenge.id, /^[0-9a-f]{36}$/);
+    assert.strictEqual((await request({ port: srv.port, method: 'POST', path: '/api/auth/register', json: {
+      username: 'new_user_' + Date.now(), password: 'short', challenge_id: challenge.id, nonce: 0
+    }})).status, 400);
+    let nonce = 0;
+    while (!crypto.createHash('sha256').update(challenge.salt + ':' + nonce).digest('hex').startsWith('0'.repeat(challenge.difficulty))) nonce++;
+    const username = 'new_user_' + Date.now();
+    const created = await request({ port: srv.port, method: 'POST', path: '/api/auth/register', json: {
+      username, password: 'strongpass123', challenge_id: challenge.id, nonce
+    }});
+    assert.strictEqual(created.status, 201);
+    const result = JSON.parse(created.body);
+    assert.strictEqual(result.username, username);
+    assert.match(result.token, /^[0-9a-f]{64}$/);
+    assert.strictEqual((await request({ port: srv.port, path: '/api/auth/me', token: result.token })).status, 200);
+    const reused = await request({ port: srv.port, method: 'POST', path: '/api/auth/register', json: {
+      username: 'another_user', password: 'strongpass123', challenge_id: challenge.id, nonce
+    }});
+    assert.strictEqual(reused.status, 400);
+  });
+
   test('未鉴权访问受保护接口返回 401', async () => {
     for (const p of ['/api/auth/me', '/api/db/vocab', '/api/gaokao/exams', '/api/auth/sessions']) {
       const r = await request({ port: srv.port, path: p });

@@ -44,6 +44,8 @@ async function startServer(opts) {
     // 显式清空 key，避免测试意外命中真实外部服务
     MINIMAX_API_KEY: '',
     ELEVEN_API_KEY: '',
+    AI_EN_SYNC_SECRET: '',
+    AI_EN_SYNC_PEER_URL: '',
     ...(options.env || {})
   };
   const child = spawn(process.execPath, [SERVER, String(port)], {

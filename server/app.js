@@ -19,6 +19,8 @@ const healthRoutes = require('./routes/health');
 const musicRoutes = require('./routes/music');
 const authRoutes = require('./routes/auth');
 const userDataRoutes = require('./routes/user-data');
+const conversationSyncRoutes = require('./routes/conversation-sync');
+const conversationSync = require('./services/conversation-sync');
 const gaokaoRoutes = require('./routes/gaokao');
 const backupRoutes = require('./routes/backup');
 const usageRoutes = require('./routes/usage');
@@ -69,6 +71,9 @@ const server = http.createServer(async (req, res) => {
 
     // 登录（无需鉴权）
     if (method === 'POST' && pathname === '/api/auth/login') return await authRoutes.login(req, res);
+    if (method === 'GET' && pathname === '/api/auth/register-challenge') return authRoutes.issueRegisterChallenge(req, res);
+    if (method === 'POST' && pathname === '/api/auth/register') return await authRoutes.register(req, res);
+    if (method === 'POST' && pathname === '/api/sync/conversations') return await conversationSyncRoutes.peer(req, res);
 
     if (method === 'GET' && !pathname.startsWith('/api/')) {
       serveStatic(res, pathname);
@@ -92,6 +97,7 @@ const server = http.createServer(async (req, res) => {
     // 用户数据读写
     const dbMatch = pathname.match(/^\/api\/db\/(\w+)$/);
     if (dbMatch) return await userDataRoutes.dbKey(req, res, dbMatch[1]);
+    if (method === 'POST' && pathname === '/api/conversations/delete') return await conversationSyncRoutes.remove(req, res);
 
     // 高考翻译题库：列出所有试卷（带题数）
     if (method === 'GET' && pathname === '/api/gaokao/exams') return gaokaoRoutes.gaokaoExams(req, res);
@@ -163,6 +169,9 @@ if (checkpointTimer.unref) checkpointTimer.unref();
 // 服务端常驻备份：即便浏览器关闭，后端也按间隔生成快照（env AI_EN_BACKUP_INTERVAL_MIN，0=关）
 const backupTimer = startBackupScheduler(BACKUP_INTERVAL_MIN);
 if (backupTimer) logger.info(`定时备份已启用：每 ${BACKUP_INTERVAL_MIN} 分钟`);
+const conversationSyncTimer = setInterval(conversationSync.schedulePeerSync, 60 * 1000);
+if (conversationSyncTimer.unref) conversationSyncTimer.unref();
+setTimeout(conversationSync.schedulePeerSync, 3000).unref?.();
 
 let shuttingDown = false;
 function shutdown(signal) {

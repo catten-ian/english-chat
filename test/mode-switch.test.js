@@ -243,52 +243,62 @@ test('Anki 桌面模板内联脚本均为合法 JavaScript', () => {
   }
 });
 
-test('Anki 词汇模板正面可解析双音标词典文本', () => {
-  class FakeNode {
-    constructor(tag) {
-      this.tagName = tag;
-      this.children = [];
-      this.dataset = {};
-      this.className = '';
-      this._text = '';
-    }
-    get textContent() {
-      return this.children.length ? this.children.map(child => child.textContent).join('') : this._text;
-    }
-    set textContent(value) {
-      this._text = String(value);
-      this.children = [];
-    }
-    cloneNode() {
-      const node = new FakeNode(this.tag);
-      node._text = this._text;
-      node.className = this.className;
-      node.dataset = { ...this.dataset };
-      return node;
-    }
-    querySelectorAll() { return []; }
-    appendChild(child) { this.children.push(child); return child; }
-  }
-
-  const root = new FakeNode('div');
-  root.textContent = 'monastery /ˈmɑːnəsteri/ /ˈmɒnəstri/ n. • 修道院•寺院';
-  const documentMock = {
-    readyState: 'complete',
-    createElement: tag => new FakeNode(tag),
-    getElementById: id => id === 'aiVocabFront' ? root : null
-  };
-  const sandbox = { document: documentMock };
+test('Anki 词汇模板只渲染字段，不依赖容易报错的内联脚本', () => {
+  const sandbox = {};
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '24-anki-templates.js'), 'utf8'), sandbox, { filename: '24-anki-templates.js' });
-  const groups = vm.runInContext('({ vocab: ankiVocabTemplates() })', sandbox);
-  const script = Object.values(groups.vocab)[0].Front.match(/<script>([\s\S]*?)<\/script>/)[1];
-  vm.runInContext(script, sandbox, { filename: 'vocab-template-inline.js' });
+  const card = Object.values(vm.runInContext('ankiVocabTemplates()', sandbox))[0];
+  assert.match(card.Front, /\{\{Front\}\}/);
+  assert.doesNotMatch(card.Front, /<script>|\{\{Back\}\}|FrontSide/);
+  assert.match(card.Back, /\{\{Back\}\}/);
+  assert.doesNotMatch(card.Back, /<script>|\{\{Front\}\}|FrontSide/);
 
-  const card = root.children[0];
-  const pos = card.children.find(node => node.className === 'vocab-pos');
-  const defs = card.children.find(node => node.className === 'vocab-defs');
-  assert.strictEqual(pos.textContent, 'n.');
-  assert.deepStrictEqual(defs.children.map(node => node.textContent), ['修道院', '寺院']);
-  assert.doesNotMatch(card.textContent, /[\/ˈ]|mɑː|mɒn/);
+  const meaningSandbox = {};
+  meaningSandbox.globalThis = meaningSandbox;
+  vm.createContext(meaningSandbox);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '06-anki.js'), 'utf8'), meaningSandbox, { filename: '06-anki.js' });
+  const meaning = meaningSandbox.normalizeVocabMeaning('monastery /ˈmɑːnəsteri/ /ˈmɒnəstri/ n. • 修道院•寺院', 'monastery');
+  assert.strictEqual(meaning, '修道院\n寺院');
+});
+
+test('Anki 默写模板正面不引用背面答案，答案页不重复正面', () => {
+  const sandbox = {};
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '24-anki-templates.js'), 'utf8'), sandbox, { filename: '24-anki-templates.js' });
+  const templates = vm.runInContext('ankiVocabTemplates()', sandbox);
+  const card = Object.values(templates)[0];
+  assert.match(card.Front, /\{\{Front\}\}/);
+  assert.doesNotMatch(card.Front, /\{\{Back\}\}|FrontSide/);
+  assert.match(card.Back, /\{\{Back\}\}/);
+  assert.doesNotMatch(card.Back, /FrontSide|\{\{Front\}\}/);
+});
+
+test('Anki 生词正面不泄露答案并显示作答形式', () => {
+  const sandbox = {};
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '06-anki.js'), 'utf8'), sandbox, { filename: '06-anki.js' });
+  const front = sandbox.vocabFrontText('obsession/əbˈseʃn/n.变形: obsessions• 痴迷；着魔；执念', 'obsession');
+  assert.doesNotMatch(front, /obsession|əbˈseʃn|变形/);
+  assert.match(front, /痴迷/);
+  assert.match(front, /答案形式：1 个单词/);
+  assert.match(sandbox.vocabFrontText('服从；听从', 'defer to'), /答案形式：词组（2 个单词）/);
+});
+
+test('上海高考式语法填空保留词根提示且支持多空', () => {
+  const sandbox = {};
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '06-anki.js'), 'utf8'), sandbox, { filename: '06-anki.js' });
+  assert.strictEqual(sandbox.decorateFillBlankQuestion({
+    type: 'fill_blank', question: 'The work ___ by Friday.', answer: 'is to be completed', blank_hints: ['complete']
+  }).question, 'The work ___ (complete) by Friday.');
+  assert.strictEqual(sandbox.decorateFillBlankQuestion({
+    type: 'fill_blank', question: 'They ___ ___ the work.', answer: 'made up', blank_hints: ['', '']
+  }).question, 'They ___ ___ the work.');
+  assert.strictEqual(sandbox.decorateFillBlankQuestion({
+    type: 'fill_blank', question: 'Looking back over the ___', answer: 'years'
+  }).question, 'Looking back over the ___');
 });

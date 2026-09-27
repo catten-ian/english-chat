@@ -739,6 +739,9 @@ body {
 }
 .login-btn:disabled { opacity: .6; cursor: wait; }
 .login-hint { font-size: 11px; color: var(--text2); margin-top: 14px; line-height: 1.6; }
+.register-btn { background: #0f766e; margin-top: 4px; }
+.auth-mode-btn { border: 0; background: transparent; color: var(--primary); cursor: pointer; font-size: 12px; margin-top: 12px; }
+.register-proof { font-size: 12px; color: var(--text2); min-height: 18px; margin: 0 0 5px; }
 
 .user-badge {
   display: inline-block; padding: 3px 12px; border-radius: 12px;
@@ -1480,6 +1483,8 @@ button.a-btn {
     background: var(--surface); border-top: 1px solid var(--border);
     box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
   }
+  /* The home screen is itself the mode picker; do not show a second mode bar. */
+  body.home-open .bottom-nav { display: none; }
   .bn-tab {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     background: none; border: none; cursor: pointer; color: var(--text3);
@@ -1521,6 +1526,54 @@ button.a-btn {
   /* 悬浮反馈窗 / 输入区避开底部导航 */
   .side-panel.panel-mini { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
   .input-area { padding-bottom: 8px; }
+
+  /* Translation controls must remain usable on narrow screens. The desktop
+     inline styles otherwise allow the question/config rows to consume the
+     whole reduced visual viewport when the software keyboard is open. */
+  #translateArea { min-height: 0; overflow: hidden; }
+  #translateArea .translate-config {
+    min-height: 46px; padding: 7px 10px !important; gap: 6px !important;
+    flex-wrap: nowrap !important; overflow-x: auto; overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  #translateArea .translate-config > span { flex: 0 0 auto; white-space: nowrap; }
+  #translateArea .translate-config > button,
+  #translateArea .translate-config > select,
+  #translateArea .translate-config > label { flex: 0 0 auto; }
+  #translateArea .translate-config [data-action="next-translate"] { margin-left: 0 !important; }
+  #trQuestion {
+    margin: 10px 12px !important; padding: 14px 12px !important;
+    max-height: 24vh; overflow-y: auto; flex: 0 1 auto;
+  }
+  #trQuestionWords { padding-left: 12px !important; padding-right: 12px !important; }
+  #trAnswerArea { flex: 1 1 0; min-height: 110px; }
+  #trInput { min-height: 110px; padding: 14px 12px; }
+  #translateArea .translate-actions {
+    padding: 8px 10px !important; gap: 6px; flex-wrap: wrap;
+    min-height: 54px; box-sizing: border-box;
+  }
+  #translateArea .translate-actions .send-btn { min-height: 38px; flex: 0 0 auto; }
+  #translateArea .translate-actions .dict-btn { min-height: 38px; padding: 7px 10px !important; }
+  #translateArea .translate-actions [data-action="toggle-tr-history"] { margin-left: 0 !important; }
+
+  /* Keep active answer controls above the software keyboard. */
+  body.keyboard-open .layout { height: var(--vvh, 100dvh); min-height: 0; }
+  body.keyboard-open .bottom-nav { display: none; }
+  body.keyboard-open .layout { padding-bottom: 0; }
+  body.keyboard-open .sidebar,
+  body.keyboard-open .side-panel { bottom: 0; }
+
+  /* Wordle must fit inside a phone width, including the two wide keys. */
+  #wordleArea { padding: 10px 8px; overflow-y: auto; }
+  #wordleBoard { margin: 12px 0; gap: 4px !important; }
+  #wordleBoard .wl-cell { width: min(11vw, 44px); height: min(11vw, 44px); font-size: clamp(18px, 6vw, 24px); }
+  #wordleKeyboard { width: 100%; max-width: 360px; margin-top: 4px; }
+  #wordleKeyboard { padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+  #wordleKeyboard > div { gap: 3px !important; margin-bottom: 3px !important; }
+  #wordleKeyboard .wl-key { flex: 1 1 0; min-width: 0; padding: 9px 0; font-size: 12px; }
+  #wordleKeyboard .wl-key.wide { flex: 1.45 1 0; padding: 9px 3px; font-size: 10px; }
+  .wordle-config { gap: 6px; padding-bottom: 8px; }
+  .wordle-config .toggle-btn { padding: 5px 9px; }
 
   /* 抽屉高度到底部导航上方即可 */
   .sidebar, .side-panel { bottom: calc(58px + env(safe-area-inset-bottom, 0px)); }

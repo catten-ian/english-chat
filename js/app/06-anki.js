@@ -19,6 +19,100 @@ function ankiExtDeck() { return ankiBaseDeck() + '::拓展'; }
 function ankiUserTag() { return 'ai-english'; }
 function wpTag(id) { return 'wp_' + (currentUser() || 'default') + '_' + id; }
 
+/* 词汇卡正面统一为「中文释义 + 作答形式提示」。历史数据里有些释义
+   是完整词典条目（把英文词头、音标、词性也一起存进了 Front），这里在
+   写卡和修复旧卡时都归一化，避免答案泄露到正面。 */
+function normalizeVocabMeaning(raw, answer) {
+  let text = String(raw || '').replace(/\r/g, '').trim();
+  if (!text) return '';
+  const word = String(answer || '').trim();
+  if (word) {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const head = new RegExp('^\\s*' + escaped + '(?=\\s|/|$)', 'i');
+    text = text.replace(head, '').trim();
+  }
+  // 迁移脚本/旧版本可能已经写过答案形式提示；归一化时先去掉它，保证
+  // 重复同步不会把「答案形式」一层层追加到正面。
+  text = text.replace(/(?:^|\n)\s*答案形式\s*[:：][^\n]*/g, '').trim();
+  // 去掉词头后的音标、英/美音标记、词性和「变形」元信息。历史词典文本
+  // 的音标可能有多个（`/uk/ (英) /us/ (美)`），所以这里全部清掉。
+  text = text
+    .replace(/\/[^\/\n]{1,120}\//g, ' ')
+    .replace(/\s*\((?:英音|美音|英|美|英式|美式|UK|US)\)\s*/gi, ' ')
+    .replace(/(^|[\s/])(?:adj|adv|vt|vi|n|v|prep|pron|conj|interj|det|phrase)\.(?=\s|$)/gi, '$1')
+    // 「变形」后面可能没有项目符号，直到中文释义才开始；保留中文起点。
+    .replace(/变形\s*[:：]?\s*[^•\n]*?(?=[\u3400-\u9fff]|•|\n|$)/gi, '')
+    .replace(/^\s*[•;；,，]+\s*/, '')
+    .trim();
+
+  const chunks = text.split(/[•\n]+/)
+    .map(s => s.replace(/^\s*[;；,，]+\s*/, '').trim())
+    .filter(Boolean);
+  if (!chunks.length) return '';
+  // 词典条目通常同时包含英文头信息和中文释义；中文学习卡只保留中文片段。
+  const chinese = chunks.filter(s => /[\u3400-\u9fff]/.test(s));
+  // 没有中文时宁可暂不生成默写正面，也不把英文词头/英文解释当成“中文释义”。
+  if (!chinese.length) return '';
+  const kept = chinese;
+  const answerRe = word ? new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi') : null;
+  return kept.map(s => {
+    let value = s;
+    if (answerRe) value = value.replace(answerRe, '').replace(/[ \t]{2,}/g, ' ').trim();
+    return value;
+  }).filter(Boolean).join('\n');
+}
+
+function vocabAnswerFormat(answer) {
+  const text = String(answer || '').trim();
+  const words = text.match(/[A-Za-z]+(?:['’][A-Za-z]+)?/g) || text.split(/\s+/).filter(Boolean);
+  const count = words.length || 1;
+  return count === 1 ? '答案形式：1 个单词' : '答案形式：词组（' + count + ' 个单词）';
+}
+
+function vocabFrontText(meaning, answer) {
+  const clean = normalizeVocabMeaning(meaning, answer);
+  return clean ? clean + '\n\n' + vocabAnswerFormat(answer) : '';
+}
+
+function extensionAnswerHint(extension) {
+  const raw = extension && (Array.isArray(extension.answers) ? extension.answers : extension.answer ? [extension.answer] : []);
+  const answers = raw.map(s => String(s || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+  if (!answers.length) return '答案形式：背面英文表达';
+  if (answers.length === 1) return vocabAnswerFormat(answers[0]);
+  const kinds = answers.map(s => (s.match(/[A-Za-z]+(?:['’][A-Za-z]+)?/g) || s.split(/\s+/).filter(Boolean)).length === 1 ? '单词' : '词组');
+  const kind = kinds.every(k => k === '单词') ? '单词' : kinds.every(k => k === '词组') ? '词组' : '单词/词组';
+  return '答案形式：' + answers.length + ' 条' + kind + '（见背面）';
+}
+
+// 旧 Anki 卡如果只保存了英文答案、本地生词本又没有对应释义，不能把英文
+// 再写回默写正面。同步时用一次批量 AI 查询补齐中文释义，失败则保留卡片
+// 不动，等待下次同步重试（不会生成“暂无中文释义”这种无效线索）。
+async function generateMissingVocabMeanings(words) {
+  const unique = [...new Set((words || []).map(w => String(w || '').trim()).filter(Boolean))];
+  if (!unique.length || typeof callAPI !== 'function') return new Map();
+  const result = new Map();
+  try {
+    for (let i = 0; i < unique.length; i += 40) {
+      const batch = unique.slice(i, i + 40);
+      const raw = await callAPI([
+        { role: 'system', content: 'You are an English-Chinese dictionary. Return ONLY valid JSON: {"items":[{"word":"English word or phrase","meaning":"concise Chinese meaning"}]}. Include every requested item, do not include English headwords, phonetics, part-of-speech labels, or explanations in meaning.' },
+        { role: 'user', content: 'Provide concise Chinese meanings for: ' + batch.join(', ') }
+      ], { temperature: 0.2, maxTokens: Math.max(800, batch.length * 80), thinking: { type: 'disabled' } });
+      const obj = smartParseJSON(raw);
+      const rows = obj && (Array.isArray(obj.items) ? obj.items : Array.isArray(obj.meanings) ? obj.meanings : []);
+      for (const row of rows) {
+        if (!row || !row.word || !row.meaning) continue;
+        const clean = normalizeVocabMeaning(row.meaning, row.word);
+        if (clean) result.set(String(row.word).trim().toLowerCase(), clean);
+      }
+    }
+    return result;
+  } catch (e) {
+    dbg('ANKI_VOCAB_MEANING', e.message);
+    return new Map();
+  }
+}
+
 // ---- 添加单张卡片（兼容旧调用） ----
 async function addToAnki(front, back, tags, deckName) {
   try {
@@ -203,8 +297,9 @@ async function processAnalysisForAnki(parsed, userText) {
       else { word = w.word || ''; meaning = w.meaning || ''; example = w.example || ''; }
       if (!word) continue;
       const ctx = userText ? '\n\n💬 语境：' + (userText.substring(0, 120) || '') : '';
-      // 默写题型：Front=中文释义，Back=英文单词+音标+例句
-      const frontText = meaning || word;  // 中文释义，没有释义时 fallback 到英文
+      // 默写题型的正面只放中文线索，并明确答案是单词还是词组。
+      const frontText = vocabFrontText(meaning, word);
+      if (!frontText) continue;
       let backText = word;
       if (getSetting('ankiAutoAudio', false)) {
         const sound = await ankiAttachAudio(word);
@@ -241,8 +336,9 @@ async function processAnalysisForAnki(parsed, userText) {
   if (extOn && parsed.extensions && parsed.extensions.length) {
     const notes = [];
     for (const e of parsed.extensions) {
-      const front = '💡 ' + (e.title || e.type || 'Knowledge');
-      const back = (e.content || '') + (e.type ? '\n\n类型：' + e.type : '');
+      const answers = Array.isArray(e.answers) ? e.answers.map(s => String(s || '').trim()).filter(Boolean) : [];
+      const front = '💡 ' + (e.title || e.type || 'Knowledge') + '\n\n' + extensionAnswerHint(e);
+      const back = (e.content || '') + (e.type ? '\n\n类型：' + e.type : '') + (answers.length ? '\n\n参考表达：' + answers.join(' / ') : '');
       notes.push({ deckName: ankiExtDeck(), modelName: ANKI_BASIC_MODEL, fields: { Front: front, Back: back }, tags: [ankiUserTag(), 'extension'] });
     }
     total += notes.length;
@@ -287,6 +383,13 @@ ${multiWp ? '- One question should test AS MANY weak points as possible (ideally
 - A fill_blank sentence may contain MORE THAN ONE blank. Put one ___ at each exact spot (so any
   comma/semicolon/word between blanks stays in the sentence). For multiple blanks, write the
   "answer" as the English answers separated by ", " in blank order (e.g. "word1, word2").
+- Follow Shanghai Gaokao grammar-fill conventions for fill_blank: when a blank is based on a
+  supplied root word (verb, adjective, adverb, noun, etc.), show that root in parentheses right
+  after the blank, for example "The work ___ (complete) by Friday." with answer
+  "is to be completed". Return the same roots in a "blank_hints" array in blank order. Use an
+  empty string for blanks with no supplied root (articles, prepositions, pronouns, conjunctions,
+  modal verbs, and similar no-prompt blanks). One blank may require several written words; keep
+  it as one ___ and put the complete phrase in answer.
 - ALL question stems, options and answers MUST be in ENGLISH. The learner is Chinese, but
   they are learning ENGLISH — never write questions in Chinese and never ask them to choose
   between Chinese characters/words (e.g. do NOT write "Which sentence uses 方位 correctly?"
@@ -312,11 +415,56 @@ Return ONLY valid JSON (no markdown, no thinking):
       "question": "English question text (use ___ for blanks, or the erroneous English sentence)",
       "options": ["A. ...", "B. ...", "C. ...", "D. ..."],   // only for multiple_choice, all in English
       "answer": "for MC: the option letter only (A/B/C/D); for fill: the missing English word/phrase; for error: the corrected English",
+      "blank_hints": ["complete", ""], // fill_blank only; one item per ___, root word or ""
       "explanation": "Chinese explanation with reasons, referencing each tested weak point",
       "weak_point_ids": ["id1", "id2"]
     }
   ]
 }`;
+}
+
+// 旧模型没有 blank_hints 字段，且模型偶尔只输出了 ___。新卡片尽量依据
+// AI 给出的提示插入括号；对历史题只做保守的词形还原，避免把冠词/介词
+// 这类无提示词题误标成有词根提示。
+function inferFillBlankHint(answer, question) {
+  const ignored = new Set(['a', 'an', 'the', 'of', 'to', 'in', 'on', 'at', 'for', 'by', 'with', 'from', 'and', 'or', 'but', 'if', 'as', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'do', 'does', 'did', 'can', 'could', 'may', 'might', 'must', 'will', 'would', 'should']);
+  const words = String(answer || '').match(/[A-Za-z]+(?:['’][A-Za-z]+)?/g) || [];
+  const hasAuxiliary = /\b(?:am|is|are|was|were|be|been|being|has|have|had|will|would|can|could|may|might|must|should|to)\b/i.test(String(answer || ''));
+  const asksForForm = /\b(?:correct|proper|appropriate)\s+(?:form|tense|word)|\bform\s+of\b|\bchange\s+the\s+word\b/i.test(String(question || ''));
+  // 没有明确的助动词/不定式结构时，无法判断这是词形变化还是普通词汇/复数；
+  // 不强行猜括号，避免把「years/cities/seatmates」等无提示词题误标记。
+  if (!hasAuxiliary && !asksForForm) return '';
+  for (let i = words.length - 1; i >= 0; i--) {
+    const w = words[i].toLowerCase();
+    if (ignored.has(w) || w.length < 4) continue;
+    if (/ied$/.test(w) && w.length > 4) return w.slice(0, -3) + 'y';
+    if (/(?:ated|eted|ited|oted|uted|aved|oved|ived|ased|osed|used|ized|ised)$/.test(w) && w.length > 5) return w.slice(0, -2) + 'e';
+    if (/ed$/.test(w) && w.length > 4) return w.slice(0, -2).replace(/([bcdfghjklmnpqrstvwxyz])\1$/i, '$1');
+    if (/ing$/.test(w) && w.length > 5) return w.slice(0, -3).replace(/([bcdfghjklmnpqrstvwxyz])\1$/i, '$1');
+    if (asksForForm && /ies$/.test(w) && w.length > 4) return w.slice(0, -3) + 'y';
+    if (asksForForm && /(?:ches|shes|sses|xes|zes)$/.test(w)) return w.slice(0, -2);
+    if (asksForForm && /s$/.test(w) && !/ss$/.test(w)) return w.slice(0, -1);
+  }
+  return '';
+}
+
+function decorateFillBlankQuestion(q) {
+  if (!q || String(q.type || '').toLowerCase() !== 'fill_blank') return q;
+  const question = String(q.question || '');
+  if (!question || !/_{2,}/.test(question)) return q;
+  const supplied = Array.isArray(q.blank_hints) ? q.blank_hints : [];
+  const answers = String(q.answer || '').split(/\s*[,;]\s*/);
+  let blankIndex = 0;
+  const decorated = question.replace(/_{2,}/g, (blank, offset, whole) => {
+    const following = whole.slice(offset + blank.length).match(/^\s*\(([^()\n]{1,80})\)/);
+    const next = supplied[blankIndex];
+    const hint = String(next == null ? '' : next).replace(/^\s*[([{]|[)\]}]\s*$/g, '').trim();
+    const answerHint = following ? '' : (hint || (supplied.length ? '' : inferFillBlankHint(answers[blankIndex] || q.answer, question)));
+    blankIndex++;
+    return following || !answerHint ? blank : blank + ' (' + answerHint + ')';
+  });
+  if (decorated === question) return q;
+  return { ...q, question: decorated };
 }
 
 // ---- AI 题目质量校验 ----
@@ -382,7 +530,7 @@ async function autoGenerateQuizQuestions(wpList) {
       if (qs && qs.length) allQuestions.push(...qs);
     } catch (e) { dbg('QUIZ_GEN', e.message); }
   }
-  const validQuestions = allQuestions.filter(isQuizQuestionUsable);
+  const validQuestions = allQuestions.map(decorateFillBlankQuestion).filter(isQuizQuestionUsable);
   if (!validQuestions.length) {
     dbg('QUIZ_QUALITY', 'AI returned no usable quiz questions');
     return;
@@ -417,6 +565,36 @@ async function autoGenerateQuizQuestions(wpList) {
   }
   toastMsg('📚 薄弱点出题: 已添加 ' + res.added + ' 道题到 Anki' + (res.skipped ? ' (跳过' + res.skipped + '道重复)' : ''));
   return res;
+}
+
+// 将已有薄弱点牌组中的旧填空题补成上海高考式的括号提示。只更新 Question
+// 字段，不触碰 Answer/Explanation，因此不会影响 Anki 的排程或用户已有答案。
+async function repairExistingQuizQuestions() {
+  try {
+    const found = await ankiPostCall({ action: 'findNotes', version: 6, params: { query: 'deck:' + ankiWeakDeck() + ' tag:weak-point' } });
+    const ids = found && found.result && found.result.result;
+    if (!Array.isArray(ids) || !ids.length) return 0;
+    const info = await ankiPostCall({ action: 'notesInfo', version: 6, params: { notes: ids.slice(0, 500) } });
+    const notes = info && info.result && info.result.result;
+    if (!Array.isArray(notes)) return 0;
+    let repaired = 0;
+    for (const note of notes) {
+      if (!note || note.modelName !== ANKI_QUIZ_MODEL) continue;
+      const field = note.fields && note.fields.Question;
+      const answerField = note.fields && note.fields.Answer;
+      const question = String(field && field.value || '');
+      if (!question || !/_{2,}/.test(question)) continue;
+      const answer = String(answerField && answerField.value || '').replace(/<[^>]*>/g, '');
+      const next = decorateFillBlankQuestion({ type: 'fill_blank', question, answer }).question;
+      if (next === question) continue;
+      const result = await ankiPostCall({ action: 'updateNoteFields', version: 6, params: { note: { id: note.noteId, fields: { Question: next } } } });
+      if (result && result.ok !== false) repaired++;
+    }
+    return repaired;
+  } catch (e) {
+    dbg('ANKI_QUIZ_REPAIR', e.message);
+    return 0;
+  }
 }
 
 // ---- 出题策略调度 ----
@@ -488,13 +666,17 @@ async function pushAllToAnki() {
   const ver = await ankiPostCall({ action: 'version', version: 6 });
   if (!ver || !ver.ok) { toastMsg('❌ Anki 未运行或 AnkiConnect 未连接'); return; }
   await ensureQuizModelAndDeck();
+  // 先修复已经存在的薄弱点填空卡，再生成新题；这样旧卡也会得到括号词根提示。
+  const quizRepaired = await repairExistingQuizQuestions();
 
   // 2. 同步生词
   const vocab = getVocab();
-  let vocabAdded = 0, vocabSkipped = 0;
+  let vocabAdded = 0, vocabSkipped = 0, vocabRepaired = 0;
   if (vocab && vocab.length) {
     // 过滤掉已经在 anki 中的（按英文单词去重：notesInfo 读 Back 字段）
     const existingWords = new Set();
+    const vocabByWord = new Map(vocab.filter(v => v && v.word).map(v => [v.word.trim().toLowerCase(), v]));
+    const repairCandidates = [];
     try {
       const allNotes = await ankiPostCall({ action: 'findNotes', version: 6, params: { query: 'deck:' + ankiVocabDeck() + ' tag:vocabulary' } });
       if (allNotes && allNotes.ok && allNotes.result && allNotes.result.result) {
@@ -502,21 +684,65 @@ async function pushAllToAnki() {
         if (ids.length) {
           const info = await ankiPostCall({ action: 'notesInfo', version: 6, params: { notes: ids.slice(0, 1000) } });
           if (info && info.ok && info.result && info.result.result) {
-            info.result.result.forEach(n => {
-              const f = n && n.fields && n.fields.Back && n.fields.Back.value;
-              if (f) existingWords.add(f.replace(/[\[\]{}<>\\\/]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase());
-            });
+            for (const n of info.result.result) {
+              const back = String(n && n.fields && n.fields.Back && n.fields.Back.value || '');
+              const front = String(n && n.fields && n.fields.Front && n.fields.Front.value || '').trim();
+              const word = back
+                .replace(/\[sound:[^\]]*\]/gi, '')
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/<[^>]*>/g, '')
+                .split(/\r?\n/).map(s => s.trim()).find(Boolean) || '';
+              const key = word.toLowerCase();
+              if (!key) continue;
+              existingWords.add(key);
+
+              // 历史版本会在缺少释义时把英文答案原样写到 Front。
+              // 用当前生词本中的释义原位修复，保留原卡片的学习进度与排程。
+              const local = vocabByWord.get(key);
+              const meaning = local && String(local.translation || local.meaning || '').trim();
+              const localFrontMeaning = normalizeVocabMeaning(meaning || front, word);
+              if (!localFrontMeaning) {
+                repairCandidates.push({ note: n, word, front });
+                continue;
+              }
+              const desiredFront = vocabFrontText(localFrontMeaning, word);
+              // 不只修复「Front=英文答案」：旧版本也可能把完整词典条目存进 Front，
+              // 只要能从本地释义得到规范正面，就原位更新并保留 Anki 排程。
+              if (desiredFront && front !== desiredFront && Number.isSafeInteger(n.noteId)) {
+                const updated = await ankiPostCall({
+                  action: 'updateNoteFields', version: 6,
+                  params: { note: { id: n.noteId, fields: { Front: desiredFront } } }
+                });
+                if (updated && updated.ok && updated.result && !updated.result.result?.error) vocabRepaired++;
+              }
+            }
           }
         }
       }
     } catch (e) { dbg('ANKI_VOCAB_FETCH', e.message); }
+    if (repairCandidates.length) {
+      const generated = await generateMissingVocabMeanings(repairCandidates.map(c => c.word));
+      for (const candidate of repairCandidates) {
+        const meaning = generated.get(candidate.word.toLowerCase());
+        if (!meaning) continue;
+        const desiredFront = vocabFrontText(meaning, candidate.word);
+        if (!desiredFront || desiredFront === candidate.front || !Number.isSafeInteger(candidate.note.noteId)) continue;
+        const updated = await ankiPostCall({
+          action: 'updateNoteFields', version: 6,
+          params: { note: { id: candidate.note.noteId, fields: { Front: desiredFront } } }
+        });
+        if (updated && updated.ok && updated.result && !updated.result.result?.error) vocabRepaired++;
+      }
+    }
     const notes = [];
     for (const v of vocab) {
       if (!v.word) continue;
       const meaning = v.translation || v.meaning || '';
       const example = v.example || '';
       if (existingWords.has(v.word.trim().toLowerCase())) { vocabSkipped++; continue; }
-      const front = meaning || v.word;
+      // 没有释义的条目无法形成有效默写题，也不能用英文答案充当正面。
+      const front = vocabFrontText(meaning, v.word);
+      if (!front) continue;
       let back = v.word;
       if (getSetting('ankiAutoAudio', false)) {
         const sound = await ankiAttachAudio(v.word);
@@ -529,9 +755,9 @@ async function pushAllToAnki() {
     if (notes.length) {
       const r = await ankiAddNotesBatch(notes);
       vocabAdded = r.added || 0;
-      toastMsg('📚 生词本：已添加 ' + vocabAdded + ' / ' + notes.length + '（已存在 ' + vocabSkipped + '）');
+      toastMsg('📚 生词本：已添加 ' + vocabAdded + ' / ' + notes.length + '（已存在 ' + vocabSkipped + '，修复旧卡 ' + vocabRepaired + '）');
     } else {
-      toastMsg('📚 生词本：无新词可加（已存在 ' + vocabSkipped + '）');
+      toastMsg('📚 生词本：无新词可加（已存在 ' + vocabSkipped + '，修复旧卡 ' + vocabRepaired + '）');
     }
   } else {
     toastMsg('📚 生词本为空，跳过');
@@ -543,7 +769,7 @@ async function pushAllToAnki() {
   const perWp = parseInt(getSetting('ankiQuizPerWp', 2)) || 2;
   let needs = wpList.filter(w => (w.anki_notes || []).length < perWp);
   if (!needs.length) {
-    toastMsg('✅ 同步完成：生词 +' + vocabAdded + '，薄弱点题目无需新增');
+    toastMsg('✅ 同步完成：生词 +' + vocabAdded + '，薄弱点题目无需新增' + (quizRepaired ? '，修复填空 ' + quizRepaired + ' 道' : ''));
     return;
   }
   let quizAdded = 0;
@@ -559,7 +785,7 @@ async function pushAllToAnki() {
     const w2 = getWeak();
     needs = Object.values(w2).filter(w => w && !w.archived && (w.anki_notes || []).length < perWp);
   }
-  toastMsg('✅ 同步完成：生词 +' + vocabAdded + '，薄弱点题目 +' + quizAdded);
+  toastMsg('✅ 同步完成：生词 +' + vocabAdded + '，薄弱点题目 +' + quizAdded + (quizRepaired ? '，修复填空 ' + quizRepaired + ' 道' : ''));
   // 刷新统计
   if (typeof renderAnkiSidebar === 'function') renderAnkiSidebar();
 }

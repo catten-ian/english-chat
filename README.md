@@ -61,6 +61,12 @@ npm start               # 等价于 node server.js，http://localhost:8091
 
 停止服务请在后端窗口按 `Ctrl+C`：会触发优雅关闭（停止接收新连接 → 等待在途请求 → WAL 并回主库 → 关闭数据库）。
 
+### 本地与线上聊天记录同步
+
+在本地 `.env` 配置 `AI_EN_SYNC_PEER_URL=https://www.catten.cyou/api/sync/conversations` 和 `AI_EN_SYNC_SECRET`（至少 32 字符）；线上 `.env` 只配置相同的 `AI_EN_SYNC_SECRET`，不设置 peer URL。两个服务需有同名账户。密钥仅保存在服务器，不进入浏览器。
+
+本地服务运行时启动后、每 60 秒及保存/删除聊天时与线上交换会话；本地关机时线上继续保存，下一次启动本地服务会补齐。会话和消息分支按 ID 合并，删除会话通过墓碑传播；浏览器每 30 秒拉取当前服务的最新会话列表。此同步只处理聊天记录，不同步其他账户数据或登录状态。首次启用前应分别备份两端 SQLite 数据库。
+
 ## 测试
 
 ```bash
@@ -78,6 +84,7 @@ npm run check           # 单独跑语法检查（server.js + server/**/*.js + j
 | `test/static-security.test.js` | 路径穿越（20 种变体）、NUL、扩展名白名单、nosniff、**严格 CSP（script-src 'self'）**、health 不泄露路径、index.html 引用的资源可访问 |
 | `test/auth.test.js` | 登录/登出、伪造 token、**数据库中不存明文 token**、会话列表、退出其他设备、修改密码全流程 |
 | `test/user-data.test.js` | 账户隔离、JSON 与顶层类型校验、损坏数据不覆盖有效数据、chunked 请求体上限 |
+| `test/conversation-sync.test.js`、`test/conversation-storage.test.js` | 双端会话/消息分支合并、删除墓碑、防旧快照复活、签名鉴权、前端失败重试与在途编辑保护 |
 | `test/anki-proxy.test.js` | Anki action 白名单、牌组归属（跨用户拒绝）、参数与数量校验、storeMediaFile 文件名约束 |
 | `test/schema-backup.test.js` | schema 版本管理与幂等迁移、题库导入原子性（源文件损坏不清空旧库）、备份同秒不冲突、备份可打开 |
 | `test/backup-service.test.js` | 备份产物完整性校验、损坏/伪造备份被拒、异盘副本落盘且可校验、定时调度器触发与关闭开关 |
@@ -231,7 +238,7 @@ python scripts\manage_users.py list
 - 后端仅绑定 `127.0.0.1`，局域网不可达
 - **静态文件按前缀映射到独立物理目录**：`index.html` + `/css/*` + `/js/*` + `/vendor/*` + `/music/*` + `/img/*`；解码后逐段校验，拒绝 `..`/反斜杠/NUL/绝对路径，扩展名必须在白名单内（无 octet-stream 兜底），响应带 `X-Content-Type-Options: nosniff`
 - **严格 CSP**（`Content-Security-Policy`）：`script-src 'self'`（禁止 inline 事件/脚本，前端交互全部走 `data-action` + 事件委托，见 `js/app/19-init.js`）、`style-src 'self' 'unsafe-inline'`、`img/media-src` 放开 `data:`/`blob:`（头像 dataURL、TTS/录音 blob）、`frame-src/object-src 'none'`
-- 所有 `/api/*` 接口（除登录/健康检查/音乐列表）需 `Authorization: Bearer <token>`
+- 所有 `/api/*` 接口（除登录/健康检查/音乐列表及服务器间 `/api/sync/conversations`）需 `Authorization: Bearer <token>`；服务器间接口校验时间戳与 HMAC 签名
 - 密码 PBKDF2 加盐哈希 + timing-safe 比较；会话 30 天有效期，过期会话自动清理
 - **会话 token 只以 SHA-256 落库**，原始 token 仅在登录响应中返回一次；数据库/WAL/备份泄露无法直接冒充用户
 - 修改密码会撤销该账户除当前会话外的所有会话；也可在「查看会话 → 退出其他设备」手动撤销

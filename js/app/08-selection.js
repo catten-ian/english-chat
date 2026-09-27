@@ -320,8 +320,9 @@ async function quickAddToAnki(word, meaning) {
   const ctx = window.getSelection()?.toString() || word;
   try {
     await ensureQuizModelAndDeck();
-    // 默写题型：Front=中文释义，Back=英文单词+语境
-    const frontText = meaning || word;
+    // 默写题型：Front=中文释义 + 答案形式，禁止把英文答案回退到正面。
+    const frontText = vocabFrontText(meaning, word);
+    if (!frontText) { toastMsg('⚠️ 没有可用的中文释义，暂不生成默写卡'); return; }
     const backText = word + '\n\n💬 语境：' + ctx.substring(0, 120);
     const res = await ankiAddNotesBatch([{
       deckName: ankiVocabDeck(), modelName: VOCAB_MODEL,
@@ -696,4 +697,4 @@ function switchFeedbackTab(tab) {
   document.querySelectorAll('#feedbackTabs .right-tab').forEach(b => b.classList.toggle('active', b.dataset.ftab === tab));
   document.querySelectorAll('[data-ftab-pane]').forEach(p => p.style.display = (p.dataset.ftabPane === tab ? '' : 'none'));
 }
-
+

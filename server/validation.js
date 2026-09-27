@@ -189,6 +189,20 @@ function ankiGuard(payload, username) {
       if (!notes.every(n => Number.isSafeInteger(n) && n > 0)) return { status: 400, error: 'invalid note id' };
       return null;
     }
+    case 'updateNoteFields': {
+      const note = p.note;
+      if (!note || !Number.isSafeInteger(note.id) || note.id <= 0) {
+        return { status: 403, error: 'invalid updateNoteFields request' };
+      }
+      if (!note.fields || typeof note.fields !== 'object' || Array.isArray(note.fields)) {
+        return { status: 403, error: 'invalid updateNoteFields request' };
+      }
+      const keys = Object.keys(note.fields);
+      if (keys.length !== 1 || !['Front', 'Question'].includes(keys[0]) || typeof note.fields[keys[0]] !== 'string' || !note.fields[keys[0]].trim()) {
+        return { status: 403, error: 'only non-empty Front or Question updates are allowed' };
+      }
+      return null;
+    }
     case 'createModel':
     case 'updateModelStyling':
     case 'updateModelTemplates': {

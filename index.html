@@ -13,7 +13,7 @@
 <link rel="icon" type="image/jpeg" href="img/icons/favicon.jpg?v=20260829a">
 <link rel="apple-touch-icon" href="img/icons/favicon.jpg?v=20260829a">
 
-<link rel="stylesheet" href="css/style.css?v=20260912a">
+    <link rel="stylesheet" href="css/style.css?v=20260926b">
 
 <link rel="stylesheet" href="vendor/katex/katex.min.css?v=20260828b">
 
@@ -850,35 +850,35 @@
 
 <script src="js/shgaoka_bank.js?v=20260828b"></script>
 
-<script src="js/storage.js?v=20260906a"></script>
+<script src="js/storage.js?v=20260927b"></script>
 
 <!-- app.js 已按领域拆分到 js/app/。
      顺序不可调整：存在顶层 IIFE、事件绑定与 const 声明的执行顺序依赖。
      校验见 test/app-split.test.js（文件齐全 / 无重复顶层声明 / 拼接可解析）。 -->
-<script src="js/app/01-core.js?v=20260906a"></script>
+<script src="js/app/01-core.js?v=20260921a"></script>
 <script src="js/app/02-agents.js?v=20260828f"></script>
 <script src="js/app/03-parse.js?v=20260828f"></script>
 <script src="js/app/04-chat-tree.js?v=20260828f"></script>
 <script src="js/app/05-chat-view.js?v=20260905a"></script>
-<script src="js/app/06-anki.js?v=20260913b"></script>
+<script src="js/app/06-anki.js?v=20260921a"></script>
 <script src="js/app/07-chat-actions.js?v=20260906a"></script>
-<script src="js/app/08-selection.js?v=20260828f"></script>
+<script src="js/app/08-selection.js?v=20260921a"></script>
 <script src="js/app/09-gaokao.js?v=20260828f"></script>
 <script src="js/app/10-dictionary.js?v=20260906a"></script>
 <script src="js/app/11-ui-panels.js?v=20260828f"></script>
 <script src="js/app/12-settings.js?v=20260913b"></script>
 <script src="js/app/13-banks.js?v=20260828f"></script>
 <script src="js/app/14-music.js?v=20260830b"></script>
-<script src="js/app/15-modes.js?v=20260905a"></script>
+<script src="js/app/15-modes.js?v=20260926a"></script>
 <script src="js/app/16-reading.js?v=20260828f"></script>
 <script src="js/app/17-practice.js?v=20260830d"></script>
 <script src="js/app/18-games.js?v=20260828f"></script>
-<script src="js/app/19-init.js?v=20260906a"></script>
+<script src="js/app/19-init.js?v=20260927a"></script>
 <script src="js/app/20-progress.js?v=20260830a"></script>
 <script src="js/app/21-anki-tasks.js?v=20260830c"></script>
 <script src="js/app/22-web-review.js?v=20260913b"></script>
 <script src="js/app/23-cost.js?v=20260830a"></script>
-<script src="js/app/24-anki-templates.js?v=20260913b"></script>
+<script src="js/app/24-anki-templates.js?v=20260921a"></script>
 
 
 
@@ -897,6 +897,8 @@
     <input id="loginUser" type="text" placeholder="用户名" autocomplete="username" aria-label="用户名">
 
     <input id="loginPass" type="password" placeholder="密码" autocomplete="current-password" aria-label="密码">
+    <input id="registerPass2" type="password" placeholder="确认密码" autocomplete="new-password" aria-label="确认密码" style="display:none">
+    <div id="registerProof" class="register-proof" style="display:none">正在进行人机校验…</div>
 
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin:6px 0 4px;cursor:pointer">
 
@@ -909,6 +911,8 @@
     <div id="loginMsg" class="login-msg" role="alert"></div>
 
     <button id="loginBtn" class="login-btn">🔓 登录</button>
+    <button id="registerBtn" class="login-btn register-btn" style="display:none">📝 注册</button>
+    <button id="authModeBtn" type="button" class="auth-mode-btn">没有账户？注册</button>
 
     <div class="login-hint">修改密码：python scripts\manage_users.py reset &lt;用户名&gt; &lt;新密码&gt;</div>
 

@@ -1,6 +1,8 @@
 /* ============================================================
    AI 英语对话教练 - 认证路由（server/routes/auth.js）
    POST /api/auth/login            登录（无需鉴权）
+   GET  /api/auth/register-challenge 获取注册人机挑战（无需鉴权）
+   POST /api/auth/register         注册并登录（无需鉴权）
    GET  /api/auth/me               当前用户
    POST /api/auth/logout           登出
    GET  /api/auth/sessions         本账户活跃会话
@@ -16,6 +18,59 @@ const { verifyPassword, hashPassword, hashToken } = require('../auth');
 const { createRateLimiter } = require('../rate-limit');
 const { db } = require('../db');
 const logger = require('../services/logger');
+
+const REGISTER_MAX_BODY = 8 * 1024;
+const REGISTER_DIFFICULTY = 4;
+const REGISTER_CHALLENGE_TTL_MS = 5 * 60 * 1000;
+const registerChallenges = new Map();
+const registerLimiter = createRateLimiter({ windowMs: 10 * 60 * 1000, max: 8 });
+
+function canonicalUsername(value) { return String(value || '').trim().toLowerCase(); }
+function validRegistrationUsername(username) { return /^[a-z0-9_-]{3,32}$/.test(username); }
+function validRegistrationPassword(password) { return typeof password === 'string' && password.length >= 8 && password.length <= 200; }
+
+function issueRegisterChallenge(req, res) {
+  const id = crypto.randomBytes(18).toString('hex');
+  const salt = crypto.randomBytes(18).toString('hex');
+  const expiresAt = Date.now() + REGISTER_CHALLENGE_TTL_MS;
+  registerChallenges.set(id, { salt, expiresAt, used: false });
+  for (const [key, item] of registerChallenges) if (item.expiresAt <= Date.now() || item.used) registerChallenges.delete(key);
+  sendJson(res, 200, { id, salt, difficulty: REGISTER_DIFFICULTY, expires_at: expiresAt }, req);
+}
+
+function checkProof(challenge, nonce) {
+  if (!challenge || challenge.used || challenge.expiresAt <= Date.now() || !/^\d{1,12}$/.test(String(nonce))) return false;
+  const digest = crypto.createHash('sha256').update(challenge.salt + ':' + String(nonce)).digest('hex');
+  return digest.startsWith('0'.repeat(REGISTER_DIFFICULTY));
+}
+
+async function register(req, res) {
+  const ip = (req.socket && req.socket.remoteAddress) || 'unknown';
+  const limit = registerLimiter.check(ip);
+  if (!limit.ok) { res.setHeader('Retry-After', String(Math.ceil(limit.retryAfterMs / 1000))); sendJson(res, 429, { error: '注册请求过多，请稍后再试' }, req); return; }
+  registerLimiter.hit(ip);
+  const body = await readBody(req, REGISTER_MAX_BODY);
+  if (!body) { sendJson(res, 413, { error: 'body too large' }, req); return; }
+  let payload;
+  try { payload = JSON.parse(body.toString('utf8')); } catch (e) { sendJson(res, 400, { error: 'invalid json' }, req); return; }
+  const username = canonicalUsername(payload.username);
+  const password = String(payload.password || '');
+  const challenge = registerChallenges.get(String(payload.challenge_id || ''));
+  if (!validRegistrationUsername(username)) { sendJson(res, 400, { error: '用户名需为 3-32 位小写字母、数字、下划线或连字符' }, req); return; }
+  if (!validRegistrationPassword(password)) { sendJson(res, 400, { error: '密码需为 8-200 位' }, req); return; }
+  if (!checkProof(challenge, payload.nonce)) { sendJson(res, 400, { error: '人机校验未通过，请刷新后重试' }, req); return; }
+  challenge.used = true;
+  if (db.prepare('SELECT id FROM users WHERE username=?').get(username)) { sendJson(res, 409, { error: '用户名已存在' }, req); return; }
+  try {
+    const result = db.prepare('INSERT INTO users (username, password_hash) VALUES (?,?)').run(username, hashPassword(password));
+    const token = crypto.randomBytes(32).toString('hex');
+    db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, last_seen_at) VALUES (?,?,?, datetime(\'now\'))').run(hashToken(token), result.lastInsertRowid, new Date(Date.now() + SESSION_TTL_DAYS * 86400000).toISOString());
+    sendJson(res, 201, { token, username }, req);
+  } catch (e) {
+    if (/UNIQUE/i.test(e.message)) sendJson(res, 409, { error: '用户名已存在' }, req);
+    else { logger.error('REGISTER_FAILED', { error: e.message }); sendJson(res, 500, { error: '注册失败' }, req); }
+  }
+}
 
 /* 登录限流：只对【失败】计数，成功登录立即清零。
    这样正常使用（含测试套件反复登录）不受影响，而密码爆破会被拦住。
@@ -136,4 +191,4 @@ async function changePassword(req, res) {
   }
 }
 
-module.exports = { login, me, logout, sessions, revokeOthers, changePassword };
+module.exports = { login, register, issueRegisterChallenge, me, logout, sessions, revokeOthers, changePassword };

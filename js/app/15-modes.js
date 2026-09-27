@@ -17,6 +17,7 @@ let currentPracticeTab = 'review';
 function showHome() {
   if (typeof AudioManager !== 'undefined') AudioManager.stopSpeech();
   localStorage.setItem('ai_en_mode', 'home');
+  if (document.body) document.body.classList.add('home-open');
   document.getElementById('homePage').style.display = 'flex';
   document.getElementById('sidePanel').style.display = '';
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
@@ -91,6 +92,7 @@ function switchMode(mode, force) {
   else if (currentMode === 'translation') saveAnswerDraft('translation');
   else if (currentMode === 'charade' || (currentMode === 'game' && currentGameTab === 'charade')) saveAnswerDraft('charade');
   currentMode = mode;
+  if (document.body) document.body.classList.remove('home-open');
   localStorage.setItem('ai_en_mode', mode);
   // 切换模块时停止正在播放的朗读（TTS），并恢复被压低的背景音乐
   if (typeof AudioManager !== 'undefined') AudioManager.stopSpeech();
@@ -231,4 +233,4 @@ function resetAnalysisForMode(mode) {
   content.style.lineHeight = '';
   switchRightTab('feedback');
 }
-
+

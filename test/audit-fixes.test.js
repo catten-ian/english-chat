@@ -59,6 +59,13 @@ describe('Anki query 归属校验（原缺陷：includes 判定可被 OR 绕过�
     const ok = ankiGuard({ action: 'findNotes', params: { query: 'deck:英语学习::catten::词汇 tag:vocabulary' } }, 'catten');
     assert.strictEqual(ok, null);
   });
+
+  test('updateNoteFields 仅允许非空 Front/Question 单字段更新', () => {
+    assert.strictEqual(ankiGuard({ action: 'updateNoteFields', params: { note: { id: 1, fields: { Front: '中文释义' } } } }, 'catten'), null);
+    assert.strictEqual(ankiGuard({ action: 'updateNoteFields', params: { note: { id: 1, fields: { Question: 'The work ___ (complete).' } } } }, 'catten'), null);
+    assert.ok(ankiGuard({ action: 'updateNoteFields', params: { note: { id: 1, fields: { Back: 'answer' } } } }, 'catten'));
+    assert.ok(ankiGuard({ action: 'updateNoteFields', params: { note: { id: 1, fields: { Front: 'x', Back: 'y' } } } }, 'catten'));
+  });
 });
 
 /* ---------- addNote 媒体字段 ---------- */
