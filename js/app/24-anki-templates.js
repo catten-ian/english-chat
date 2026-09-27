@@ -84,73 +84,81 @@ const ANKI_VOCAB_CSS = `
 * { box-sizing: border-box; }
 .card {
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
-  color: #172033; background: #f4f6f8;
-  padding: 24px 18px; text-align: left; margin: 0 auto;
+  font-size: 18px; line-height: 1.7; color: #0f172a; background: #f8fafc;
+  padding: 28px 24px; text-align: left; margin: 0 auto;
 }
-.vocab-shell { width: 100%; max-width: 620px; margin: 0 auto; }
+.vocab-shell { width: 100%; max-width: 700px; margin: 0 auto; }
 .vocab-kicker {
-  color: #576274; font-size: 12px; font-weight: 700;
-  letter-spacing: 0; margin-bottom: 18px;
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  color: #64748b; font-size: 12px; font-weight: 800;
+  letter-spacing: 2px; margin-bottom: 18px; text-transform: uppercase;
 }
 .vocab-front-card, .vocab-back-card {
-  background: #ffffff; border: 1px solid #d9dee7; border-radius: 8px;
-  padding: 28px 26px; box-shadow: 0 4px 14px rgba(23, 32, 51, .07);
+  position: relative; overflow: hidden; background: #ffffff;
+  border: 1px solid #dbe3ef; border-radius: 18px;
+  padding: 28px 26px; box-shadow: 0 10px 30px rgba(15, 23, 42, .06);
+}
+.vocab-front-card::before, .vocab-back-card::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: #0f766e;
 }
 .vocab-front-meaning {
   white-space: pre-wrap; text-align: left; font-size: 24px; line-height: 1.65;
-  font-weight: 700; color: #172033;
+  font-weight: 750; color: #0f172a;
 }
 .vocab-front-text, .vocab-back-text {
   white-space: pre-wrap; word-break: break-word;
 }
 .vocab-front-text {
-  font-size: 24px; line-height: 1.7; font-weight: 700; color: #172033;
+  font-size: 24px; line-height: 1.7; font-weight: 750; color: #0f172a;
 }
 .vocab-back-text {
-  font-size: 17px; line-height: 1.8; color: #334155;
+  font-size: 18px; line-height: 1.8; color: #334155;
 }
 .vocab-direction {
-  display: inline-block; margin-bottom: 18px; padding: 4px 8px;
-  border-radius: 4px; background: #e8f0ee; color: #176b5b;
-  font-size: 12px; font-weight: 700;
+  display: inline-flex; align-items: center; margin-bottom: 18px; padding: 5px 10px;
+  border-radius: 999px; background: #ecfdf5; color: #047857;
+  font-size: 12px; font-weight: 800;
 }
 .vocab-prompt {
-  color: #738095; font-size: 13px; margin-top: 22px; padding-top: 14px;
-  border-top: 1px solid #edf0f4;
+  color: #64748b; font-size: 13px; margin-top: 22px; padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
 }
 .vocab-word-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-.vocab-audio { display: inline-flex; align-items: center; }
-.vocab-word { font-size: 38px; line-height: 1.25; font-weight: 800; color: #126b5d; letter-spacing: 0; }
+.vocab-audio { display: inline-flex; align-items: center; order: 2; }
+.vocab-word { font-size: 40px; line-height: 1.25; font-weight: 850; color: #0f766e; letter-spacing: 0; }
 .vocab-phonetic { color: #64748b; font-family: Georgia, "Times New Roman", serif; font-size: 18px; }
 .vocab-pos {
-  display: inline-flex; padding: 3px 7px; border-radius: 4px;
-  background: #eef1f5; color: #526074; font-size: 12px; font-weight: 700;
+  display: inline-flex; padding: 4px 8px; border-radius: 999px;
+  background: #eff6ff; color: #2563eb; font-size: 12px; font-weight: 800;
 }
 .vocab-defs { display: grid; gap: 9px; margin: 14px 0 0; padding: 0; list-style: none; counter-reset: vocab-def; }
 .vocab-defs li {
   counter-increment: vocab-def; display: grid; grid-template-columns: 26px 1fr; gap: 9px;
-  padding: 10px 12px; border-radius: 6px; background: #f6f8fa; line-height: 1.65;
+  padding: 11px 13px; border-radius: 10px; background: #f8fafc; border: 1px solid #eef2f7; line-height: 1.65;
 }
 .vocab-defs li::before {
-  content: counter(vocab-def); width: 22px; height: 22px; border-radius: 4px;
+  content: counter(vocab-def); width: 22px; height: 22px; border-radius: 7px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: #dceeea; color: #126b5d; font-size: 12px; font-weight: 800;
+  background: #ccfbf1; color: #0f766e; font-size: 12px; font-weight: 800;
 }
-.vocab-inflection { margin-top: 12px; padding: 10px 12px; border-radius: 6px; background: #f6f8fa; color: #64748b; font-size: 13px; }
+.vocab-inflection { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: #f8fafc; color: #64748b; font-size: 13px; }
 .vocab-divider { border: none; border-top: 1px dashed #cbd5e1; margin: 24px 0; }
 .vocab-example, .vocab-context {
-  white-space: pre-wrap; margin-top: 10px; padding: 12px 14px; border-radius: 6px;
+  white-space: pre-wrap; margin-top: 10px; padding: 13px 15px; border-radius: 10px;
   font-size: 15px; line-height: 1.75;
 }
-.vocab-example { background: #f2f4f7; color: #334155; }
-.vocab-context { background: #edf6f3; border-left: 3px solid #3a927f; color: #475569; }
+.vocab-example { background: #f8fafc; border: 1px solid #eef2f7; color: #334155; }
+.vocab-context { background: #ecfdf5; border-left: 4px solid #10b981; color: #475569; }
+.vocab-back-content { white-space: pre-wrap; }
+.vocab-answer-label { color: #047857; font-size: 12px; font-weight: 800; letter-spacing: 1px; margin-bottom: 8px; }
 .replay-button { text-decoration: none; margin-left: 6px; }
 .replay-button svg { width: 26px; height: 26px; }
 @media (max-width: 480px) {
-  .card { padding: 14px 10px; }
+  .card { padding: 18px 12px; }
   .vocab-front-card, .vocab-back-card { padding: 22px 18px; }
   .vocab-front-meaning { font-size: 21px; }
-  .vocab-word { font-size: 32px; }
+  .vocab-word { font-size: 34px; }
 }
 `;
 
@@ -184,10 +192,10 @@ function ankiBasicTemplates() {
 }
 
 function ankiVocabQuestionHTML() {
-  return `<div class="vocab-shell"><div class="vocab-front-card"><div class="vocab-kicker">中译英默写</div><div class="vocab-front-text">{{Front}}</div></div></div>`;
+  return `<div class="vocab-shell"><div class="vocab-kicker">词汇默写 · 中译英</div><div class="vocab-front-card"><div class="vocab-front-text">{{Front}}</div></div></div>`;
 }
 function ankiVocabBackHTML() {
-  return `<div class="vocab-shell"><div class="vocab-kicker">正确答案</div><div class="vocab-back-card"><div class="vocab-back-text">{{Back}}</div></div></div>`;
+  return `<div class="vocab-shell"><div class="vocab-kicker">词汇卡 · 参考答案</div><div class="vocab-back-card"><div class="vocab-answer-label">ANSWER</div><div class="vocab-back-text vocab-back-content">{{Back}}</div></div></div>`;
 }
 function ankiVocabTemplates() {
   return { [VOCAB_TEMPLATE]: { Front: ankiVocabQuestionHTML(), Back: ankiVocabBackHTML() } };
