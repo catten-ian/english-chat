@@ -68,7 +68,9 @@ function startWebReview() {
         }
         return;
       }
-      await new Promise(r => setTimeout(r, 500));
+      // AnkiConnect updates guiCurrentCard immediately after guiDeckReview;
+      // avoid the old half-second artificial delay that made each review feel laggy.
+      await new Promise(r => setTimeout(r, 80));
       if (webReviewState === session) fetchNextWebReviewCard();
     } catch (e) {
       modal.innerHTML = '<div style="text-align:center;padding:20px;color:var(--red)">❌ 启动复习失败：' + esc(e.message || e) + '<br><br>请确认 Anki 已运行且 AnkiConnect 插件已安装（默认端口 8765）<br><br><button data-action="close-overlay" style="padding:8px 20px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer">关闭</button></div>';
@@ -362,8 +364,14 @@ function webReviewParseVocabMeaning(raw, expectedWord) {
 
 function webReviewVocabMeaningBlock(raw, expectedWord, hideAnswer) {
   const p = webReviewParseVocabMeaning(raw, expectedWord);
+  if (hideAnswer) {
+    const count = String(expectedWord || '').trim().split(/\s+/).filter(Boolean).length || 1;
+    const kind = count > 1 ? '词组' : '单词';
+    const hasMeaning = p.meanings.some(m => /[\u3400-\u9fff]/.test(m));
+    return `<div class="wr-vocab-meaning wr-vocab-prompt"><div class="wr-vocab-prompt-label">中文释义</div>${hasMeaning ? '' : '<div class="wr-vocab-prompt-empty">这张旧卡还没有中文释义，请先在生词本补充</div>'}<div class="wr-vocab-prompt-hint">请输入英文${kind}（${count} 个词）</div></div>`;
+  }
   return `<div class="wr-vocab-meaning">
-    ${(!hideAnswer && p.phonetic) || p.pos ? `<div class="wr-vocab-head">${!hideAnswer && p.phonetic ? `<span class="wr-vocab-phonetic">${esc(p.phonetic)}</span>` : ''}${p.pos ? `<span class="wr-vocab-pos">${esc(p.pos)}</span>` : ''}</div>` : ''}
+    ${p.phonetic || p.pos ? `<div class="wr-vocab-head">${p.phonetic ? `<span class="wr-vocab-phonetic">${esc(p.phonetic)}</span>` : ''}${p.pos ? `<span class="wr-vocab-pos">${esc(p.pos)}</span>` : ''}</div>` : ''}
     <ol class="wr-vocab-defs">${p.meanings.map(m => `<li>${esc(m)}</li>`).join('') || '<li>暂无中文释义，请在 Anki 中补充</li>'}</ol>
     ${!hideAnswer && p.inflection ? `<div class="wr-vocab-inflection"><span>词形变化</span>${esc(p.inflection)}</div>` : ''}
     ${!hideAnswer && p.details ? `<details class="wr-vocab-details"><summary>更多词典信息</summary><div>${esc(p.details)}</div></details>` : ''}
@@ -392,15 +400,28 @@ function webReviewQuizType(cardData) {
   const isVocab = model === '英语学习-词汇' || /::词汇\s*$/.test(deck);
   // 非生词卡：薄弱点模型用 Question/Answer，基础卡（拓展/纠错）用 Front/Back
   const qRaw = webReviewFieldRaw(cardData, 'Question');
+  const answerRaw = webReviewFieldRaw(cardData, 'Answer') || webReviewFieldRaw(cardData, 'Back');
+  const explanationRaw = webReviewFieldRaw(cardData, 'Explanation');
   const structuredMc = webReviewStructuredQuiz(qRaw);
-  const qText = structuredMc ? '' : (webReviewTextFromHTML(qRaw) || webReviewFieldText(cardData, 'Front'));
+  const qText = structuredMc ? '' : (webReviewTextFromHTML(qRaw) || String(qRaw || '').replace(/<[^>]*>/g, ' ') || webReviewFieldText(cardData, 'Front'));
   let aText = '';
   let exp = '';
   if (isVocab) {
-    const meaning = webReviewFieldText(cardData, 'Front').trim();
-    const backRaw = webReviewFieldText(cardData, 'Back').replace(/\[sound:[^\]]*\]/g, '').trim();
+    let frontRaw = webReviewFieldRaw(cardData, 'Front');
+    let backRaw = webReviewFieldText(cardData, 'Back').replace(/\[sound:[^\]]*\]/g, '').trim();
+    // Some legacy notes were saved with Front/Back reversed. Mixed prompts
+    // such as “英文词组（2个词）” still contain Chinese, so pure-English
+    // detection alone misses them.
+    if ((webReviewLooksEnglishAnswer(frontRaw) || webReviewHasEnglishHeadword(frontRaw)) && webReviewLooksChinese(backRaw)) {
+      const oldFront = frontRaw;
+      frontRaw = backRaw;
+      backRaw = webReviewTextFromHTML(oldFront).replace(/\[sound:[^\]]*\]/g, '').trim();
+    }
+    const meaning = webReviewVocabMeaningText(frontRaw).trim();
+    const word = webReviewVocabAnswer(backRaw, frontRaw);
     const parts = backRaw.split('\n').map(s => s.trim()).filter(Boolean);
-    const word = parts.shift() || '';
+    const answerLine = parts.findIndex(line => webReviewVocabAnswerLine(line, frontRaw));
+    if (answerLine >= 0) parts.splice(answerLine, 1);
     const example = parts.join('\n').trim();
     const phase = webReviewVocabPhase(word);
     if (phase === 2) {
@@ -408,11 +429,10 @@ function webReviewQuizType(cardData) {
     }
     return { type: 'recall', word, meaning, example, explanation: '' };
   }
-  aText = (webReviewFieldText(cardData, 'Answer') || webReviewFieldText(cardData, 'Back')).trim();
-  exp = webReviewFieldText(cardData, 'Explanation').replace(/[。.！!？?]?\s*(?:测试点|测试點)\s*[:：][\s\S]*$/, '').trim();
+  aText = webReviewTextFromHTML(answerRaw).trim();
+  exp = webReviewTextFromHTML(explanationRaw).replace(/[。.！!？?]?\s*(?:测试点|测试點)\s*[:：][\s\S]*$/, '').trim();
   if (structuredMc) {
-    const am = aText.match(/([A-D])/);
-    return { type: 'mc', stem: structuredMc.stem, options: structuredMc.options, answer: am ? am[1] : '', answerRaw: aText, explanation: exp };
+    return { type: 'mc', stem: structuredMc.stem, options: structuredMc.options, answer: webReviewAnswerLetter(aText), answerRaw: aText, explanation: exp };
   }
   const lines = qText.split('\n').map(s => s.trim()).filter(Boolean);
   const optRe = /^([A-D])[\.、\)]\s*(.+)$/;
@@ -424,13 +444,65 @@ function webReviewQuizType(cardData) {
   });
   if (opts.length === 4 && opts.map(o => o.letter).join('') === 'ABCD') {
     const stem = lines.slice(0, optStart).join(' ').trim();
-    const am = aText.match(/([A-D])/);
-    return { type: 'mc', stem, options: opts, answer: am ? am[1] : '', answerRaw: aText, explanation: exp };
+    return { type: 'mc', stem, options: opts, answer: webReviewAnswerLetter(aText), answerRaw: aText, explanation: exp };
   }
-  if (/_{2,}/.test(qText) && aText) {
-    return { type: 'fill', stem: qText.trim(), answer: aText.replace(/^[A-D][\.、\)]?\s*/, '').trim(), explanation: exp };
+  const hasBlank = /_{2,}/.test(webReviewStripHTML(qRaw));
+  const hasRootHint = /[（(]\s*[a-z][a-z' -]{1,40}\s*[）)]/i.test(answerRaw + '\n' + explanationRaw);
+  if ((hasBlank || hasRootHint) && answerRaw) {
+    // 语法填空必须把给出的词根/中文提示留在题干中；旧卡常把它只写在
+    // Answer 或 Explanation，兼容这些格式并在正面展示，避免用户无从作答。
+    let stem = qText.trim();
+    const rootMatch = (answerRaw + '\n' + explanationRaw).match(/[（(]\s*([a-z][a-z' -]{1,40})\s*[）)]/i);
+    if (rootMatch && !/[（(]\s*[a-z][a-z' -]{1,40}\s*[）)]/i.test(stem)) {
+      const pos = stem.indexOf('___');
+      if (pos >= 0) stem = stem.slice(0, pos) + '___ (' + rootMatch[1].trim() + ')' + stem.slice(pos + 3);
+    }
+    if (!rootMatch && !/[\u3400-\u9fff]/.test(stem)) {
+      const cue = webReviewTextFromHTML(explanationRaw).match(/[\u3400-\u9fff][^\n。！？!?]{0,70}/);
+      if (cue) stem += `（提示：${cue[0].trim()}）`;
+    }
+    return { type: 'fill', stem, answer: aText.replace(/^[A-D][\.、\)]?\s*/, '').trim(), explanation: exp };
   }
   return { type: 'manual', stem: qText.trim(), answer: aText, explanation: exp, answerHtml: (cardData && cardData.answer) || '' };
+}
+
+function webReviewVocabMeaningText(raw) {
+  const text = webReviewTextFromHTML(raw);
+  return text.replace(/(?:^|\n)\s*答案形式\s*[:：].*$/gim, '').trim();
+}
+
+function webReviewLooksChinese(text) {
+  return /[\u3400-\u9fff]/.test(String(text || ''));
+}
+
+function webReviewLooksEnglishAnswer(text) {
+  const value = String(text || '').replace(/\[sound:[^\]]*\]/gi, '').trim();
+  return /[A-Za-z]/.test(value) && !webReviewLooksChinese(value);
+}
+
+function webReviewHasEnglishHeadword(text) {
+  const value = webReviewTextFromHTML(text).replace(/[\uFF08(][^\uFF09)]*[\uFF09)]/g, '').trim();
+  return /(?:^|\n)\s*[A-Za-z][A-Za-z' -]{1,48}(?:\s|$)/m.test(value);
+}
+
+// 词汇卡的 Front 永远是题面，Back 永远是答案。旧卡有时把答案形式、
+// HTML 或例句放在首行，因此不能再用 Back 的第一行盲猜，否则网页复习会
+// 把中文卡误判成英文答案，或者把答案泄露到题面。
+function webReviewVocabAnswerLine(line, frontRaw) {
+  const value = String(line || '').replace(/\[sound:[^\]]*\]/gi, '').trim();
+  if (!value || /^答案形式\s*[:：]/i.test(value) || /^\(?\d+\s*个(?:单词|词)\)?$/i.test(value)) return false;
+  const hint = webReviewTextFromHTML(frontRaw).match(/答案形式\s*[:：].*$/im);
+  if (hint && value === hint[0].trim()) return false;
+  return /[A-Za-z]/.test(value) && !/[\u3400-\u9fff]/.test(value);
+}
+
+function webReviewVocabAnswer(backText, frontRaw) {
+  const lines = String(backText || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const candidate = lines.find(line => webReviewVocabAnswerLine(line, frontRaw));
+  if (candidate) return candidate.replace(/^(?:答案|answer)\s*[:：]\s*/i, '').trim();
+  // Last-resort legacy format: take the first token only when it is clearly an
+  // English headword. Never fall back to Chinese/front content.
+  return lines.find(line => /^[A-Za-z][A-Za-z' -]*$/.test(line)) || '';
 }
 
 /* ==================== 键盘操作 ==================== */
@@ -605,6 +677,10 @@ function webReviewBlankMatch(given, answer) {
   const a = webReviewNormalize(answer);
   if (!g || !a) return false;
   if (g === a) return true;
+  // Accept harmless answer formatting differences used by legacy cards:
+  // surrounding root hints, HTML punctuation, and alternate whitespace.
+  const stripRoot = (value) => value.replace(/[\uFF08(]\s*[a-z][a-z' -]{1,40}\s*[\uFF09)]/gi, '').replace(/\s+/g, ' ').trim();
+  if (stripRoot(g) === stripRoot(a)) return true;
   // 允许答案带括号可选内容：organize(organise) / (be) used to
   const optRe = /\(([^)]*)\)/g;
   const stripped = a.replace(optRe, '').replace(/\s+/g, ' ').trim();
@@ -612,7 +688,21 @@ function webReviewBlankMatch(given, answer) {
   return (stripped && g === stripped) || (kept && g === kept);
 }
 function webReviewSplitAnswers(answer) {
-  return String(answer || '').split(/\s*[,;|]\s*/).map(s => s.trim()).filter(Boolean);
+  const text = String(answer || '').trim();
+  if (!text) return [];
+  // A single blank may legitimately contain punctuation (for example
+  // "if ..., ..."). Only treat separators as multiple answers when the
+  // answer explicitly uses the conventional numbered/blank format.
+  if (!/(?:^|\n)\s*(?:\d+\s*[.)、:]|blank\s*\d+)/i.test(text)) {
+    return [text];
+  }
+  return text.split(/\s*(?:[,;|]|\n)\s*/).map(s => s.replace(/^\s*(?:\d+\s*[.)、:]|blank\s*\d+)\s*/i, '').trim()).filter(Boolean);
+}
+
+function webReviewAnswerLetter(raw) {
+  const text = webReviewTextFromHTML(raw).trim();
+  const m = text.match(/^(?:答案|answer|正确答案|correct answer)\s*[:：]?\s*\(?([A-D])\)?(?:\b|[.、)]|$)/i) || text.match(/^\(?([A-D])\)?(?:\b|[.、)]|$)/i);
+  return m ? m[1].toUpperCase() : '';
 }
 
 function webReviewChoose(letter) {
@@ -641,7 +731,13 @@ function webReviewSubmitFill(values) {
   let correct;
   if (answers.length > 1 || givenArr.length > 1) {
     // 多空：逐空判定，全对才算对
-    correct = answers.every((ans, i) => webReviewBlankMatch(givenArr[i] || '', ans));
+    // 单个答案中可能包含逗号/分号（例如 "if ..., ..."），此时将
+    // 同一答案用于唯一输入框，而不是拿它去比对每个输入框。
+    if (answers.length === 1 && givenArr.length > 1) {
+      correct = webReviewBlankMatch(givenArr.filter(Boolean).join(' '), answers[0]);
+    } else {
+      correct = answers.length === givenArr.length && answers.every((ans, i) => webReviewBlankMatch(givenArr[i] || '', ans));
+    }
   } else {
     correct = webReviewBlankMatch(givenArr[0] || '', answers[0] || quiz.answer);
   }
@@ -756,7 +852,7 @@ async function webReviewPrev() {
     if (!ok) { toastMsg('已经是第一张了'); return; }
     const graded = Array.isArray(st.history) ? st.history.pop() : null;
     if (graded && graded.correct) st.correct = Math.max(0, st.correct - 1);
-    await new Promise(res => setTimeout(res, 600));
+    await new Promise(res => setTimeout(res, 120));
     const card = await ankiPostCall({ action: 'guiCurrentCard', version: 6 });
     const cardData = card && card.result && card.result.result;
     if (webReviewState !== st) return;
@@ -787,7 +883,7 @@ async function webReviewCommit(ease) {
     gradedCorrect = st.selfGraded ? ease >= 3 : st.judgedCorrect === true;
     if (gradedCorrect) st.correct++;
     await ankiPostCall({ action: 'guiShowAnswer', version: 6 });
-    await new Promise(r => setTimeout(r, 120));
+    await new Promise(r => setTimeout(r, 40));
     st.prevCardId = st.cardId;
     await ankiPostCall({ action: 'guiAnswerCard', version: 6, params: { ease } });
     if (!Array.isArray(st.history)) st.history = [];
@@ -796,7 +892,7 @@ async function webReviewCommit(ease) {
       const promoted = webReviewVocabRecord(st.quiz.word, ease);
       if (promoted) toastMsg('🎯 「' + st.quiz.word + '」已熟练，以后改为看中文默写英文');
     }
-    await new Promise(r => setTimeout(r, 250));
+    await new Promise(r => setTimeout(r, 80));
     syncAnkiReviewData().catch(() => {});
     fetchNextWebReviewCard();
   } catch (e) {

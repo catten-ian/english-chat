@@ -168,10 +168,25 @@ registerAction('switch-variant', function () { switchVariant(this.getAttribute('
 registerAction('retry-analysis', function () { retryAnalysis(this.getAttribute('data-arg1')); });
 registerAction('show-vocab-detail', function () { showVocabDetail(+this.getAttribute('data-arg1')); });
 registerAction('remove-word', function () { removeWord(+this.getAttribute('data-arg1')); });
+registerAction('add-vocab-manual', function () { addVocabManual(); });
+registerAction('import-vocab', function () { importVocab(); });
+registerAction('save-vocab-import', function () { saveVocabImport(); });
+registerAction('edit-vocab', function () { addVocabManual(+this.getAttribute('data-arg1')); });
+registerAction('save-vocab-editor', function () { saveVocabEditor(+this.getAttribute('data-arg1')); });
 registerAction('clear-all-vocab', function () { clearAllVocab(); });
+registerAction('open-feedback', function () { openFeedbackForm(); });
+registerAction('submit-feedback', function () { submitFeedback(); });
+registerAction('reading-practice-new', function () { readingPracticeNew(); });
+registerAction('reading-practice-submit', function () { readingPracticeSubmit(); });
+registerAction('reading-practice-export', function () { readingPracticePrint(); });
+registerAction('reading-practice-export-word', function () { readingPracticeExportWord(); });
+registerAction('reading-practice-export-image', function () { readingPracticeExportImage(); });
+registerAction('reading-setting', function () { readingPracticeSaveSettings(readingPracticeSettings()); });
+registerAction('reading-add-word', function () { readingPracticeAddWord(this.getAttribute('data-arg1')); });
+registerAction('cluster-weak-points', function () { clusterWeakPoints(); });
 registerAction('delete-weak-point', function () { deleteWeakPoint(this.getAttribute('data-arg1')); });
 // Anki（06-anki.js）
-registerAction('anki-sync', function () { syncAnkiReviewData(); renderAnkiSidebar(); });
+registerAction('anki-sync', function () { syncAnkiReviewData({ force: true }); renderAnkiSidebar(); });
 registerAction('web-review-show-answer', function () { webReviewShowAnswer(); });
 registerAction('close-web-review', function () { closeWebReview(); });
 registerAction('web-review-answer', function () { webReviewAnswer(+this.getAttribute('data-arg1')); });
@@ -214,6 +229,8 @@ registerAction('delete-strategist-instruction', function () { deleteStrategistIn
 registerAction('click-avatar-file', function () { const f = document.getElementById('avatarFile'); if (f) f.click(); });
 registerAction('change-password', function () { changePassword(); });
 registerAction('prompt-new-character', function () { promptNewCharacter(); });
+registerAction('choose-tavern-card', function () { chooseTavernCardFile(); });
+registerAction('import-tavern-card', function (e) { importTavernCard(this); });
 registerAction('music-prev', function () { musicPrev(); });
 registerAction('settings-music-toggle', function () { settingsMusicToggle(); });
 registerAction('music-next', function () { musicNext(); });
@@ -224,6 +241,9 @@ registerAction('check-anki-connect', function () { checkAnkiConnect(); });
 registerAction('reconnect-anki-connect', function () { reconnectAnkiConnect(); });
 registerAction('backup-now', function () { backupNow(); });
 registerAction('logout-user', function () { logoutUser(); });
+registerAction('delete-account', function () { deleteAccount(); });
+registerAction('finish-help-guide', function () { finishHelpGuide(); });
+registerAction('open-help-guide', function () { showHelpGuide(true); });
 registerAction('save-settings', function () { saveSettings(); });
 registerAction('save-new-character', function () { saveNewCharacter(); });
 registerAction('choose-slash-command', function () { chooseSlashCommand(this.getAttribute('data-arg1')); });
@@ -529,7 +549,14 @@ initResize('panelResize', 'sidePanel', 'panelW', 280, 720, true);
     if (enabled) {
       registerProof.style.display = '';
       registerProof.textContent = '正在获取人机校验…';
-      apiRegisterChallenge().then(function(c) { registerChallenge = c; registerProof.textContent = '人机校验已准备'; }).catch(function(e) { registerProof.textContent = e.message || '人机校验获取失败'; });
+      apiRegisterChallenge().then(function(c) { registerChallenge = c; registerProof.textContent = '人机校验已准备'; }).catch(function(e) {
+        registerChallenge = null;
+        registerProof.textContent = '人机校验获取失败，正在重试…';
+        window.setTimeout(function() {
+          if (!registerMode) return;
+          apiRegisterChallenge().then(function(c) { registerChallenge = c; registerProof.textContent = '人机校验已准备'; }).catch(function(err) { registerProof.textContent = err.message || '请点击注册重试'; });
+        }, 600);
+      });
     } else { registerChallenge = null; registerProof.style.display = 'none'; }
   }
 
@@ -562,6 +589,9 @@ initResize('panelResize', 'sidePanel', 'panelW', 280, 720, true);
       bootApp();
     } catch (e) {
       loginMsg.textContent = e.message || '登录失败';
+      if (typeof LOCAL_FILE_MODE !== 'undefined' && LOCAL_FILE_MODE) {
+        loginMsg.textContent += '；本地打开 index.html 不会自动启动后端';
+      }
     } finally {
       loginBtn.disabled = false;
     }
@@ -581,7 +611,11 @@ initResize('panelResize', 'sidePanel', 'panelW', 280, 720, true);
       if (userBadge) userBadge.textContent = currentUser();
       loginOverlay.style.display = 'none';
       bootApp();
-    } catch (e) { loginMsg.textContent = e.message || '注册失败'; registerChallenge = null; }
+    } catch (e) {
+      loginMsg.textContent = e.message || '注册失败';
+      registerChallenge = null;
+      if (registerMode) setRegisterMode(true);
+    }
     finally { registerBtn.disabled = false; }
   }
   if (loginBtn) loginBtn.addEventListener('click', doLogin);
@@ -616,7 +650,7 @@ initResize('panelResize', 'sidePanel', 'panelW', 280, 720, true);
            if (isMobile() && document.getElementById('sidePanel')?.classList.contains('open')) setFeedbackPanelMode('collapsed');
          }
          if (!e.target.closest('#sidebar, #sidebarToggle, #mobileSidebarToggle')) {
-           if (isMobile() && sidebarOpen) { sidebarOpen = false; document.getElementById('sidebar')?.classList.remove('open'); }
+           if (isMobile() && sidebarOpen) { sidebarOpen = false; document.getElementById('sidebar')?.classList.remove('open'); syncDrawerBackdrop(); }
          }
        });
 input.addEventListener('keydown', function(e) {
@@ -697,6 +731,12 @@ input.addEventListener('keydown', function(e) {
 
       renderVocab();
       renderWeak();
+      // Restore per-account translation preferences before the first module
+      // render so switching away and back does not silently reset the source.
+      if (typeof getSetting === 'function') {
+        const savedTrSource = getSetting('trSource', 'bank');
+        if (savedTrSource === 'bank' || savedTrSource === 'ai') trSource = savedTrSource;
+      }
       // Anki 任务中心：登录后先渲染一次，并尝试补发上次遗留的排队任务
       if (typeof renderAnkiTaskCenter === 'function') renderAnkiTaskCenter();
       if (typeof processAnkiQueue === 'function' && authToken) processAnkiQueue().catch(() => {});
@@ -707,6 +747,11 @@ input.addEventListener('keydown', function(e) {
       const convs = getAllConversations();
       if (currentId && convs[currentId]) {
         resumeConversation(currentId);
+        // A partially-created conversation can be left behind when the first
+        // provider request fails. Start it again so Chat never opens blank.
+        if (currentMode === 'chat' && !conversation.some(m => m && m.role === 'assistant')) {
+          setTimeout(function () { startNewConversation(currentTopic || 'free'); }, 0);
+        }
       } else {
         const ids = Object.keys(convs);
         if (ids.length) {
@@ -718,6 +763,7 @@ input.addEventListener('keydown', function(e) {
           // 否则 saveConversation() 会因 convs[id] 不存在而静默丢弃，且 getActivePath() 会对对象报错。
           conversation = [];
           createConversation('新对话', 'free');
+          setTimeout(function () { startNewConversation('free'); }, 0);
         }
       }
       renderSidebar();
@@ -743,7 +789,7 @@ input.addEventListener('keydown', function(e) {
         }
       });
       const savedGameTab = localStorage.getItem('ai_en_game_tab');
-      if (savedGameTab && ['charade', 'cloze', 'wordle'].includes(savedGameTab)) currentGameTab = savedGameTab;
+      if (savedGameTab && ['charade', 'cloze', 'wordle', 'reading'].includes(savedGameTab)) currentGameTab = savedGameTab;
       const savedPracticeTab = localStorage.getItem('ai_en_practice_tab');
       if (savedPracticeTab && ['overview', 'review', 'cost'].includes(savedPracticeTab)) currentPracticeTab = savedPracticeTab;
       const savedMode = localStorage.getItem('ai_en_mode');
@@ -752,6 +798,7 @@ input.addEventListener('keydown', function(e) {
         switchMode(savedMode, true);
       } else {
         showHome();
+      if (!getSetting('helpGuideSeen', false)) setTimeout(function () { showHelpGuide(false); }, 400);
       }
     });
   }

@@ -24,6 +24,13 @@ const parts = appPartFiles();
 const partNames = parts.map((p) => path.basename(p));
 const indexHtml = fs.readFileSync(path.join(APP_DIR, 'index.html'), 'utf8');
 
+test('全部浏览器脚本不存在重复词法声明（包含 config 与 storage）', () => {
+  const vm = require('node:vm');
+  const source = [...indexHtml.matchAll(/<script\s+src="(js\/[^"?]+)(?:\?[^\"]*)?"/g)]
+    .map(m => fs.readFileSync(path.join(APP_DIR, m[1]), 'utf8')).join('\n');
+  assert.doesNotThrow(() => new vm.Script(source));
+});
+
 /* 从 index.html 中按出现顺序取出 js/app/*.js 引用 */
 function scriptRefsInOrder() {
   const out = [];
@@ -239,7 +246,7 @@ describe('app.js 拆分完整性', () => {
     for (const p of parts) {
       const head = fs.readFileSync(p, 'utf8').slice(0, 400);
       assert.match(head, /^\/\* =+/, `${path.basename(p)} 缺少头注释`);
-      assert.match(head, /由 js\/app\.js 拆分而来/, `${path.basename(p)} 头注释缺少来源说明`);
+      assert.match(head, /由 js\/app\.js 拆分而来|Extracted from js\/app\//, `${path.basename(p)} 头注释缺少来源说明`);
     }
   });
 

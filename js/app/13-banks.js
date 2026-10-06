@@ -10,7 +10,6 @@ function updateDifficulty() {
   const labels = ['', 'CET-初', 'CET-初', 'CET-4', 'CET-4', 'CET-5', 'CET-6', 'CET-6+', 'CET-7', 'CET-8', 'CET-8+'];
   document.getElementById('diffLabel').textContent = labels[currentLevel] || currentLevel;
 }
-
 /* ============================================================
    首页 + 六大功能模块：Chat / Reading / Practice / Writing / Translation / Game
    ============================================================ */
@@ -162,6 +161,7 @@ function buildTranslationEvalPrompt(opts) {
   const lines = [];
   lines.push('You are an English translation examiner. Evaluate the user\'s English translation of a Chinese sentence.');
   lines.push('Score (0-10) and provide feedback in Chinese.');
+  lines.push('better_translation 必须是基于用户答案的纠正版或另一种自然表达，尽量保留用户正确措辞；严禁逐字照抄 reference。若用户答案正确，返回用户答案或最小润色版本。额外返回 relation_to_user: corrected 或 alternative。');
   // 必用词约束
   if (ruleVersion !== 'legacy' && words && words.length) {
     lines.push('');
@@ -200,6 +200,7 @@ function buildTranslationEvalPrompt(opts) {
   lines.push('  "missing_words": ["words the user failed to use (REQUIRED). Omit field if no words required."],');
   lines.push('  "capital_issues": ["words the user placed incorrectly regarding capitalization. Omit if none."],');
   lines.push('  "better_translation": "a better English version if applicable (MUST use all required words, and obey the sentence-count rule)",');
+  lines.push('  "relation_to_user": "corrected|alternative",');
   lines.push('  "segments": [{"text": "part of the user\'s translation", "type": "correct|error|improve", "note": "Chinese explanation"}]');
   lines.push('}');
   lines.push('');
@@ -394,4 +395,83 @@ const CHARADE_BANK = [
   { word: 'tornado', hint: 'a violent rotating column of air' },
   { word: 'scarecrow', hint: 'a figure dressed in old clothes, placed in a field to frighten birds' }
 ];
-
+
+/* ---------- Retry Analysis ---------- */
+function retryAnalysis(userMsgId) {
+  const node = findNode(userMsgId);
+  if (!node) return;
+  activeVariant(node).feedback = null;
+  renderFeedbackForMsg(userMsgId);
+  callAnalysis(activeVariant(node).content, userMsgId);
+}
+
+/* ---------- Slash Commands in Main Chat ---------- */
+const SLASH_COMMANDS = [
+  { name: '/new', description: '开始新对话' },
+  { name: '/topic', description: '选择对话主题' },
+  { name: '/translate', alias: '/t', description: '打开词典翻译并查询文本' },
+  { name: '/ask', description: '向英语老师提问' },
+  { name: '/feedback', description: '打开反馈面板' },
+  { name: '/settings', description: '打开设置' },
+  { name: '/compact', description: '收起反馈面板' },
+  { name: '/help', description: '显示斜杠命令帮助' }
+];
+
+function hideSlashMenu() {
+  const menu = document.getElementById('slashMenu');
+  if (menu) menu.style.display = 'none';
+}
+
+function renderSlashMenu(query) {
+  const menu = document.getElementById('slashMenu');
+  if (!menu) return;
+  const q = String(query || '').toLowerCase();
+  const items = SLASH_COMMANDS.filter(c => c.name.includes(q) || c.description.includes(q));
+  if (!items.length) { hideSlashMenu(); return; }
+  menu.innerHTML = items.map((c, i) => `<button class="slash-item" data-command="${esc(c.name)}" data-action="choose-slash-command" data-arg1="${esc(c.name)}"><strong>${esc(c.name)}</strong>${c.alias ? `<small>${esc(c.alias)}</small>` : ''}<span>${esc(c.description)}</span></button>`).join('');
+  menu.style.display = 'block';
+}
+
+function chooseSlashCommand(command) {
+  const input = document.getElementById('userInput');
+  if (!input) return;
+  input.value = command + ' ';
+  input.focus();
+  hideSlashMenu();
+}
+
+function handleSlashCommand(text) {
+  hideSlashMenu();
+  // /t or /translate <text> → switch to dict tab and translate
+  const tMatch = text.match(/^\/(?:t|translate)\s+(.+)/s);
+  if (tMatch) {
+    switchRightTab('dict');
+    const input = document.getElementById('dictInput');
+    input.value = tMatch[1];
+    setTimeout(queryDict, 300);
+    return true;
+  }
+  // /ask <question> → switch to dict tab and ask
+  const aMatch = text.match(/^\/ask\s+(.+)/s);
+  if (aMatch) {
+    switchRightTab('dict');
+    const input = document.getElementById('dictInput');
+    input.value = '/ask ' + aMatch[1];
+    setTimeout(queryDict, 300);
+    return true;
+  }
+  if (text === '/new') { promptNewConversation(); return true; }
+  if (text === '/topic') { promptNewConversation(); return true; }
+  if (text === '/feedback') { setFeedbackPanelMode('expanded'); return true; }
+  if (text === '/compact') { setFeedbackPanelMode('collapsed'); return true; }
+  if (text === '/settings') { openSettings(); return true; }
+  if (text === '/help') {
+    const input = document.getElementById('userInput');
+    input.value = SLASH_COMMANDS.map(c => c.name + ' — ' + c.description).join('\n');
+    return true;
+  }
+  return false;
+}
+
+
+

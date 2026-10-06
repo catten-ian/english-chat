@@ -91,6 +91,30 @@ async function queryDict() {
   btn.textContent = '查询中...';
   resultEl.innerHTML = '<div class="loading">⏳ 查询中...</div>';
 
+  const lookupMode = getSetting('dictProvider', 'ai');
+  if (lookupMode === 'dictionary' && /^[a-zA-Z][a-zA-Z\s'-]*$/.test(text)) {
+    try {
+      const word = encodeURIComponent(text.toLowerCase());
+      const res = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + word);
+      if (!res.ok) throw new Error('dictionary unavailable');
+      const rows = await res.json();
+      const entry = rows && rows[0];
+      if (!entry) throw new Error('not found');
+      const meanings = (entry.meanings || []).flatMap(m => (m.definitions || []).slice(0, 3).map(d => d.definition));
+      let html = '<div class="dict-section"><h4>📖 词典</h4><div style="font-size:20px;font-weight:700">' + esc(entry.word || text) + '</div>';
+      if (entry.phonetic) html += '<div style="color:var(--text2);margin:4px 0">' + esc(entry.phonetic) + '</div>';
+      const addWord = esc((entry.word || text).replace(/'/g, "\\'"));
+      html += meanings.map((m, i) => '<div style="padding:8px 0;border-bottom:1px solid var(--border)">' + (i + 1) + '. ' + esc(m) + '<button data-action="quick-add-vocab" data-arg1="' + addWord + '" data-arg2="' + esc(m).replace(/'/g, "\\'") + '" data-argc="2" style="margin-left:8px;border:0;background:var(--primary);color:#fff;border-radius:4px;padding:2px 7px;font-size:11px">+ 生词本</button></div>').join('');
+      html += '</div>';
+      resultEl.innerHTML = html;
+      saveDictHistory(text, html);
+      btn.disabled = false; btn.textContent = '🔍 查询';
+      return;
+    } catch (e) {
+      resultEl.innerHTML = '<div style="color:var(--amber)">在线词典暂时不可用，已切回 AI 查询…</div>';
+    }
+  }
+
   // Add conversation context for dictionary
   let contextText = '';
   const ctxMsgs = getActivePath().slice(-20);
@@ -213,7 +237,7 @@ async function queryDict() {
           html += '</div>';
         }
       }
-      if (obj.meanings) html += obj.meanings.map(m => '<div style="font-size:13px;line-height:1.6">• ' + esc(m) + '</div>').join('');
+      if (obj.meanings) html += obj.meanings.map(m => '<div style="font-size:13px;line-height:1.6">• ' + esc(m) + '<button data-action="quick-add-vocab" data-arg1="' + esc(obj.word || obj.input || text).replace(/'/g, "\\'") + '" data-arg2="' + esc(m).replace(/'/g, "\\'") + '" data-argc="2" style="margin-left:8px;border:0;background:var(--primary);color:#fff;border-radius:4px;padding:2px 7px;font-size:11px">+ 生词本</button></div>').join('');
       if (obj.examples) {
         html += '<div style="font-size:12px;color:var(--text2);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)"><strong>例句</strong></div>';
         obj.examples.forEach(ex => {

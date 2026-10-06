@@ -4,12 +4,12 @@
    ============================================================ */
 
 const VOCAB_MODEL = '英语学习-词汇';
-const ANKI_QUIZ_MODEL = '英语学习-薄弱点问答';
+// ANKI_QUIZ_MODEL is declared by js/config.js, which loads before this file.
+// Keep this module compatible with the shared constant instead of redeclaring it.
 const ANKI_BASIC_MODEL = '英语学习-基础卡';
 const VOCAB_TEMPLATE = '默写';
 const ANKI_QUIZ_TEMPLATE = '薄弱点问答';
 const ANKI_BASIC_TEMPLATE = '正反面';
-const ANKI_QUIZ_FIELDS = ['Question', 'Answer', 'Explanation'];
 const ANKI_BASIC_FIELDS = ['Front', 'Back'];
 
 const ANKI_QUIZ_CSS = `

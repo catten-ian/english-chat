@@ -74,6 +74,8 @@ async function renderCostCenter() {
     return;
   }
 
+  const quota = summary.quota || null;
+
   const est = estimateCost(summary);
   const rangeBtns = [7, 30, 90].map(d =>
     `<button class="a-btn small${d === costCenterDays ? ' primary' : ''}" data-action="cost-range" data-arg1="${d}">近 ${d} 天</button>`
@@ -95,6 +97,12 @@ async function renderCostCenter() {
   </div>`;
   html += `<div class="cc-note">统计区间：${esc(summary.since)} 起，共 ${summary.days} 天</div>`;
   html += '<div class="cc-stats">' + cards + '</div>';
+  if (quota && !quota.unlimited) {
+    const used = Number(quota.used || 0), daily = Number(quota.daily || 0);
+    html += `<div class="cc-note" style="margin-top:8px">🎁 MiniMax M3 今日赠送额度：<b>${fmtNum(Math.max(0, daily - used))}</b> / ${fmtNum(daily)} 次 · RPM ${fmtNum(quota.rpm || 0)}</div>`;
+  } else if (quota && quota.unlimited) {
+    html += '<div class="cc-note" style="margin-top:8px">🎁 MiniMax M3：当前账户为无限额度</div>';
+  }
 
   html += '<div class="cc-grid">';
 

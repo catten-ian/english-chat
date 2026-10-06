@@ -8,17 +8,22 @@
 const net = require('node:net');
 
 // AnkiConnect 工作地址缓存（null 表示尚未探测/已失效）
-let _ankiWorkingUrl = null;
+// AnkiConnect endpoints are user preference state. Never share a private
+// bridge choice between accounts in the same Node process.
+const _ankiWorkingUrls = new Map();
 
 /* 发送一次 AnkiConnect 请求并解析出 HTTP body（有限长度保护）。
    任何错误都 resolve({ ok:false, err }) 而不是 reject，方便调用方统一处理。 */
-function ankiCall(port, action, payloadBuf, timeoutMs) {
+function ankiCall(portOrUrl, action, payloadBuf, timeoutMs) {
   return new Promise((resolve) => {
     const t = timeoutMs || 2500;
-    const sock = net.createConnection({ host: '127.0.0.1', port: port || 8765 }, () => {
-      const urlPath = '/' + action;
+    const target = typeof portOrUrl === 'string' ? new URL(portOrUrl) : null;
+    const host = target ? target.hostname : '127.0.0.1';
+    const port = target ? Number(target.port || 80) : (portOrUrl || 8765);
+    const path = target ? (target.pathname || '/') : '/' + action;
+    const sock = net.createConnection({ host, port }, () => {
       sock.write(Buffer.from(
-        `POST ${urlPath} HTTP/1.1\r\nHost: 127.0.0.1:${port || 8765}\r\nContent-Type: application/json\r\nContent-Length: ${payloadBuf.length}\r\nConnection: close\r\n\r\n`
+        `POST ${path} HTTP/1.1\r\nHost: ${host}:${port}\r\nContent-Type: application/json\r\nContent-Length: ${payloadBuf.length}\r\nConnection: close\r\n\r\n`
       ));
       sock.write(payloadBuf);
     });
@@ -48,9 +53,16 @@ function parseAnkiBody(rawBody) {
 }
 
 const ankiCache = {
-  get() { return _ankiWorkingUrl; },
-  set(url) { _ankiWorkingUrl = url; },
-  clear() { _ankiWorkingUrl = null; }
+  get(userKey = 'anonymous') { return _ankiWorkingUrls.get(String(userKey)) || null; },
+  set(userKey = 'anonymous', url) {
+    // Backward-compatible set(url) for any non-route callers.
+    if (url === undefined) { url = userKey; userKey = 'anonymous'; }
+    _ankiWorkingUrls.set(String(userKey), String(url));
+  },
+  clear(userKey) {
+    if (userKey === undefined || userKey === null) _ankiWorkingUrls.clear();
+    else _ankiWorkingUrls.delete(String(userKey));
+  }
 };
 
 module.exports = { ankiCall, parseAnkiBody, ankiCache };

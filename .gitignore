@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.npm-cache/
 .venv-test/
 
 # Python
@@ -29,3 +30,4 @@ music/
 # Scratch
 history.txt
 *.zip
+.chrome-*

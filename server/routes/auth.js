@@ -62,7 +62,7 @@ async function register(req, res) {
   challenge.used = true;
   if (db.prepare('SELECT id FROM users WHERE username=?').get(username)) { sendJson(res, 409, { error: '用户名已存在' }, req); return; }
   try {
-    const result = db.prepare('INSERT INTO users (username, password_hash) VALUES (?,?)').run(username, hashPassword(password));
+    const result = db.prepare("INSERT INTO users (username, password_hash, role, daily_call_limit, rpm_limit, provider_mode) VALUES (?,?,'user',100,10,'gift')").run(username, hashPassword(password));
     const token = crypto.randomBytes(32).toString('hex');
     db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, last_seen_at) VALUES (?,?,?, datetime(\'now\'))').run(hashToken(token), result.lastInsertRowid, new Date(Date.now() + SESSION_TTL_DAYS * 86400000).toISOString());
     sendJson(res, 201, { token, username }, req);
@@ -134,7 +134,21 @@ async function login(req, res) {
 }
 
 function me(req, res) {
-  sendJson(res, 200, { username: req.username }, req);
+  sendJson(res, 200, { username: req.username, role: req.role || 'user' }, req);
+}
+
+function deleteAccount(req, res) {
+  const now = new Date().toISOString();
+  db.exec('BEGIN');
+  try {
+    db.prepare('UPDATE users SET soft_deleted_at=? WHERE id=?').run(now, req.uid);
+    db.prepare('DELETE FROM sessions WHERE user_id=?').run(req.uid);
+    db.exec('COMMIT');
+    sendJson(res, 200, { status: 'ok', purge_after: new Date(Date.now() + 30 * 86400000).toISOString() }, req);
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    sendJson(res, 500, { error: '删除账户失败' }, req);
+  }
 }
 
 function logout(req, res) {
@@ -191,4 +205,4 @@ async function changePassword(req, res) {
   }
 }
 
-module.exports = { login, register, issueRegisterChallenge, me, logout, sessions, revokeOthers, changePassword };
+module.exports = { login, register, issueRegisterChallenge, me, logout, sessions, revokeOthers, changePassword, deleteAccount };

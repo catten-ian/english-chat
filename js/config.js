@@ -120,7 +120,7 @@ function getActiveCharacter() {
 
 function buildCharacterCard() {
   const c = getActiveCharacter();
-  return `[${c.name.toUpperCase()} CHARACTER CARD]
+  const base = `[${c.name.toUpperCase()} CHARACTER CARD]
 Name: ${c.fullName}
 Age: ${c.age}
 City: ${c.city}
@@ -131,4 +131,6 @@ Family: ${c.family}
 Mannerisms: ${c.mannerisms}
 Pet: ${c.pet}
 Known backstory: ${c.backstorySeed}`;
+  const tavern = typeof TavernCards !== 'undefined' && TavernCards.prompt ? TavernCards.prompt(c) : '';
+  return tavern ? base + '\n\n' + tavern : base;
 }

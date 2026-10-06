@@ -111,6 +111,9 @@ test('真实服务进程会输出结构化请求日志（id/路径/状态/耗时
     // 不带 token 时是 401 —— 两者都应记录
     await request({ port: s.port, method: 'POST', path: '/api/no-such-endpoint', json: {} });
     const logFile = path.join(s.dataDir, 'logs', 'server.log');
+    // Windows 下客户端收到 end 与服务端 response.finish 之间可能有一个
+    // 极短的事件循环间隔；给结构化请求日志一个确定的可见性窗口。
+    await new Promise(resolve => setTimeout(resolve, 25));
     assert.ok(fs.existsSync(logFile), '服务应写请求日志文件');
     const lines = readJsonl(logFile);
     const health = lines.find(l => l.path === '/api/health');

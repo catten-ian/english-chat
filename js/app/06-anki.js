@@ -791,7 +791,22 @@ async function pushAllToAnki() {
 }
 
 // ---- 从 Anki 拉取复习数据 → 更新 weak points 掌握状态 ----
-async function syncAnkiReviewData() {
+let _ankiReviewSync = { key: '', started: 0, promise: null };
+function syncAnkiReviewData(options = {}) {
+  const key = String(currentUser() || 'default');
+  const now = Date.now();
+  // Collapse duplicate background syncs caused by login + mode rendering.
+  if (!options.force && _ankiReviewSync.promise && _ankiReviewSync.key === key) return _ankiReviewSync.promise;
+  if (!options.force && _ankiReviewSync.key === key && now - _ankiReviewSync.started < 30000) return Promise.resolve(false);
+  _ankiReviewSync = { key, started: now, promise: null };
+  const promise = syncAnkiReviewDataImpl().finally(() => {
+    if (_ankiReviewSync.key === key) _ankiReviewSync.promise = null;
+  });
+  _ankiReviewSync.promise = promise;
+  return promise;
+}
+
+async function syncAnkiReviewDataImpl() {
   try {
     // 检查连接
     const ver = await ankiPostCall({ action: 'version', version: 6 });

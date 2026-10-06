@@ -13,7 +13,7 @@ const assert = require('node:assert');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-en-usage-'));
 process.env.AI_EN_DATA_DIR = tmp;
 
-const { recordUsage, parseChatUsage, parseStreamUsage, getUsageSummary, clearUsage, localDay } = require('../server/services/usage');
+const { recordUsage, parseChatUsage, parseStreamUsage, getUsageSummary, clearUsage, localDay, quotaStatusForRequest, isGiftLearningRequest } = require('../server/services/usage');
 const { db } = require('../server/db');
 
 // 播种一个用户（usage_log 有外键约束）
@@ -23,9 +23,9 @@ const UID1 = db.prepare("SELECT id FROM users WHERE username='u1'").get().id;
 const UID2 = db.prepare("SELECT id FROM users WHERE username='u2'").get().id;
 
 describe('usage_log schema 与写入', () => {
-  test('迁移已建表且 schema 版本升到 4', () => {
+  test('迁移已建表且 schema 版本不低于 usage_log 迁移版本', () => {
     const v = db.prepare('PRAGMA user_version').get().user_version;
-    assert.strictEqual(Number(v), 4);
+    assert.ok(Number(v) >= 4);
     const cols = db.prepare('PRAGMA table_info(usage_log)').all().map(c => c.name);
     for (const c of ['user_id', 'day', 'provider', 'kind', 'model', 'prompt_tokens', 'completion_tokens', 'total_tokens', 'chars', 'requests', 'status']) {
       assert.ok(cols.includes(c), '缺列 ' + c);
@@ -151,6 +151,33 @@ describe('聚合与隔离', () => {
     assert.ok(removed >= 4);
     assert.strictEqual(getUsageSummary(UID2, 30).totals.calls, 0);
     assert.strictEqual(getUsageSummary(UID1, 30).totals.calls, before1, 'u1 的记录不应被删');
+  });
+});
+
+describe('赠送额度边界', () => {
+  test('只将站内 MiniMax M3 对话识别为赠送调用', () => {
+    assert.strictEqual(isGiftLearningRequest({ provider: 'minimax', kind: 'chat', model: 'MiniMax-M3' }), true);
+    assert.strictEqual(isGiftLearningRequest({ provider: 'minimax', kind: 'chat_stream', model: 'MiniMax-M3' }), true);
+    assert.strictEqual(isGiftLearningRequest({ provider: 'minimax', kind: 'websearch', model: 'MiniMax-M3' }), false);
+    assert.strictEqual(isGiftLearningRequest({ provider: 'elevenlabs', kind: 'tts', model: 'M3' }), false);
+    assert.strictEqual(isGiftLearningRequest({ provider: 'minimax', kind: 'chat', model: 'other-model' }), false);
+    assert.strictEqual(isGiftLearningRequest({ provider: 'minimax', kind: 'chat', model: '' }), false);
+  });
+
+  test('赠送次数及 RPM 仅统计 M3 对话，catten/test 不限额', () => {
+    db.prepare("INSERT INTO users (username,password_hash) VALUES ('quota-isolated','x')").run();
+    const UID1 = db.prepare("SELECT id FROM users WHERE username='quota-isolated'").get().id;
+    db.prepare("UPDATE users SET role='user', daily_call_limit=1, rpm_limit=1, provider_mode='gift' WHERE id=?").run(UID1);
+    clearUsage(UID1);
+    recordUsage({ userId: UID1, provider: 'minimax', kind: 'websearch' });
+    recordUsage({ userId: UID1, provider: 'elevenlabs', kind: 'tts', chars: 100 });
+    assert.strictEqual(quotaStatusForRequest(UID1, { provider: 'minimax', kind: 'chat', model: 'MiniMax-M3' }).allowed, true);
+    recordUsage({ userId: UID1, provider: 'minimax', kind: 'chat', model: 'MiniMax-M3' });
+    assert.strictEqual(quotaStatusForRequest(UID1, { provider: 'minimax', kind: 'chat', model: 'MiniMax-M3' }).allowed, false);
+    for (const username of ['catten', 'test']) {
+      const row = db.prepare('SELECT id FROM users WHERE username=?').get(username);
+      if (row) assert.strictEqual(quotaStatusForRequest(row.id, { provider: 'minimax', kind: 'chat', model: 'MiniMax-M3' }).unlimited, true);
+    }
   });
 });
 

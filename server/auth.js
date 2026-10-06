@@ -37,7 +37,7 @@ function hashToken(token) {
 }
 function userByToken(token) {
   if (!token) return null;
-  return dbMod.db.prepare('SELECT s.user_id uid, u.username FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at > ?')
+  return dbMod.db.prepare('SELECT s.user_id uid, u.username, u.role, u.daily_call_limit, u.rpm_limit, u.provider_mode FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at > ? AND u.soft_deleted_at IS NULL')
     .get(hashToken(token), new Date().toISOString()) || null;
 }
 
@@ -52,10 +52,14 @@ function auth(req) {
    只应该在启动时调用一次（app.js 在 db 就绪后调用）。 */
 function seedUsers(db) {
   const userCount = db.prepare('SELECT COUNT(*) c FROM users').get().c;
-  if (userCount !== 0) return;
+  if (userCount !== 0) {
+    try { db.prepare("UPDATE users SET role='admin', daily_call_limit=0, rpm_limit=1000, provider_mode='custom' WHERE username='catten'").run(); } catch (_) {}
+    return;
+  }
   for (const [u, p] of [['test', 'test'], ['catten', 'catten']]) {
     db.prepare('INSERT OR IGNORE INTO users (username, password_hash) VALUES (?,?)').run(u, hashPassword(p));
   }
+  try { db.prepare("UPDATE users SET role='admin', daily_call_limit=0, rpm_limit=1000, provider_mode='custom' WHERE username='catten'").run(); } catch (_) {}
   logger.info('已创建账户 test / catten（密码与账户名相同）');
   // 迁移旧 JSON 数据到 catten
   const catten = db.prepare('SELECT id FROM users WHERE username=?').get('catten');

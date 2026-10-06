@@ -378,7 +378,7 @@ async function fetchReadingTipTranslation(text, tip) {
 }` + contextBlock;
     const res = await fetch((BACKEND_URL || '') + '/api/proxy/chat', {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ model: MODEL, messages: [{ role: 'system', content: sys }, { role: 'user', content: text }], temperature: 0.2, max_tokens: 1200, thinking: { type: 'disabled' } })
+      body: JSON.stringify({ provider: activeProvider(), model: activeTextModel(), messages: [{ role: 'system', content: sys }, { role: 'user', content: text }], temperature: 0.2, max_tokens: 1200, thinking: { type: 'disabled' } })
     });
     if (!res.ok) throw new Error('API ' + res.status);
     const data = await res.json();
@@ -414,7 +414,7 @@ async function fetchReadingTipTranslation(text, tip) {
 function readingTipAddVocab(word) {
   const v = getVocab();
   if (!v.some(x => x.word && x.word.toLowerCase() === word.toLowerCase())) {
-    v.push({ word, translation: '（阅读中添加）', part: '', example: '', context: 'Reading mode', added: new Date().toISOString().slice(0, 10) });
+    v.push({ word: String(word || '').trim(), translation: '', meanings: [], direction: 'meaning-to-word', part: '', example: '', context: 'Reading mode', added: new Date().toISOString().slice(0, 10) });
     saveVocab(v);
     renderVocab();
     toastMsg('已加入生词本：' + word, 'success');
@@ -694,4 +694,4 @@ function openReciteInMain() {
   window.open(url, '_blank');
   toastMsg('已在新标签页打开背诵练习', 'success');
 }
-
+

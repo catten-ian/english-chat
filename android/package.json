@@ -1,0 +1,18 @@
+{
+  "private": true,
+  "name": "ai-english-chat-android",
+  "version": "0.1.0",
+  "scripts": {
+    "sync": "cap sync android",
+    "open": "cap open android",
+    "init": "cap add android",
+    "build": "node scripts/build-apk.js"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  },
+  "dependencies": {
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/android": "^7.0.0"
+  }
+}

@@ -509,16 +509,69 @@ let wlState = null; // {word, length, attempts, history:[[letters, status]]}
 let wlInput = '';
 let wlDone = false;
 
+// Local bank keeps Wordle deterministic and prevents repeated AI-generated answers.
+const WORDLE_BANK = {
+  4: ['area','bake','calm','deal','echo','film','glow','kind','lamp','moon','open','risk','seed','time','wave'],
+  5: ['adapt','alert','apple','beach','brain','cause','cloud','dream','earth','flame','grace','house','light','ocean','plant','quiet','shelf','sound','stone','trust','world'],
+  6: ['bright','castle','clever','friend','garden','honest','island','jungle','moment','people','planet','silver','simple','travel','winter'],
+  7: ['another','balance','journey','teacher','thought','weather','without','picture','freedom','morning']
+};
+const wordleRecent = new Set();
+function normalizeWordleWord(value, length) {
+  const word = String(value || '').trim().toLowerCase();
+  return /^[a-z]+$/.test(word) && word.length === length ? word : '';
+}
+function wordleBankWord(length) {
+  const pool = (WORDLE_BANK[length] || []).map(w => normalizeWordleWord(w, length)).filter(Boolean);
+  const fresh = pool.filter(w => !wordleRecent.has(w));
+  const source = fresh.length ? fresh : pool;
+  const word = source[Math.floor(Math.random() * source.length)] || 'apple'.slice(0, length);
+  wordleRecent.add(word);
+  if (wordleRecent.size > 40) wordleRecent.delete(wordleRecent.values().next().value);
+  return word;
+}
+
+// Wordle scoring is deliberately two-pass: exact matches consume letters first,
+// then misplaced matches consume only the remaining target letters. This keeps
+// duplicate guesses from receiving more green/yellow marks than the answer has.
+function scoreWordleGuess(guess, target) {
+  const g = String(guess || '').toLowerCase();
+  const t = String(target || '').toLowerCase();
+  if (!g || g.length !== t.length) return [];
+  const remaining = t.split('');
+  const status = Array(t.length).fill('absent');
+  for (let i = 0; i < t.length; i++) {
+    if (g[i] === remaining[i]) { status[i] = 'right'; remaining[i] = null; }
+  }
+  for (let i = 0; i < t.length; i++) {
+    if (status[i] === 'right') continue;
+    const idx = remaining.indexOf(g[i]);
+    if (idx >= 0) { status[i] = 'mispos'; remaining[idx] = null; }
+  }
+  return status;
+}
+
 function wordleSource(src) {
   if (src === 'ai') wlGenerate();
+  else if (src === 'bank') {
+    document.getElementById('wlAiBtn').classList.remove('active');
+    document.getElementById('wlCustomBtn').classList.remove('active');
+    document.getElementById('wlBankBtn').classList.add('active');
+    wlStart(wordleBankWord(wordleLength()));
+  }
   else wlPromptCustom();
+}
+function wordleLength() {
+  const el = document.getElementById('wordleLength');
+  return Math.max(4, Math.min(7, parseInt(el && el.value, 10) || 5));
 }
 
 function wlPromptCustom() {
-  const w = prompt('输入你想让对方猜的 5-6 字母单词：', '');
+  const length = wordleLength();
+  const w = prompt('输入你想让对方猜的 ' + length + ' 字母单词：', '');
   if (!w) return;
   const clean = (w.match(/[a-zA-Z]+/)?.[0] || '').toLowerCase();
-  if (clean.length < 4 || clean.length > 7) { toastMsg('请输入 4-7 个字母的单词'); return; }
+  if (clean.length !== length) { toastMsg('请输入恰好 ' + length + ' 个字母的单词'); return; }
   document.getElementById('wlAiBtn').classList.remove('active');
   document.getElementById('wlCustomBtn').classList.add('active');
   wlStart(clean);
@@ -532,16 +585,16 @@ function extractWordleWord(text) {
   // 去掉常见前缀（"the word is apple", "here is: apple" 等）
   s = s.replace(/\bthe\s+word\s+is\b[^\n]*?([a-z]+)/g, '$1');
   s = s.replace(/\bhere'?s?\s+(?:a|an)\s+word\b[^\n]*?([a-z]+)/g, '$1');
-  // 只接受 5 或 6 字母的纯英文单词
-  const m = s.match(/\b[a-z]{5,6}\b/);
+  const m = s.match(/\b[a-z]{4,7}\b/);
   return m ? m[0] : '';
 }
 
 async function wlGenerate() {
   document.getElementById('wlAiBtn').classList.add('active');
   document.getElementById('wlCustomBtn').classList.remove('active');
+  const length = wordleLength();
   const prompt = 'You are picking a single English Wordle-style word. Output rules (strict):\n' +
-    '- Exactly 5 or 6 letters, lowercase, common English.\n' +
+    '- Exactly ' + length + ' letters, lowercase, common English.\n' +
     '- Reply with ONLY the word. No quotes, no JSON, no markdown, no explanation, no preamble.\n' +
     '- Do not include the word "word" or any other commentary.';
   const tryOnce = async () => {
@@ -549,15 +602,21 @@ async function wlGenerate() {
       [{ role: 'system', content: prompt }, { role: 'user', content: 'Word.' }],
       { temperature: 0.5, maxTokens: 200 }
     );
-    return extractWordleWord(raw);
+    return normalizeWordleWord(extractWordleWord(raw), length);
   };
   let word = '';
   for (let i = 0; i < 2 && !word; i++) {
     try { word = await tryOnce(); } catch (e) { /* retry */ }
   }
+  // AI output is optional: never accept an invalid or recently repeated answer.
+  // Falling back to the local bank keeps the game playable and deterministic.
+  if (!word || wordleRecent.has(word)) word = '';
   if (!word) {
-    toastMsg('AI 出题失败，使用备用词 apple');
-    word = 'apple';
+    word = wordleBankWord(length);
+    toastMsg('AI 出题不可用，已使用词库单词 ' + word);
+  } else {
+    wordleRecent.add(word);
+    if (wordleRecent.size > 40) wordleRecent.delete(wordleRecent.values().next().value);
   }
   wlStart(word);
 }
@@ -573,6 +632,7 @@ function wlStart(word) {
 
 function wordleNew() {
   if (document.getElementById('wlAiBtn').classList.contains('active')) wlGenerate();
+  else if (document.getElementById('wlBankBtn')?.classList.contains('active')) wlStart(wordleBankWord(wordleLength()));
   else wlPromptCustom();
 }
 
@@ -651,23 +711,24 @@ function wlKey(k) {
   }
 }
 
+// Physical keyboards must use the same path as the on-screen keyboard.
+// Without this listener desktop/mobile hardware input only updates the DOM
+// through browser defaults and never reaches the Wordle state machine.
+document.addEventListener('keydown', function(e) {
+  if (!wlState || wlDone) return;
+  const target = e.target;
+  if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+  if (e.key === 'Enter') { e.preventDefault(); wlKey('enter'); return; }
+  if (e.key === 'Backspace') { e.preventDefault(); wlKey('back'); return; }
+  if (/^[a-zA-Z]$/.test(e.key)) { e.preventDefault(); wlKey(e.key.toLowerCase()); }
+});
+
 function wlSubmit() {
   const guess = wlInput;
   const target = wlState.word;
   const len = wlState.length;
   const row = [];
-  const targetArr = target.split('');
-  const status = Array(len).fill('absent');
-  // 第一轮：精确匹配
-  for (let i = 0; i < len; i++) {
-    if (guess[i] === targetArr[i]) { status[i] = 'right'; targetArr[i] = null; }
-  }
-  // 第二轮：错位
-  for (let i = 0; i < len; i++) {
-    if (status[i] === 'right') continue;
-    const idx = targetArr.indexOf(guess[i]);
-    if (idx >= 0) { status[i] = 'mispos'; targetArr[idx] = null; }
-  }
+  const status = scoreWordleGuess(guess, target);
   // 记录
   const rowData = [];
   for (let i = 0; i < len; i++) rowData.push({ letter: guess[i], status: status[i] });
@@ -682,4 +743,4 @@ function wlSubmit() {
   wlRenderKeyboard();
   wlUpdateStatus();
 }
-
+

@@ -52,7 +52,7 @@ async function runExecutor(query, signal) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     signal,
-    body: JSON.stringify({ q: query })
+    body: JSON.stringify({ q: query, provider: llmPreference().searchProvider })
   });
   if (!res.ok) throw new Error('websearch HTTP ' + res.status);
   return await res.json();   // {organic:[{title,link,snippet,date}]}
@@ -154,8 +154,10 @@ function consumeSSE(payload) {
   }
 }
 
-async function streamChat(messages, onDelta, signal) {
-  const body = { model: MODEL, messages: messages, temperature: 0.9, max_tokens: 4000, stream: true };
+async function streamChat(messages, onDelta, signal, options) {
+  options = options || {};
+  const pref = options.chat && typeof chatLlmPreference === 'function' ? chatLlmPreference() : null;
+  const body = { provider: pref ? pref.provider : activeProvider(), model: pref ? pref.textModel : activeTextModel(), messages: messages, temperature: 0.9, max_tokens: 4000, stream: true };
   const res = await fetch((BACKEND_URL || '') + '/api/proxy/chat/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -238,7 +240,7 @@ function renderDictField(key, value, dictType) {
 
 /* ---------- 流式词典/翻译（与 streamChat 类似，但接受自定义 options） ---------- */
 async function streamDict(messages, options, onDelta, signal) {
-  const body = { model: MODEL, messages: messages, temperature: options.temperature ?? 0.3, max_tokens: options.maxTokens ?? 3000, stream: true };
+  const body = { provider: activeProvider(), model: activeTextModel(), messages: messages, temperature: options.temperature ?? 0.3, max_tokens: options.maxTokens ?? 3000, stream: true };
   if (options.thinking !== undefined) body.thinking = options.thinking;
   const res = await fetch((BACKEND_URL || '') + '/api/proxy/chat/stream', {
     method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, signal, body: JSON.stringify(body)
@@ -325,19 +327,20 @@ function clearStreamBubble(msgId) {
 }
 
 // 流式或非流式调用一次完整回复；流式失败自动回退非流式
-async function streamOrCall(messages, aiMsgId, live, signal) {
+async function streamOrCall(messages, aiMsgId, live, signal, options) {
+  options = options || {};
   if (streamChatEnabled) {
     try {
-      return await streamChat(messages, (d) => appendStreamDelta(aiMsgId, d), signal);
+      return await streamChat(messages, (d) => appendStreamDelta(aiMsgId, d), signal, options);
     } catch (e) {
       if (e && (e.name === 'AbortError' || e.code === 20)) throw e;
       dbg('STREAM_ERR', e.message);
       if (live && live.remove) live.remove();
-      const chatRaw = await callAPI(messages, { signal });
+      const chatRaw = await callAPI(messages, { signal, ...options });
       return extractChatReply(chatRaw);
     }
   }
-  const chatRaw = await callAPI(messages, { signal });
+  const chatRaw = await callAPI(messages, { signal, ...options });
   return extractChatReply(chatRaw);
 }
-
+

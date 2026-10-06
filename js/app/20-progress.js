@@ -187,3 +187,14 @@ function renderProgressDashboard() {
     '<div class="pg-stats">' + statCards + '</div>' +
     '<div class="pg-grid">' + dimHtml + weakHtml + trHtml + recentHtml + '</div>';
 }
+
+async function clusterWeakPoints() {
+  const points = getAllWeakPoints();
+  const res = document.getElementById('weakClusters');
+  if (res) res.innerHTML = '<div class="muted">正在分析薄弱点…</div>';
+  try {
+    const r = await fetch((BACKEND_URL || '') + '/api/weak-points/cluster', { method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()}, body:JSON.stringify({points}) });
+    const data = await r.json(); if (!r.ok) throw new Error(data.error || '分析失败');
+    if (res) res.innerHTML = (data.clusters || []).map(c => '<div class="pf-section"><b>'+esc(c.label)+'</b><span class="muted"> '+c.count+' 个薄弱点</span><div>'+c.points.map(p=>'<span class="tag">'+esc(p.text)+'</span>').join(' ')+'</div></div>').join('') || '<div class="muted">暂无可聚类薄弱点</div>';
+  } catch (e) { if (res) res.innerHTML = '<div style="color:var(--red)">'+esc(e.message || '分析失败')+'</div>'; }
+}

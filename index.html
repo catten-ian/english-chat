@@ -7,6 +7,7 @@
 <meta charset="UTF-8">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base href="./">
 
 <title>AI 英语对话教练 · Speak with AI</title>
 
@@ -567,7 +568,7 @@
 
         <button class="game-tab" data-game="cloze" data-action="switch-game-tab">📝 Cloze</button>
 
-        <button class="game-tab" data-game="wordle" data-action="switch-game-tab">🟩 Wordle</button>
+        <button class="game-tab" data-game="wordle" data-action="switch-game-tab">🟩 Wordle</button><button class="game-tab" data-game="reading" data-action="switch-game-tab">📚 阅读练习</button>
 
       </div>
 
@@ -663,6 +664,13 @@
         <div class="wordle-config" style="width:100%;max-width:480px;padding-bottom:12px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
 
           <span style="font-size:13px;font-weight:600">🟩 Wordle</span>
+          <label style="font-size:12px;display:flex;align-items:center;gap:4px">长度
+            <select id="wordleLength" aria-label="Wordle 单词长度" style="font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:6px">
+              <option value="4">4</option><option value="5" selected>5</option><option value="6">6</option><option value="7">7</option>
+            </select>
+          </label>
+
+          <button class="toggle-btn" id="wlBankBtn" data-action="wordle-source" data-arg1="bank" style="font-size:12px">📚 词库</button>
 
           <button class="toggle-btn ai-btn" id="wlAiBtn" data-action="wordle-source" data-arg1="ai" style="font-size:12px">🤖 AI 出词</button>
 
@@ -679,6 +687,7 @@
         <div id="wordleKeyboard" style="width:100%;max-width:480px;margin-top:8px"></div>
 
       </div>
+      <div class="game-module" id="gameReadingArea" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:auto;padding:16px"><div class="reading-toolbar"><strong>📚 高考阅读练习</strong><label>来源<select id="grSource" data-action="reading-setting"><option value="current">时文精选</option><option value="rss">RSS 时文</option><option value="ai">AI生成</option></select></label><label>题型<select id="grTypes" multiple size="1" data-action="reading-setting"><option value="cloze" selected>完形</option><option value="grammar" selected>语法填空</option><option value="seven" selected>七选五</option><option value="reading" selected>阅读选择</option></select></label><label>题数<input id="grReadingCount" type="number" min="1" max="10" value="5" data-action="reading-setting"></label><button class="send-btn" data-action="reading-practice-new">生成题组</button><button class="dict-btn" data-action="reading-practice-export">打印/PDF</button><button class="dict-btn" data-action="reading-practice-export-word">Word</button><button class="dict-btn" data-action="reading-practice-export-image">长图</button></div><article id="gameReadingArticle" class="reading-article"></article><div id="gameReadingQuestions" class="reading-questions"></div><div id="gameReadingResult"></div></div>
 
     </div>
 
@@ -741,6 +750,7 @@
       </div>
 
       <div class="panel-section" data-ftab-pane="weak" style="display:none">
+        <button class="dict-btn" data-action="cluster-weak-points">分析薄弱点聚类</button><div id="weakClusters"></div>
 
         <div id="weakContent">
 
@@ -848,6 +858,8 @@
 
 <script src="js/config.js?v=20260828b"></script>
 
+<script src="js/tavern-card.js?v=20261002a"></script>
+
 <script src="js/shgaoka_bank.js?v=20260828b"></script>
 
 <script src="js/storage.js?v=20260927b"></script>
@@ -865,7 +877,7 @@
 <script src="js/app/08-selection.js?v=20260921a"></script>
 <script src="js/app/09-gaokao.js?v=20260828f"></script>
 <script src="js/app/10-dictionary.js?v=20260906a"></script>
-<script src="js/app/11-ui-panels.js?v=20260828f"></script>
+<script src="js/app/11-ui-panels.js?v=20261001b"></script>
 <script src="js/app/12-settings.js?v=20260913b"></script>
 <script src="js/app/13-banks.js?v=20260828f"></script>
 <script src="js/app/14-music.js?v=20260830b"></script>
@@ -876,9 +888,17 @@
 <script src="js/app/19-init.js?v=20260927a"></script>
 <script src="js/app/20-progress.js?v=20260830a"></script>
 <script src="js/app/21-anki-tasks.js?v=20260830c"></script>
-<script src="js/app/22-web-review.js?v=20260913b"></script>
+<script src="js/app/22-web-review.js?v=20261002a"></script>
 <script src="js/app/23-cost.js?v=20260830a"></script>
 <script src="js/app/24-anki-templates.js?v=20260927c"></script>
+<script src="js/app/25-feedback.js?v=20261001a"></script>
+<script src="js/app/26-game-reading.js?v=20261001a"></script>
+<script src="js/app/27-strategist.js?v=20261001a"></script>
+<script src="js/app/28-reading-exports.js?v=20261001a"></script>
+<script src="js/app/29-provider-settings.js?v=20261002a"></script>
+<script src="js/app/30-admin.js?v=20261002a"></script>
+<script src="js/app/31-chat-modes.js?v=20261002a"></script>
+<script src="js/app/32-settings-import.js?v=20261002a"></script>
 
 
 

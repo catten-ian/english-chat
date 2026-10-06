@@ -126,7 +126,8 @@ function refreshMusicSettingsControls() {
 
 async function musicInit() {
   try {
-    const res = await fetch((BACKEND_URL || '') + '/api/music/list');
+    const res = await fetch((BACKEND_URL || '') + '/api/music/list', { cache: 'no-store' });
+    if (!res.ok) throw new Error('music list HTTP ' + res.status);
     const data = await res.json();
     musicItems = (data.files || []).map(f => ({ file: f.file, name: f.name }));
     if (musicItems.length) {
@@ -189,6 +190,8 @@ function doToggleMusic() {
     });
     return;
   }
+  // Playback must be initiated by the user's click. Keep this path explicit
+  // so a rejected autoplay promise does not silently swallow the failure.
   if (musicIdx < 0) musicIdx = 0;
   if (!musicAudio || !musicAudio.src) { musicPlayIdx(musicIdx); return; }
   if (musicAudio.paused) {
@@ -223,7 +226,12 @@ function musicPlayIdx(i, isResume) {
   if (i < 0 || i >= musicItems.length) i = 0;
   musicIdx = i;
   localStorage.setItem('ai_en_music_idx', String(i));
-  const url = (BACKEND_URL || '') + '/music/' + encodeURIComponent(musicItems[i].file);
+  // encodeURIComponent leaves the path valid for spaces and non-ASCII names,
+  // but replace the encoded slash defensively if a malformed server entry ever
+  // contains one. Audio URLs are same-origin and therefore work for both stable
+  // and /api-dev deployments.
+  const encodedFile = encodeURIComponent(String(musicItems[i].file || '')).replace(/%2F/gi, '');
+  const url = (BACKEND_URL || '') + '/music/' + encodedFile;
   if (!musicAudio) musicAudio = new Audio();
   musicAudio.src = url;
   musicAudio.loop = false;

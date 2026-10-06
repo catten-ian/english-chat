@@ -118,10 +118,29 @@ body {
 /* ============ Layout ============ */
 .layout { display: flex; height: calc(100vh - 68px); height: calc(100dvh - 68px); position: relative; }
 @media (max-width: 767px) {
+  .home-page .home-logo { font-size: 42px; margin-bottom: 2px; }
+  .home-page .home-title { font-size: 28px; }
+  .home-page .home-sub { margin-bottom: 18px; }
+  .home-page .home-tagline { margin-bottom: 14px; }
+  .home-page .home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .home-page .home-card { padding: 14px 8px 12px; border-radius: 12px; }
+  .home-page .home-desc { font-size: 11px; }
+  .home-page { overflow-y: auto; padding-top: 56px; padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); box-sizing: border-box; align-items: flex-start; }
+  .home-inner { padding: 20px 14px 30px; }
+  .home-page .home-grid { padding-top: 8px; }
+  .home-page .home-card-featured { order: -1; }
+  .home-page .home-card-featured .home-card-title { white-space: nowrap; }
   .layout { height: 100vh; padding-top: 56px; box-sizing: border-box; }
 }
 
 /* ============ Sidebar ============ */
+.reading-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; border-bottom:1px solid var(--border); padding-bottom:10px; }
+.reading-toolbar label { display:inline-flex; align-items:center; gap:4px; font-size:12px; }
+.reading-toolbar select, .reading-toolbar input { max-width:150px; box-sizing:border-box; padding:6px; }
+.reading-article, .reading-questions { max-width:820px; margin:14px auto; width:100%; line-height:1.85; }
+.reading-glossary { margin-top:14px; padding:10px 12px; background:var(--amber-bg); border:1px solid #f6d58b; border-radius:8px; font-size:13px; }
+.reading-glossary ul { margin:6px 0 0 18px; }
+@media (max-width: 767px) { .reading-toolbar { align-items:stretch; } .reading-toolbar > * { flex:1 1 42%; } .reading-toolbar strong { flex-basis:100%; } .reading-toolbar button { min-height:38px; } .reading-article, .reading-questions { margin-top:10px; } }
 .sidebar-toggle {
   position: absolute; left: 0; top: 0; bottom: 0; z-index: 5;
   width: 32px; display: flex; align-items: center; justify-content: center;
@@ -656,7 +675,9 @@ body {
     width: 0; overflow: hidden; box-shadow: none; transition: width .3s ease, box-shadow .3s ease;
   }
   .sidebar.open {
-    width: 78vw; max-width: 320px; box-shadow: 2px 0 24px rgba(0,0,0,0.25);
+    /* Leave a tappable strip of the backdrop visible so the drawer can be
+       dismissed by tapping outside it on phones. */
+    width: min(86vw, 340px); max-width: none; box-shadow: 2px 0 24px rgba(0,0,0,0.25);
   }
   .sidebar-toggle { display: none; }
   .mobile-sidebar-toggle {
@@ -667,10 +688,12 @@ body {
     box-shadow: 2px 0 8px rgba(0,0,0,0.08);
   }
   .sidebar.open ~ .mobile-sidebar-toggle { display: none; }
+  body.drawer-open .sidebar,
+  body.drawer-open .side-panel { z-index: 1200; }
 
   /* Right panel: overlay drawer */
   .side-panel {
-    position: fixed; top: 56px; right: 0; bottom: 0; width: 85vw !important; max-width: 340px;
+    position: fixed; top: 56px; right: 0; bottom: 0; width: 100vw !important; max-width: none;
     z-index: 36; box-shadow: -4px 0 24px rgba(0,0,0,0.2);
     transform: translateX(102%); transition: transform .3s ease;
   }
@@ -694,7 +717,7 @@ body {
 }
 @media (max-width: 767px) {
   body.drawer-open .drawer-backdrop {
-    display: block; opacity: 1;
+    display: block; opacity: 1; z-index: 1190;
   }
 }
 
@@ -722,7 +745,8 @@ body {
 }
 .login-card {
   background: #fff; border-radius: 16px; padding: 32px 36px;
-  width: 330px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.4);
+  width: 330px; max-width: calc(100vw - 32px); box-sizing: border-box;
+  text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.4);
 }
 .login-logo { font-size: 40px; margin-bottom: 6px; }
 .login-card h2 { font-size: 20px; color: var(--text); margin: 6px 0 2px; }
@@ -742,6 +766,10 @@ body {
 .register-btn { background: #0f766e; margin-top: 4px; }
 .auth-mode-btn { border: 0; background: transparent; color: var(--primary); cursor: pointer; font-size: 12px; margin-top: 12px; }
 .register-proof { font-size: 12px; color: var(--text2); min-height: 18px; margin: 0 0 5px; }
+
+@media (max-width: 399px) {
+  .login-card { padding: 26px 22px; }
+}
 
 .user-badge {
   display: inline-block; padding: 3px 12px; border-radius: 12px;
@@ -838,9 +866,9 @@ body {
     radial-gradient(ellipse at 20% -10%, rgba(59,130,246,0.25), transparent 50%),
     radial-gradient(ellipse at 80% 110%, rgba(16,185,129,0.15), transparent 50%),
     linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
-  display: flex; align-items: center; justify-content: center; overflow-y: auto;
+  display: flex; align-items: flex-start; justify-content: center; overflow-y: auto;
 }
-.home-inner { text-align: center; padding: 40px 24px; max-width: 820px; width: 100%; }
+.home-inner { text-align: center; padding: 40px 24px; max-width: 820px; width: 100%; margin-block: auto; flex-shrink: 0; }
 .home-logo { font-size: 60px; margin-bottom: 6px; animation: floaty 3s ease-in-out infinite; display:inline-block; }
 @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 .home-title {
@@ -1470,6 +1498,32 @@ button.a-btn {
 .mobile-more-btn { display: none; }
 .mobile-more-menu { display: none; }
 
+/* Keep the full desktop toolbar on ordinary PC widths.  The compact overflow
+   menu is only needed for tablets; at 1280px and above hiding the controls
+   makes the dev build look materially different from the stable build. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .header { padding: 10px 14px; gap: 12px; overflow: visible; }
+  .header-controls { min-width: 0; flex: 1; gap: 8px; }
+  .header-controls .mode-nav { min-width: 0; flex: 1; overflow-x: auto; }
+  .header-controls .mode-btn { flex-shrink: 0; white-space: nowrap; }
+  .header-controls .ctl,
+  .header-controls .toggle-btn,
+  .header-controls .music-btn,
+  .header-controls .new-topic-btn,
+  .header-controls .debug-btn:not([data-action="open-settings"]) { display: none; }
+  .header-controls .sync-ind { max-width: 90px; overflow: hidden; white-space: nowrap; }
+  .mobile-more-btn { display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 34px; flex-shrink: 0; color: #fff; background: rgba(255,255,255,.16);
+    border: 0; border-radius: 6px; font-size: 20px; }
+  .mobile-more-menu { position: absolute; top: 60px; right: 8px; z-index: 9600;
+    min-width: 210px; padding: 6px; background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 10px 34px rgba(0,0,0,.2); }
+  .mobile-more-menu.open { display: block; }
+  .mmm-item { display: block; width: 100%; text-align: left; background: none; border: 0;
+    padding: 10px 12px; cursor: pointer; color: var(--text); }
+  .mmm-user { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+}
+
 @media (max-width: 767px) {
   /* 动态视口高度：软键盘 / 地址栏伸缩时不再遮挡输入区（100dvh，旧浏览器回退 100vh） */
   body { height: 100vh; height: 100dvh; }
@@ -1522,6 +1576,7 @@ button.a-btn {
 
   /* 首页内容避开底部导航 */
   .home-page { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); box-sizing: border-box; }
+  .home-inner { padding: 20px 14px 30px; }
 
   /* 悬浮反馈窗 / 输入区避开底部导航 */
   .side-panel.panel-mini { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }

@@ -9,13 +9,16 @@
 
 const logger = require('./services/logger');
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 8;
 
 /* 版本历史：
    0 → 1  初始 schema（users / sessions / user_data / gaokao_questions）
    1 → 2  gaokao_questions.q_words 列（旧库补列）
    2 → 3  sessions 改存 token 哈希（token_hash），并加 expires_at 索引
    3 → 4  usage_log 表（外部 API 用量：token / 字符数，按用户与日期聚合）
+   4 → 5  users.soft_deleted_at 软删除标记
+   5 → 6  users.role / api quota / provider preference
+   6 → 7  feedback history
 */
 
 /* 迁移定义需要 db 实例（up() 里直接执行 SQL），
@@ -134,6 +137,57 @@ CREATE TABLE IF NOT EXISTS usage_log (
 CREATE INDEX IF NOT EXISTS idx_usage_user_day ON usage_log(user_id, day);
 CREATE INDEX IF NOT EXISTS idx_usage_day ON usage_log(day);
 `);
+      }
+    },
+    {
+      version: 5,
+      name: 'users.soft_deleted_at（账户删除保留期）',
+      up() {
+        if (!columnExists('users', 'soft_deleted_at')) db.exec('ALTER TABLE users ADD COLUMN soft_deleted_at TEXT');
+        db.exec('CREATE INDEX IF NOT EXISTS idx_users_soft_deleted ON users(soft_deleted_at)');
+      }
+    },
+    {
+      version: 6,
+      name: '账户角色与调用额度',
+      up() {
+        if (!columnExists('users', 'role')) db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+        if (!columnExists('users', 'daily_call_limit')) db.exec('ALTER TABLE users ADD COLUMN daily_call_limit INTEGER NOT NULL DEFAULT 100');
+        if (!columnExists('users', 'rpm_limit')) db.exec('ALTER TABLE users ADD COLUMN rpm_limit INTEGER NOT NULL DEFAULT 10');
+        if (!columnExists('users', 'provider_mode')) db.exec("ALTER TABLE users ADD COLUMN provider_mode TEXT NOT NULL DEFAULT 'gift'");
+      }
+    },
+    {
+      version: 7,
+      name: 'feedback history',
+      up() {
+        db.exec(`CREATE TABLE IF NOT EXISTS feedback (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          type TEXT NOT NULL DEFAULT 'suggestion',
+          title TEXT NOT NULL DEFAULT '',
+          body TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'open',
+          admin_note TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback(user_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback(status, created_at);`);
+      }
+    },
+    {
+      version: 8,
+      name: 'encrypted user provider credentials',
+      up() {
+        db.exec(`CREATE TABLE provider_credentials (
+          user_id INTEGER NOT NULL,
+          provider TEXT NOT NULL,
+          value TEXT NOT NULL,
+          PRIMARY KEY (user_id, provider),
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );`);
       }
     }
   ];

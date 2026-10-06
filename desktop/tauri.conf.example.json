@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AI English Chat Dev",
+  "version": "0.1.0",
+  "identifier": "cyou.catten.english.dev",
+  "build": {
+    "devUrl": "https://www.catten.cyou/english?version=dev",
+    "frontendDist": "../web"
+  },
+  "app": {
+    "windows": [{ "title": "AI English Chat Dev", "width": 1280, "height": 800 }],
+    "security": { "csp": "default-src 'self' https://www.catten.cyou; connect-src 'self' https://www.catten.cyou" }
+  },
+  "bundle": { "active": true, "targets": ["msi", "nsis"] }
+}

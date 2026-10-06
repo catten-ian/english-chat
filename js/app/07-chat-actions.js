@@ -294,6 +294,15 @@ async function sendMessage() {
 
     // 1. 组装系统提示：角色卡 + 策略师简报 + （执行者启用时的）联网决策协议
     let chatSystem = buildChatPrompt();
+    if (typeof buildChatInputContext === 'function') {
+      let inputContext = buildChatInputContext(text);
+      // 最近会话上下文和当前消息可能命中同一世界书条目；避免重复计入上下文/token。
+      if (inputContext && typeof TavernCards !== 'undefined' && TavernCards.worldPrompt) {
+        const currentTavern = TavernCards.worldPrompt(getActiveCharacter(), text);
+        if (currentTavern && chatSystem.includes(currentTavern)) inputContext = inputContext.replace(currentTavern, '');
+      }
+      if (inputContext.trim()) chatSystem += inputContext;
+    }
     if (strategist) {
       chatSystem += '\n\n[STRATEGIST BRIEF]\n' + JSON.stringify(strategist) +
         '\n(Use the suggested follow-up angle naturally; stay in character and in the target difficulty.)';
@@ -328,13 +337,13 @@ async function sendMessage() {
         { role: 'system', content: chatSystem + '\n\n[EXECUTOR RESEARCH]\n' + research.summary +
           '\n\nAnswer Alex\u2019s reply naturally using these facts; briefly mention a source when appropriate.' },
         ...buildApiMessages()
-      ], aiMsgId, live, signal);
+      ], aiMsgId, live, signal, { chat: true });
     } else {
       // 首轮对话：主对话模型自行决定是否需要联网
       reply = await streamOrCall([
         { role: 'system', content: chatSystem },
         ...buildApiMessages()
-      ], aiMsgId, live, signal);
+      ], aiMsgId, live, signal, { chat: true });
       const m = stripThinking(reply).trim().match(/^\[NEED_SEARCH\]\s*(.+)/i);
       if (m && m[1] && executorEnabled) {
         researchQuery = m[1].trim().substring(0, 120);
@@ -346,7 +355,7 @@ async function sendMessage() {
           { role: 'system', content: chatSystem + '\n\n[EXECUTOR RESEARCH]\n' + research.summary +
             '\n\nAnswer Alex\u2019s reply naturally using these facts; briefly mention a source when appropriate.' },
           ...buildApiMessages()
-        ], aiMsgId, live, signal);
+          ], aiMsgId, live, signal, { chat: true });
       }
     }
 
@@ -494,7 +503,7 @@ async function startNewConversation(topic) {
       { role: 'system', content: buildChatPrompt() },
       { role: 'user', content: 'Hello! Let\'s start a conversation. Please introduce yourself and ask me a question.' }
     ];
-    const content = await callAPI(messages);
+    const content = await callAPI(messages, { chat: true });
     const reply = extractChatReply(content);
     const aiNode = makeNode('assistant', reply || content, null);
     appendToEnd(aiNode);
@@ -505,12 +514,35 @@ async function startNewConversation(topic) {
     removeTyping();
     lastApiError = { message: err.message, time: new Date().toISOString() };
     dbg('INIT_ERR', err.message);
+    // Keep the first screen useful when the upstream provider is temporarily
+    // unavailable. An empty chat area looks like a broken render and leaves
+    // new users without a clear next action.
+    if (!conversation.some(m => m && m.role === 'assistant')) {
+      const fallback = makeNode('assistant', 'Hi! I\'m Alex, your English practice coach. Tell me your name or choose a topic, and we\'ll start with a short conversation.', null);
+      appendToEnd(fallback);
+      saveConversation(conversation);
+      renderSidebar();
+    }
     showSystemError(err.message, { hint: '请检查 API 配置或网络连接。' });
     renderMessages();
     console.error(err);
   } finally {
     setSending(false);
   }
+}
+
+function showHelpGuide(force) {
+  if (!force && getSetting('helpGuideSeen', false)) return;
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay';
+  ov.innerHTML = '<div class="modal-card" style="max-width:560px"><div class="modal-header"><h3>📘 使用帮助</h3><button class="modal-close" data-action="close-overlay">×</button></div><div class="modal-body"><p><strong>从首页选择模块：</strong>Chat 练习对话，Reading 阅读，Translation 翻译，Game 游戏，学习中心管理复习。</p><p><strong>Chat：</strong>输入英文后发送，右侧可查看纠错和词汇。点击头像可在设置中修改。</p><p><strong>查词：</strong>在右侧查词面板输入单词，可在设置中选择 AI 或在线词典。</p><p><strong>手机端：</strong>左侧按钮打开对话记录，右侧按钮打开反馈面板，点击灰色区域关闭。</p><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="helpGuideSkip"> 下次不再自动显示</label></div><div class="modal-footer"><button class="a-btn primary" data-action="finish-help-guide">开始使用</button></div></div>';
+  document.body.appendChild(ov);
+}
+
+function finishHelpGuide() {
+  const skip = document.getElementById('helpGuideSkip')?.checked;
+  if (skip) setSetting('helpGuideSeen', true);
+  document.querySelector('.modal-overlay')?.remove();
 }
 
 /* ---------- Resume Conversation ---------- */
@@ -544,12 +576,17 @@ function toggleSidebar() {
   const sb = document.getElementById('sidebar');
   hideTip();
   sb.classList.toggle('open', sidebarOpen);
+  document.body.classList.toggle('drawer-open', isMobile() && sidebarOpen);
   const btn = document.getElementById('sidebarToggle');
   if (btn) btn.textContent = sidebarOpen ? '◀' : '▶';
   try { localStorage.setItem('ai_en_sidebar_open', sidebarOpen ? '1' : '0'); } catch (e) {}
   // On mobile, close the right panel when opening the sidebar
   if (isMobile() && sidebarOpen) {
-    document.getElementById('sidePanel').classList.remove('open');
+    // Use the panel state helper so the shared backdrop and floating-panel
+    // state are cleared together. Removing only `.open` left a transparent
+    // overlay behind the sidebar on some mobile browsers.
+    if (typeof setFeedbackPanelMode === 'function') setFeedbackPanelMode('collapsed');
+    else document.getElementById('sidePanel').classList.remove('open');
   }
   syncDrawerBackdrop();
   document.querySelector('.main-area').style.marginLeft = sidebarOpen ? '0' : '0';
@@ -561,11 +598,12 @@ function applySidebarPreference() {
   let saved = null;
   try { saved = localStorage.getItem('ai_en_sidebar_open'); } catch (e) {}
   const desktop = window.innerWidth >= 1440;
-  sidebarOpen = saved !== null ? saved === '1' : desktop;
+  sidebarOpen = !isMobile() && (saved !== null ? saved === '1' : desktop);
   const sb = document.getElementById('sidebar');
   const btn = document.getElementById('sidebarToggle');
   if (sb) sb.classList.toggle('open', sidebarOpen);
   if (btn) btn.textContent = sidebarOpen ? '◀' : '▶';
+  document.body.classList.remove('drawer-open');
 }
 
 function toggleMobilePanel() {
@@ -576,6 +614,7 @@ function toggleMobilePanel() {
   if (isMobile() && opening) {
     document.getElementById('sidebar').classList.remove('open');
     sidebarOpen = false;
+    document.body.classList.remove('drawer-open');
   }
   syncDrawerBackdrop();
 }
@@ -605,6 +644,8 @@ function syncDrawerBackdrop() {
   const panel = document.getElementById('sidePanel');
   const open = (sb && sb.classList.contains('open')) || (panel && panel.classList.contains('open'));
   document.body.classList.toggle('drawer-open', !!open);
+  const backdrop = document.getElementById('drawerBackdrop');
+  if (backdrop) backdrop.style.pointerEvents = open ? 'auto' : 'none';
 }
 
 function renderSidebar() {
@@ -657,4 +698,4 @@ function sidebarNewConversation() {
   toggleSidebar();
   promptNewConversation();
 }
-
+

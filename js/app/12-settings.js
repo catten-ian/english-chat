@@ -12,17 +12,6 @@ function getSavedCharacters() {
   const customs = (Array.isArray(v) ? v : []).filter(c => c && c.id && !builtins.includes(c.id));
   return [...CHARACTERS, ...customs];
 }
-
-function getActiveCharacterId() {
-  return getSetting('activeCharacter', 'alex');
-}
-
-function setActiveCharacterId(id) {
-  setSetting('activeCharacter', id);
-  activeCharacterId = id;
-  alexBackstory = '';
-}
-
 function openSettings() {
   // Remove all stuck overlays/modals first
   removeAllModals();
@@ -66,12 +55,13 @@ function openSettings() {
            <span style="color:var(--text2);flex-shrink:0;font-size:11px">${esc((it.time || '').slice(5, 16))}</span>
            <button data-action="delete-strategist-instruction" data-arg1="${i}" style="border:none;background:none;color:var(--text2);cursor:pointer;font-size:13px;flex-shrink:0" title="删除">×</button>
          </div>`).join('') + '</div>'
-    : '<div class="empty" style="padding:8px 0;font-size:12px">暂无指令，发送一条试试</div>';
+    : '<div class="empty" style="padding:8px 0;font-size:12px">暂无指令</div>';
   modal.innerHTML = `<div class="modal-header"><h3 id="settingsTitle">⚙️ 设置</h3><button class="modal-close" data-action="close-overlay" aria-label="关闭">×</button></div>
     <div class="modal-body">
-
     <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="account">
       <div style="font-size:14px;font-weight:600;margin-bottom:10px">👤 账户</div>
+      <div id="giftQuotaStatus" role="status" style="font-size:12px;margin-bottom:8px">正在读取赠送额度...</div>
+      <button id="adminEntry" type="button" class="a-btn" data-action="open-admin" style="display:none" hidden>管理后台</button>
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
         <div id="avatarPreview" style="width:52px;height:52px;border-radius:50%;background:var(--primary-bg);display:flex;align-items:center;justify-content:center;font-size:26px;overflow:hidden;border:1px solid var(--border)">${avatar ? '<img src="' + esc(avatar) + '" style="width:100%;height:100%;object-fit:cover">' : '👤'}</div>
         <div style="display:flex;flex-direction:column;gap:6px">
@@ -85,13 +75,25 @@ function openSettings() {
         <input id="setNewPw" type="password" placeholder="新密码（至少 4 位）" autocomplete="new-password" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;outline:none">
         <button data-action="change-password" style="padding:6px 14px;border-radius:6px;border:none;background:var(--amber);color:#fff;font-size:12px;cursor:pointer;align-self:flex-start">🔑 修改密码</button>
         <div id="pwMsg" style="font-size:12px;color:var(--green);min-height:16px"></div>
+        <button data-action="delete-account" style="padding:6px 14px;border-radius:6px;border:1px solid #ef4444;background:#fff;color:#dc2626;font-size:12px;cursor:pointer;align-self:flex-start">🗑️ 删除账户</button>
       </div>
+    </div>
+
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="help">
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">❓ 帮助</div>
+      <button data-action="open-help-guide" style="padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:#fff;font-size:12px;cursor:pointer">查看使用帮助</button><button data-action="open-feedback" style="margin-left:6px;padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:#fff;font-size:12px;cursor:pointer">提交反馈</button>
     </div>
 
     <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="characters">
       <div style="font-size:14px;font-weight:600;margin-bottom:10px">🎭 角色卡</div>
       <div style="display:flex;flex-direction:column;gap:6px">${charOptions}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <button data-action="choose-tavern-card" type="button" class="a-btn small">📥 导入 Tavern 角色卡</button>
+        <input id="tavernCardFile" type="file" accept=".json,.png,application/json,image/png" data-action="import-tavern-card" style="display:none">
+        <small style="color:var(--text2)">支持 V1/V2 JSON 和 PNG</small>
+      </div>
       <button data-action="prompt-new-character" style="margin-top:8px;padding:6px 14px;border-radius:6px;border:1px dashed var(--primary);background:#fff;color:var(--primary);font-size:12px;cursor:pointer">＋ 新建角色</button>
+      ${typeof chatModeMarkup === 'function' ? chatModeMarkup() : ''}
     </div>
 
     <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="chat">
@@ -112,6 +114,9 @@ function openSettings() {
         <input type="checkbox" id="setAutoRead" ${isAuto ? 'checked' : ''} style="width:17px;height:17px">
         <span style="font-size:14px">🔊 自动朗读回复</span>
       </label>
+      <div style="margin:4px 0 8px 26px;padding:8px 10px;background:var(--bg);border-radius:8px;font-size:12px;color:var(--text2)">
+        TTS 语音、音量与背景音乐压低方式可在下方“背景音乐 / TTS”区域单独设置。
+      </div>
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:6px 0">
         <input type="checkbox" id="setStream" ${isStream ? 'checked' : ''} style="width:17px;height:17px">
         <span style="font-size:14px">⚡ 流式输出回复</span>
@@ -124,11 +129,18 @@ function openSettings() {
         <input type="checkbox" id="setExecutor" ${isExecutor ? 'checked' : ''} style="width:17px;height:17px">
         <span style="font-size:14px">🔎 执行者（需要时联网搜索）</span>
       </label>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:6px 0">
+        <span style="font-size:14px">🔤 查词服务</span>
+        <select id="setDictProvider" style="margin-left:auto;padding:5px 8px;border:1px solid var(--border);border-radius:6px">
+          <option value="ai" ${getSetting('dictProvider', 'ai') === 'ai' ? 'selected' : ''}>AI 词典</option>
+          <option value="dictionary" ${getSetting('dictProvider', 'ai') === 'dictionary' ? 'selected' : ''}>在线词典</option>
+        </select>
+      </label>
     </div>
 
     <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="music">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:14px;font-weight:600">🎵 背景音乐</div>
+      <div style="font-size:14px;font-weight:600">🎵 背景音乐</div>
         <span id="setMusicStatus" style="font-size:11px;color:var(--text2)">${musicItems.length ? musicItems.length + ' 首曲目' : '正在读取 music/ 目录…'}</span>
       </div>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-bottom:8px">
@@ -156,7 +168,18 @@ function openSettings() {
         <input type="number" id="setMusicVolNum" min="0" max="100" step="1" value="${musicVol}" data-action="set-music-vol" style="width:48px;box-sizing:border-box;padding:4px 4px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none;text-align:center;font-variant-numeric:tabular-nums" aria-label="音量百分比（0-100）">
         <span style="font-size:12px;color:var(--text2)">%</span>
       </div>
-      <div style="border-top:1px dashed var(--border);margin:2px 0 10px;padding-top:10px">
+      <div style="display:flex;gap:8px">
+        <button type="button" class="a-btn small" data-action="music-prev">⏮ 上一首</button>
+        <button type="button" class="a-btn primary small" id="setMusicPlayBtn" data-action="settings-music-toggle">${(typeof musicAudio !== 'undefined' && musicAudio && !musicAudio.paused) ? '⏸ 暂停' : '▶ 播放'}</button>
+        <button type="button" class="a-btn small" data-action="music-next">下一首 ⏭</button>
+      </div>
+    </div>
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="tts">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">🔊 TTS 设置</div>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px">语音速度
+          <input id="setTtsRate" type="range" min="0.6" max="1.4" step="0.05" value="${getSetting('ttsRate', 1)}" style="flex:1">
+          <span id="setTtsRateValue" style="width:40px;text-align:right">${Number(getSetting('ttsRate', 1)).toFixed(2)}x</span>
+        </label>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-bottom:8px">
           <input type="checkbox" id="setTtsDuck" ${isTtsDuck ? 'checked' : ''} style="width:16px;height:16px"> 朗读（TTS）时自动压低背景音乐
         </label>
@@ -166,15 +189,7 @@ function openSettings() {
           <span id="setTtsDuckRatioValue" style="width:44px;text-align:right;font-size:12px;color:var(--text2)">${ttsDuckRatio === 0 ? '暂停' : ttsDuckRatio + '%'}</span>
         </div>
         <div style="font-size:11px;color:var(--text3)">朗读期间背景音乐压到该音量，结束后自动恢复；0 = 朗读时完全暂停音乐。</div>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button type="button" class="a-btn small" data-action="music-prev">⏮ 上一首</button>
-        <button type="button" class="a-btn primary small" id="setMusicPlayBtn" data-action="settings-music-toggle">${(typeof musicAudio !== 'undefined' && musicAudio && !musicAudio.paused) ? '⏸ 暂停' : '▶ 播放'}</button>
-        <button type="button" class="a-btn small" data-action="music-next">下一首 ⏭</button>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.6">顶部 🎵 按钮：单击播放/暂停，双击下一首，滚轮调音量，<b>悬停展开迷你播放器</b>（可拖动进度）。</div>
     </div>
-
     <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="quiz">
       <div style="font-size:14px;font-weight:600;margin-bottom:8px">📝 薄弱点出题策略</div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:8px">分析发现薄弱点后，AI 自动生成题目推送到 Anki 薄弱点牌组，利用 Anki 的原生排程（FSRS）复习。题组可能在同一道题中考察多个相关薄弱点。</div>
@@ -196,6 +211,15 @@ function openSettings() {
         </label>
       </div>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px"><input type="checkbox" id="setQuizMultiWp" ${getSetting('ankiQuizMultiWp', true) === false ? '' : 'checked'} style="width:15px;height:15px"> 尽量一题多薄弱点（多轮 API 强化覆盖）</label>
+    </div>
+
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="reading-practice">
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">📚 阅读练习</div>
+      <label>时文来源 <select id="setReadingRssSource"><option value="bbc" ${getSetting('readingRssSource', 'bbc') === 'bbc' ? 'selected' : ''}>BBC</option><option value="guardian" ${getSetting('readingRssSource', 'bbc') === 'guardian' ? 'selected' : ''}>The Guardian</option></select></label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="setReadingGlossary" ${getSetting('readingShowGlossary', true) === false ? '' : 'checked'} style="width:16px;height:16px">
+        为超纲难词显示中文释义
+      </label>
     </div>
 
     <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="topic">
@@ -310,8 +334,42 @@ function openSettings() {
             <button class="a-btn small ghost" data-action="keys-test" data-arg1="eleven">检测</button>
           </div>
         </div>
-        <div id="keysMsg" style="font-size:12px;margin-top:8px;min-height:16px;line-height:1.6"></div>
-      </div>
+      <div id="keysMsg" style="font-size:12px;margin-top:8px;min-height:16px;line-height:1.6"></div>
+    </div>
+    </div>
+
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="llm">
+      <div style="font-size:14px;font-weight:600;margin-bottom:6px">🤖 大模型与搜索偏好</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px">默认使用 MiniMax M3。自定义提供商需在服务端配置对应密钥，浏览器不会保存 API key。</div>
+      <label style="display:block;font-size:12px;margin:6px 0">文本模型
+        <select id="setLlmProvider" style="width:100%;padding:6px;margin-top:3px">
+          ${Object.entries(LLM_PROVIDER_OPTIONS).map(([id, def]) => `<option value="${id}">${def.label}${id === 'minimax' ? '（默认）' : ''}</option>`).join('')}
+        </select>
+      </label>
+      <input id="setLlmTextModel" type="text" placeholder="文本模型，例如 MiniMax-M3" style="width:100%;box-sizing:border-box;padding:7px;margin-top:4px">
+      <label style="display:block;font-size:12px;margin-top:8px">多模态提供商
+        <select id="setLlmVisionProvider" style="width:100%;padding:6px;margin-top:3px">
+          <option value="same">与文本提供商相同</option>
+          ${Object.entries(LLM_PROVIDER_OPTIONS).map(([id, def]) => `<option value="${id}">${def.label}</option>`).join('')}
+        </select>
+      </label>
+      <input id="setLlmVisionModel" type="text" placeholder="多模态模型，例如 qwen-vl-plus 或 gpt-4o" style="width:100%;box-sizing:border-box;padding:7px;margin-top:6px">
+      <label style="display:block;font-size:12px;margin-top:8px">搜索引擎
+          <select id="setSearchProvider" style="width:100%;padding:6px;margin-top:3px"><option value="minimax">MiniMax 搜索（默认）</option><option value="bing">Bing</option><option value="brave">Brave</option><option value="tavily">Tavily</option><option value="serper">Google（Serper）</option><option value="none">关闭联网搜索</option></select>
+        </label>
+        <details style="margin-top:12px"><summary>我的 API 配置</summary>
+          <label style="display:block;margin:8px 0">提供商
+            <select id="setCredentialProvider" style="width:100%;padding:7px">${Object.entries(LLM_PROVIDER_OPTIONS).map(([id, def]) => `<option value="${id}">${esc(def.label)}</option>`).join('')}
+              <option value="search:brave">Brave 搜索</option><option value="search:bing">Bing 搜索</option><option value="search:tavily">Tavily 搜索</option><option value="search:serper">Google / Serper 搜索</option>
+            </select>
+          </label>
+          <label style="display:block;margin:8px 0">API Base URL<input id="setCredentialBase" type="url" style="width:100%;box-sizing:border-box;padding:7px"></label>
+          <label style="display:block;margin:8px 0">默认模型<input id="setCredentialModel" type="text" style="width:100%;box-sizing:border-box;padding:7px"></label>
+          <label style="display:block;margin:8px 0">API key<input id="setCredentialKey" type="password" autocomplete="new-password" placeholder="留空保留已保存密钥" style="width:100%;box-sizing:border-box;padding:7px"></label>
+          <button type="button" class="a-btn" id="saveCredentialBtn">保存我的配置</button>
+          <button type="button" class="a-btn" id="removeCredentialBtn">恢复站点配置</button>
+          <div id="providerConfigStatus" role="status" style="font-size:12px;margin-top:8px"></div>
+        </details>
     </div>
 
     <div style="padding:8px 0;font-size:14px;display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -320,6 +378,7 @@ function openSettings() {
       <button data-action="reconnect-anki-connect" style="padding:5px 14px;border-radius:6px;border:none;background:var(--primary);color:#fff;font-size:12px;cursor:pointer;display:none" id="reconnectAnkiBtn">重连</button>
       <span id="ankiStatus" style="font-size:12px;color:var(--text2)">未检测</span>
     </div>
+    <div style="padding:8px 0;font-size:12px;border-bottom:1px solid var(--border)"><div style="font-weight:600;margin-bottom:6px">Anki 连接偏好</div><select id="setAnkiPreference" style="padding:6px;width:100%"><option value="public" ${getSetting('ankiPreference','public') === 'public' ? 'selected' : ''}>优先公共 Anki（默认）</option><option value="private" ${getSetting('ankiPreference','public') === 'private' ? 'selected' : ''}>优先我的私有 Anki</option></select><label style="display:block;margin-top:6px"><input type="checkbox" id="setAnkiNeverPublic" ${getSetting('ankiNeverPublic',false) ? 'checked' : ''}> 私有连接失败时永不回退公共 Anki</label><input id="setAnkiPrivateUrl" value="${esc(getSetting('ankiPrivateUrl','http://127.0.0.1:8765'))}" placeholder="私有桥接地址（仅允许本机/受信桥接）" style="width:100%;box-sizing:border-box;margin-top:6px;padding:6px"></div>
     <div style="font-size:11px;color:var(--text2);padding:0 0 6px 0;line-height:1.6">
       当前薄弱点牌组：<code>${esc(ankiWeakDeck())}</code><br>
       笔记类型：<code>${esc(ANKI_QUIZ_MODEL)}</code>（Question/Answer/Explanation）
@@ -346,7 +405,38 @@ function openSettings() {
       </div>
     </div>`;
   overlay.appendChild(modal);
-  document.body.appendChild(overlay);
+    document.body.appendChild(overlay);
+    initProviderCredentials();
+    initAdminAccountSettings(modal);
+  const llmProviderEl = document.getElementById('setLlmProvider');
+  const llmTextEl = document.getElementById('setLlmTextModel');
+  const llmVisionEl = document.getElementById('setLlmVisionModel');
+  const llmVisionProviderEl = document.getElementById('setLlmVisionProvider');
+  const searchProviderEl = document.getElementById('setSearchProvider');
+  if (llmProviderEl) llmProviderEl.value = getSetting('llmProvider', 'minimax');
+  if (llmVisionProviderEl) llmVisionProviderEl.value = getSetting('llmVisionProvider', 'same');
+  if (llmTextEl) llmTextEl.value = getSetting('llmTextModel', 'MiniMax-M3');
+  if (llmVisionEl) llmVisionEl.value = getSetting('llmVisionModel', '');
+  if (llmProviderEl && llmTextEl) {
+    let previousProvider = validLlmProvider(llmProviderEl.value);
+    llmProviderEl.addEventListener('change', () => {
+      if (!llmTextEl.value.trim() || llmTextEl.value.trim() === LLM_PROVIDER_OPTIONS[previousProvider].model) {
+        llmTextEl.value = LLM_PROVIDER_OPTIONS[validLlmProvider(llmProviderEl.value)].model;
+      }
+      previousProvider = validLlmProvider(llmProviderEl.value);
+    });
+  }
+  if (searchProviderEl) searchProviderEl.value = getSetting('searchProvider', 'minimax');
+  // chatModeMarkup renders persisted values directly; keep this hook for
+  // cached/older markup and for callers that inject the settings section.
+  if (typeof chatModeSettingsValues === 'function') {
+    const cv = chatModeSettingsValues();
+    const cm = document.getElementById('setChatMode'); if (cm) cm.value = cv.mode;
+    const cs = document.getElementById('setChatScenario'); if (cs) cs.value = cv.scenario;
+    const cp = document.getElementById('setChatLlmProvider'); if (cp) cp.value = cv.provider;
+    const ct = document.getElementById('setChatLlmTextModel'); if (ct) ct.value = cv.model;
+    const cd = document.getElementById('setChatDebateSide'); if (cd) cd.value = cv.side;
+  }
   // Check backend status
   fetch(BACKEND_URL + '/api/health').then(r => r.json()).then(d => {
     const label = (d && d.status === 'ok') ? '✅ 在线' : ('⚠️ ' + ((d && d.status) || '未知'));
@@ -401,6 +491,10 @@ function restructureSettingsModal(modal) {
       { title: '🌐 翻译规则', matchText: '翻译规则版本' },
       { title: '💬 聊天偏好', matchText: '自动添加到 Anki' },
       { title: '🎵 背景音乐', matchText: '背景音乐' },
+      { title: '🔊 TTS 设置', key: 'tts' },
+      { title: '📚 阅读练习', key: 'reading-practice' },
+      { title: '❓ 帮助与反馈', key: 'help' },
+      { title: '🤖 模型与搜索', key: 'llm' },
       { title: '🃏 薄弱点出题策略', matchText: '薄弱点出题策略' },
       { title: '🎯 主题与长度', matchText: '你想谈论的主题' },
       { title: '🤖 策略师指令', matchText: '策略师指令' },
@@ -412,7 +506,7 @@ function restructureSettingsModal(modal) {
     for (const child of Array.from(body.children)) {
       if (child.tagName === 'DIV') {
         const text = child.textContent || '';
-        const matched = sections.find(s => text.includes(s.matchText));
+        const matched = sections.find(s => s.key && s.key === child.dataset.section) || sections.find(s => s.matchText && text.includes(s.matchText));
         if (matched) {
           if (pending.length) groups.push({ title: null, items: pending });
           pending = [child];
@@ -471,7 +565,7 @@ async function ankiPostCall(payload) {
   const r = await fetch((BACKEND_URL || '') + '/api/proxy/anki', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({ ...payload, connectionPreference: getSetting('ankiPreference','public'), privateUrl: getSetting('ankiPrivateUrl','http://127.0.0.1:8765'), neverPublic: getSetting('ankiNeverPublic',false) })
   });
   if (!r.ok) {
     let friendly = 'proxy HTTP ' + r.status;
@@ -649,16 +743,36 @@ async function logoutUser() {
   location.reload();
 }
 
+async function deleteAccount() {
+  if (!confirm('确定删除账户？账户会立即停用，服务器保留 30 天后自动清理。')) return;
+  try {
+    await apiDeleteAccount();
+    logoutLocal();
+    clearUserCache();
+    localStorage.removeItem('ai_en_cache_owner');
+    location.reload();
+  } catch (e) { alert(e.message || '删除账户失败'); }
+}
+
 function saveSettings() {
   const anki = document.getElementById('setAnki').checked;
   const autoRead = document.getElementById('setAutoRead').checked;
   const stream = document.getElementById('setStream').checked;
   const strategist = document.getElementById('setStrategist').checked;
   const executor = document.getElementById('setExecutor').checked;
+  const dictProvider = document.getElementById('setDictProvider')?.value || 'ai';
+  const llmProvider = document.getElementById('setLlmProvider')?.value || 'minimax';
+  const llmTextModel = (document.getElementById('setLlmTextModel')?.value || '').trim().slice(0, 120) || LLM_PROVIDER_OPTIONS[validLlmProvider(llmProvider)].model;
+  const llmVisionProvider = document.getElementById('setLlmVisionProvider')?.value || 'same';
+  const llmVisionModel = (document.getElementById('setLlmVisionModel')?.value || '').trim().slice(0, 120);
+  const searchProvider = document.getElementById('setSearchProvider')?.value || 'minimax';
+  const readingShowGlossary = document.getElementById('setReadingGlossary')?.checked !== false;
+  const readingRssSource = document.getElementById('setReadingRssSource')?.value === 'guardian' ? 'guardian' : 'bbc';
   const musicEnabledSetting = !!document.getElementById('setMusicEnabled')?.checked;
   const musicAutoNextSetting = !!document.getElementById('setMusicAutoNext')?.checked;
   const ttsDuckSetting = document.getElementById('setTtsDuck') ? !!document.getElementById('setTtsDuck').checked : true;
   const ttsDuckRatioSetting = Math.max(0, Math.min(100, parseInt(document.getElementById('setTtsDuckRatio')?.value, 10) || 0));
+  const ttsRateSetting = Math.max(0.6, Math.min(1.4, parseFloat(document.getElementById('setTtsRate')?.value) || 1));
   const musicTrackSetting = parseInt(document.getElementById('setMusicTrack')?.value, 10);
   const musicVolumeSetting = parseInt(document.getElementById('setMusicVol')?.value, 10) || 0;
   const userTopic = (document.getElementById('setUserTopic').value || '').trim();
@@ -677,9 +791,13 @@ function saveSettings() {
   const quizMultiWp = !!document.getElementById('setQuizMultiWp')?.checked;
   const quizAutoSync = !!document.getElementById('setAnkiAutoSync')?.checked;
   const quizAudio = !!document.getElementById('setAnkiAudio')?.checked;
+  const ankiPreference = document.getElementById('setAnkiPreference')?.value || 'public';
+  const ankiNeverPublic = !!document.getElementById('setAnkiNeverPublic')?.checked;
+  const ankiPrivateUrl = document.getElementById('setAnkiPrivateUrl')?.value.trim() || 'http://127.0.0.1:8765';
   // 翻译规则版本
   const trRuleEl = document.querySelector('input[name="setTrRule"]:checked');
   const translationRuleVersion = trRuleEl ? (trRuleEl.value || '') : '';
+  if (typeof saveChatModeSettings === 'function') saveChatModeSettings();
   ankiAutoAdd = anki;
   autoReadAloud = autoRead;
   streamChatEnabled = stream;
@@ -696,14 +814,26 @@ function saveSettings() {
   setSetting('ankiQuizMultiWp', quizMultiWp);
   setSetting('ankiAutoSync', quizAutoSync);
   setSetting('ankiAutoAudio', quizAudio);
+  setSetting('ankiPreference', ankiPreference);
+  setSetting('ankiNeverPublic', ankiNeverPublic && ankiPreference === 'private');
+  setSetting('ankiPrivateUrl', /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(ankiPrivateUrl) ? ankiPrivateUrl : 'http://127.0.0.1:8765');
   setSetting('autoRead', autoRead);
   setSetting('streamChat', stream);
   setSetting('strategistEnabled', strategist);
   setSetting('executorEnabled', executor);
+  setSetting('dictProvider', dictProvider);
+  setSetting('llmProvider', validLlmProvider(llmProvider));
+  setSetting('llmTextModel', llmTextModel);
+  setSetting('llmVisionModel', llmVisionModel);
+  setSetting('llmVisionProvider', llmVisionProvider === 'same' ? 'same' : validLlmProvider(llmVisionProvider));
+  setSetting('searchProvider', ['minimax', 'bing', 'brave', 'tavily', 'serper', 'none'].includes(searchProvider) ? searchProvider : 'minimax');
+  setSetting('readingShowGlossary', readingShowGlossary);
+  setSetting('readingRssSource', readingRssSource);
   setSetting('musicEnabled', musicEnabledSetting);
   setSetting('musicAutoNext', musicAutoNextSetting);
   setSetting('ttsDuckMusic', ttsDuckSetting);
   setSetting('ttsDuckRatio', ttsDuckRatioSetting);
+  setSetting('ttsRate', ttsRateSetting);
   setMusicVol(musicVolumeSetting);
   if (Number.isInteger(musicTrackSetting) && musicTrackSetting >= 0) {
     localStorage.setItem('ai_en_music_idx', String(musicTrackSetting));
@@ -736,6 +866,8 @@ function saveSettings() {
     streamChat: stream,
     strategistEnabled: strategist,
     executorEnabled: executor,
+    readingShowGlossary,
+    readingRssSource,
     musicEnabled: musicEnabledSetting,
     musicAutoNext: musicAutoNextSetting,
     musicMode: musicMode(),
@@ -749,6 +881,7 @@ function saveSettings() {
     answerFontFamily,
     activeCharacter: activeCharacterId,
     translationRuleVersion: translationRuleVersion || null
+    ,llmProvider, llmTextModel, llmVisionModel, llmVisionProvider, searchProvider
   };
   // 本地快照与服务端保持一致，避免后续 setCurrentConvId 用旧快照覆盖这次保存
   saveSettingsBackup(mergedSettings);
@@ -760,7 +893,7 @@ function saveSettings() {
   applyMusicEnabledUI();
   document.getElementById('settingsModal').parentElement.remove();
   applyAnswerFontSettings();
-  if (anki) { syncAnkiReviewData().catch(() => {}); renderAnkiSidebar().catch(() => {}); }
+  if (anki) { syncAnkiReviewData({ force: true }).catch(() => {}); renderAnkiSidebar().catch(() => {}); }
 }
 
 /* ---------- 修改密码 ---------- */
@@ -803,16 +936,6 @@ function uploadAvatar(input) {
     toastMsg('✅ 头像已更新');
   };
   reader.readAsDataURL(file);
-}
-
-/* ---------- 角色卡选择 ---------- */
-function settingsSelectCharacter(id) {
-  setActiveCharacterId(id);
-  document.querySelectorAll('.char-option').forEach(el => el.classList.toggle('active', el.dataset.charId === id || el.getAttribute('data-arg1') === id));
-  document.querySelectorAll('.char-option').forEach(el => {
-    el.classList.toggle('active', el.textContent.includes(getActiveCharacter().name));
-  });
-  toastMsg('🎭 已切换角色：' + getActiveCharacter().fullName);
 }
 
 function promptNewCharacter() {
@@ -870,112 +993,3 @@ function saveNewCharacter() {
   toastMsg('✅ 已创建角色：' + name);
   openSettings();
 }
-
-/* ---------- 策略师指令 ---------- */
-function getStrategistInstructions() {
-  const v = getSetting('strategistInstructions', []);
-  return Array.isArray(v) ? v : [];
-}
-function saveStrategistInstructions(list) {
-  setSetting('strategistInstructions', list);
-  apiSave('strategist', list);
-}
-function sendStrategistInstruction() {
-  const input = document.getElementById('setStrategistInstr');
-  const text = (input.value || '').trim();
-  if (!text) { toastMsg('请输入指令内容'); return; }
-  const permanent = document.getElementById('setInstrPermanent').checked;
-  const list = getStrategistInstructions();
-  list.push({ text: text, permanent: Boolean(permanent), time: new Date().toISOString() });
-  saveStrategistInstructions(list);
-  input.value = '';
-  document.getElementById('setInstrPermanent').checked = false;
-  toastMsg(permanent ? '📌 指令已设为常驻' : '✅ 指令已发送（仅一次）');
-  openSettings();   // 重新打开设置刷新历史列表
-}
-function deleteStrategistInstruction(idx) {
-  const list = getStrategistInstructions();
-  if (idx >= 0 && idx < list.length) {
-    list.splice(idx, 1);
-    saveStrategistInstructions(list);
-    openSettings();
-  }
-}
-
-/* ---------- Retry Analysis ---------- */
-function retryAnalysis(userMsgId) {
-  const node = findNode(userMsgId);
-  if (!node) return;
-  activeVariant(node).feedback = null;
-  renderFeedbackForMsg(userMsgId);
-  callAnalysis(activeVariant(node).content, userMsgId);
-}
-
-/* ---------- Slash Commands in Main Chat ---------- */
-const SLASH_COMMANDS = [
-  { name: '/new', description: '开始新对话' },
-  { name: '/topic', description: '选择对话主题' },
-  { name: '/translate', alias: '/t', description: '打开词典翻译并查询文本' },
-  { name: '/ask', description: '向英语老师提问' },
-  { name: '/feedback', description: '打开反馈面板' },
-  { name: '/settings', description: '打开设置' },
-  { name: '/compact', description: '收起反馈面板' },
-  { name: '/help', description: '显示斜杠命令帮助' }
-];
-
-function hideSlashMenu() {
-  const menu = document.getElementById('slashMenu');
-  if (menu) menu.style.display = 'none';
-}
-
-function renderSlashMenu(query) {
-  const menu = document.getElementById('slashMenu');
-  if (!menu) return;
-  const q = String(query || '').toLowerCase();
-  const items = SLASH_COMMANDS.filter(c => c.name.includes(q) || c.description.includes(q));
-  if (!items.length) { hideSlashMenu(); return; }
-  menu.innerHTML = items.map((c, i) => `<button class="slash-item" data-command="${esc(c.name)}" data-action="choose-slash-command" data-arg1="${esc(c.name)}"><strong>${esc(c.name)}</strong>${c.alias ? `<small>${esc(c.alias)}</small>` : ''}<span>${esc(c.description)}</span></button>`).join('');
-  menu.style.display = 'block';
-}
-
-function chooseSlashCommand(command) {
-  const input = document.getElementById('userInput');
-  if (!input) return;
-  input.value = command + ' ';
-  input.focus();
-  hideSlashMenu();
-}
-
-function handleSlashCommand(text) {
-  hideSlashMenu();
-  // /t or /translate <text> → switch to dict tab and translate
-  const tMatch = text.match(/^\/(?:t|translate)\s+(.+)/s);
-  if (tMatch) {
-    switchRightTab('dict');
-    const input = document.getElementById('dictInput');
-    input.value = tMatch[1];
-    setTimeout(queryDict, 300);
-    return true;
-  }
-  // /ask <question> → switch to dict tab and ask
-  const aMatch = text.match(/^\/ask\s+(.+)/s);
-  if (aMatch) {
-    switchRightTab('dict');
-    const input = document.getElementById('dictInput');
-    input.value = '/ask ' + aMatch[1];
-    setTimeout(queryDict, 300);
-    return true;
-  }
-  if (text === '/new') { promptNewConversation(); return true; }
-  if (text === '/topic') { promptNewConversation(); return true; }
-  if (text === '/feedback') { setFeedbackPanelMode('expanded'); return true; }
-  if (text === '/compact') { setFeedbackPanelMode('collapsed'); return true; }
-  if (text === '/settings') { openSettings(); return true; }
-  if (text === '/help') {
-    const input = document.getElementById('userInput');
-    input.value = SLASH_COMMANDS.map(c => c.name + ' — ' + c.description).join('\n');
-    return true;
-  }
-  return false;
-}
-

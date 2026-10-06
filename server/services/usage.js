@@ -12,6 +12,8 @@
 'use strict';
 
 const logger = require('./logger');
+const { randomUUID } = require('node:crypto');
+let giftLedgerReady = false;
 
 function getDb() { return require('../db').db; }
 
@@ -27,6 +29,7 @@ function localDay(d) {
 function recordUsage(entry) {
   if (!entry || !entry.userId) return;
   try {
+    if (entry.personal) ensureGiftLedger();
     const pt = Math.max(0, Number(entry.promptTokens) || 0);
     const ct = Math.max(0, Number(entry.completionTokens) || 0);
     // 上游没给 total 时用 prompt+completion 兜底
@@ -44,9 +47,98 @@ function recordUsage(entry) {
       Math.max(0, Number(entry.chars) || 0),
       Number(entry.status) || 200
     );
+    if (giftLedgerReady && !entry.reservationId && !entry.personal && isGiftLearningRequest(entry)) {
+      getDb().prepare('INSERT INTO gift_calls(id,user_id,day,created_ms,state) VALUES(?,?,?,?,?)')
+        .run(randomUUID(), entry.userId, localDay(), Date.now(), Number(entry.status || 200) < 400 ? 'committed' : 'released');
+    }
   } catch (e) {
     logger.warn('用量记账失败（不影响请求）: ' + e.message);
   }
+}
+
+// Separate from deletable usage history: clearing analytics cannot reset gifts.
+function ensureGiftLedger() {
+  if (giftLedgerReady) return;
+  const db = getDb();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const exists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='gift_calls'").get();
+    db.exec(`CREATE TABLE IF NOT EXISTS gift_calls (
+      id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      day TEXT NOT NULL, created_ms INTEGER NOT NULL,
+      state TEXT NOT NULL CHECK(state IN ('pending','committed','released'))
+    ); CREATE INDEX IF NOT EXISTS gift_calls_user_day ON gift_calls(user_id,day);
+    CREATE INDEX IF NOT EXISTS gift_calls_user_time ON gift_calls(user_id,created_ms)`);
+    if (!exists) db.exec(`INSERT INTO gift_calls(id,user_id,day,created_ms,state)
+      SELECT 'legacy-' || id,user_id,day,CAST(strftime('%s',ts) AS INTEGER)*1000,
+      CASE WHEN status < 400 THEN 'committed' ELSE 'released' END FROM usage_log
+      WHERE provider='minimax' AND kind IN ('chat','chat_stream') AND lower(COALESCE(model,'')) LIKE '%m3%'`);
+    db.exec('COMMIT');
+    giftLedgerReady = true;
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+
+function quotaStatus(userId) {
+  ensureGiftLedger();
+  const db = getDb();
+  const u = db.prepare('SELECT username, role, daily_call_limit, rpm_limit, provider_mode FROM users WHERE id=? AND soft_deleted_at IS NULL').get(userId);
+  if (!u) return { allowed: false, status: 401, error: '账户不可用', unlimited: false, daily: 0, used: 0, rpm: 0 };
+  if (u.username === 'catten' || u.username === 'test') return { allowed: true, unlimited: true };
+  const day = localDay();
+  const today = db.prepare("SELECT COUNT(*) requests FROM gift_calls WHERE user_id=? AND day=? AND state!='released'").get(userId, day).requests;
+  const recent = db.prepare('SELECT COUNT(*) c FROM gift_calls WHERE user_id=? AND created_ms > ?').get(userId, Date.now() - 60000).c;
+  const daily = Number.isInteger(u.daily_call_limit) && u.daily_call_limit >= 0 ? u.daily_call_limit : 100;
+  const rpm = Number.isInteger(u.rpm_limit) && u.rpm_limit >= 1 ? u.rpm_limit : 10;
+  if (Number(today) >= daily) return { allowed: false, status: 429, error: '已达到今日赠送调用次数上限', daily, used: Number(today), rpm };
+  if (Number(recent) >= rpm) return { allowed: false, status: 429, error: '调用过于频繁，请稍后再试', daily, used: Number(today), rpm };
+  return { allowed: true, daily, used: Number(today), rpm };
+}
+
+function giftQuotaForUser(userId) {
+  const db = getDb();
+  const u = db.prepare('SELECT username, role, daily_call_limit, rpm_limit, provider_mode FROM users WHERE id=? AND soft_deleted_at IS NULL').get(userId);
+  if (!u) return { allowed: false, unlimited: false, daily: 0, used: 0, rpm: 0 };
+  const status = quotaStatus(userId);
+  return { ...status, username: u.username, providerMode: u.provider_mode || 'gift' };
+}
+
+function quotaStatusForRequest(userId, entry) {
+  return isGiftLearningRequest(entry) && !entry.personal ? quotaStatus(userId) : { allowed: true, unlimited: true, bypass: true };
+}
+
+// The check and reservation share a write transaction, including across workers.
+function reserveGiftCall(userId, entry) {
+  if (!isGiftLearningRequest(entry) || entry.personal) return quotaStatusForRequest(userId, entry);
+  ensureGiftLedger();
+  const db = getDb();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const quota = quotaStatus(userId);
+    if (quota.allowed && !quota.unlimited) {
+      quota.reservationId = randomUUID();
+      db.prepare("INSERT INTO gift_calls(id,user_id,day,created_ms,state) VALUES(?,?,?,?,'pending')")
+        .run(quota.reservationId, userId, localDay(), Date.now());
+    }
+    db.exec('COMMIT');
+    return quota;
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+
+function finishGiftCall(reservationId, status) {
+  if (!reservationId) return;
+  ensureGiftLedger();
+  getDb().prepare("UPDATE gift_calls SET state=? WHERE id=? AND state='pending'")
+    .run(Number(status) >= 200 && Number(status) < 400 ? 'committed' : 'released', reservationId);
+}
+
+// Gift quota applies only to the site's M3 learning requests. Other upstream
+// services and utility calls must not consume the daily allowance.
+function isGiftLearningRequest(entry) {
+  if (!entry || entry.provider !== 'minimax') return false;
+  const kind = String(entry.kind || '');
+  if (!['chat', 'chat_stream'].includes(kind)) return false;
+  const model = String(entry.model || '').toLowerCase();
+  return model.includes('m3');
 }
 
 /* 从 MiniMax 非流式响应里抽 usage。返回 null 表示上游没给。 */
@@ -176,6 +268,7 @@ function getUsageSummary(userId, days) {
 /* 清空该用户的用量记录（隐私中心「清除用量数据」）。返回删除条数。 */
 function clearUsage(userId) {
   try {
+    ensureGiftLedger();
     const r = getDb().prepare('DELETE FROM usage_log WHERE user_id = ?').run(userId);
     return Number(r.changes || 0);
   } catch (e) {
@@ -184,4 +277,4 @@ function clearUsage(userId) {
   }
 }
 
-module.exports = { recordUsage, parseChatUsage, parseStreamUsage, getUsageSummary, clearUsage, localDay };
+module.exports = { recordUsage, quotaStatus, giftQuotaForUser, quotaStatusForRequest, reserveGiftCall, finishGiftCall, isGiftLearningRequest, parseChatUsage, parseStreamUsage, getUsageSummary, clearUsage, localDay };

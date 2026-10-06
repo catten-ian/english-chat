@@ -61,13 +61,27 @@ function sendFile(res, abs) {
   });
 }
 
-function serveStatic(res, pathname) {
+function serveStatic(res, pathname, opts) {
   // URL pathname 保留百分号编码，需解码以支持中文文件名；解码失败直接拒绝
   let decoded;
   try { decoded = decodeURIComponent(pathname); } catch (e) { sendJson(res, 400, { error: 'bad request' }); return; }
   if (decoded.includes('\0')) { sendJson(res, 400, { error: 'bad request' }); return; }
 
-  if (decoded === '/' || decoded === '/index.html') { sendFile(res, INDEX_FILE); return; }
+  // The public dev entry is /english?version=dev.  Its HTML uses relative
+  // assets, so serve the dev checkout's index with a base path marker; the
+  // reverse proxy maps /english-dev/ to the same checkout for direct checks.
+  if (decoded === '/' || decoded === '/index.html') {
+    if (opts && opts.baseHref) {
+      fs.readFile(INDEX_FILE, 'utf8', (err, html) => {
+        if (err) { sendJson(res, 404, { error: 'not found' }); return; }
+        const updated = html.replace('<base href="./">', '<base href="' + opts.baseHref + '">');
+        res.writeHead(200, { 'Content-Type': STATIC_MIME['.html'], 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': CSP });
+        res.end(updated);
+      });
+      return;
+    }
+    sendFile(res, INDEX_FILE); return;
+  }
 
   for (const [prefix, root] of Object.entries(STATIC_DIRS)) {
     if (!decoded.startsWith(prefix)) continue;

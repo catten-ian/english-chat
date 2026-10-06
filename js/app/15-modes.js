@@ -30,18 +30,19 @@ function showHome() {
 let currentGameTab = 'charade';
 // 在 Game 中心内切换子游戏（Charade / Cloze / Wordle）
 function switchGameTab(game) {
-  if (!['charade', 'cloze', 'wordle'].includes(game)) game = 'charade';
+  if (!['charade', 'cloze', 'wordle', 'reading'].includes(game)) game = 'charade';
   currentGameTab = game;
   localStorage.setItem('ai_en_game_tab', game);
   const tabs = document.querySelectorAll('.game-tab');
   tabs.forEach(t => t.classList.toggle('active', t.dataset.game === game));
-  ['charade', 'cloze', 'wordle'].forEach(g => {
-    const el = document.getElementById(g + 'Area');
+  ['charade', 'cloze', 'wordle', 'reading'].forEach(g => {
+    const el = document.getElementById(g === 'reading' ? 'gameReadingArea' : g + 'Area');
     if (el) el.style.display = g === game ? 'flex' : 'none';
   });
   if (game === 'charade' && !chState) charadeNext();
   if (game === 'cloze' && !clState) clozeNext();
   if (game === 'wordle' && !wlState) wlGenerate();
+  if (game === 'reading' && typeof readingPracticeNew === 'function' && !gameReadingCurrent) readingPracticeNew();
 }
 
 /* 在「学习中心」内切换子页。

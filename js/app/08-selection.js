@@ -290,8 +290,19 @@ async function translateSelection(text, isSentence, isPhrase, contextBlock) {
 }
 
 function quickAddVocab(word, meaning) {
+  word = String(word || '').trim(); meaning = String(meaning || '').trim();
+  if (!word) return;
   const v = getVocab();
-  if (!v.some(i => i.word && i.word.toLowerCase() === word.toLowerCase())) {
+  const existing = v.find(i => i.word && i.word.toLowerCase() === word.toLowerCase());
+  if (existing) {
+    const meanings = Array.isArray(existing.meanings) ? existing.meanings : String(existing.translation || '').split(/\s*\/\s*/).filter(Boolean);
+    if (meaning && !meanings.includes(meaning)) meanings.push(meaning);
+    existing.meanings = meanings; existing.translation = meanings.join(' / ');
+    saveVocab(v); renderVocab();
+    if (!meanings.length && typeof generateVocabMeaningAsync === 'function') generateVocabMeaningAsync(existing.word, existing.context || '');
+    return;
+  }
+  {
     // 提取原句作为语境
     const selection = window.getSelection();
     let context = word;
@@ -308,9 +319,11 @@ function quickAddVocab(word, meaning) {
         }
       }
     }
-    v.push({ word: word, translation: meaning || '', context: context, added: new Date().toISOString().slice(0, 10) });
+    v.push({ word, translation: meaning, meanings: meaning ? [meaning] : [], direction: 'meaning-to-word', context, added: new Date().toISOString().slice(0, 10) });
     saveVocab(v);
     renderVocab();
+    toastMsg('✅ 已加入生词本' + (meaning ? '' : '，可稍后补充释义'));
+    if (!meaning && typeof generateVocabMeaningAsync === 'function') generateVocabMeaningAsync(word, context);
   }
 }
 
@@ -697,4 +710,3 @@ function switchFeedbackTab(tab) {
   document.querySelectorAll('#feedbackTabs .right-tab').forEach(b => b.classList.toggle('active', b.dataset.ftab === tab));
   document.querySelectorAll('[data-ftab-pane]').forEach(p => p.style.display = (p.dataset.ftabPane === tab ? '' : 'none'));
 }
-

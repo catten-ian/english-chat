@@ -7,14 +7,14 @@
 'use strict';
 
 const { sendJson } = require('../helpers');
-const { getUsageSummary, clearUsage } = require('../services/usage');
+const { getUsageSummary, clearUsage, giftQuotaForUser } = require('../services/usage');
 const { MINIMAX_KEY, ELEVEN_KEY, MINIMAX_BASE, BACKUP_INTERVAL_MIN } = require('../config');
 
 function usageGet(req, res) {
   const url = new URL(req.url, 'http://localhost');
   const days = url.searchParams.get('days');
   try {
-    sendJson(res, 200, getUsageSummary(req.uid, days), req);
+    sendJson(res, 200, { ...getUsageSummary(req.uid, days), quota: giftQuotaForUser(req.uid) }, req);
   } catch (e) {
     sendJson(res, 500, { error: 'usage query failed', detail: e.message }, req);
   }

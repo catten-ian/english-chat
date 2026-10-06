@@ -8,7 +8,21 @@
 // 注意：file:// 直接双击打开已不再受支持——服务端 CORS 不再放行 `Origin: null`
 // （任意第三方 sandbox iframe 都能伪造该来源）。请用 http://localhost:8091 访问。
 // 这里保留指向仍便于本地调试时看到明确的 CORS 报错而不是同源静默失败。
-const BACKEND_URL = (typeof location !== 'undefined' && location.protocol === 'file:') ? 'http://localhost:8091' : "";
+const _queryVersion = (typeof location !== 'undefined' && typeof location.search === 'string')
+  ? (location.search.match(/[?&]version=([^&]+)/) || [])[1] : '';
+// The reverse proxy exposes dev under /api-dev, but a local/static preview may
+// not have that mount. Keep the decision explicit and avoid emitting a bare
+// relative URL which browsers resolve against an unexpected subpath.
+const BACKEND_URL = (typeof location !== 'undefined' && location.protocol === 'file:') ? 'http://localhost:8091'
+  : ((typeof location !== 'undefined' && /^(www\.)?catten\.cyou$/.test(location.hostname)
+      && (_queryVersion === 'dev' || location.pathname.startsWith('/english-dev/'))) ? '/api-dev' : '');
+
+const LOCAL_FILE_MODE = typeof location !== 'undefined' && location.protocol === 'file:';
+
+function apiFetch(path, options) {
+  const url = String(BACKEND_URL || '') + String(path || '');
+  return fetch(url, options);
+}
 
 /* ---------- Auth ---------- */
 let authToken = localStorage.getItem('ai_en_token') || sessionStorage.getItem('ai_en_token') || null;
@@ -47,20 +61,32 @@ function setAuth(token, user, remember) {
 function logoutLocal() { setAuth(null, null); }
 
 async function apiLogin(username, password) {
-  const res = await fetch(BACKEND_URL + '/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
-  });
+  let res;
+  try {
+    res = await apiFetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+  } catch (e) {
+    if (LOCAL_FILE_MODE) throw new Error('本地文件模式无法连接后端，请使用 http://localhost:8091 或线上网站打开');
+    throw new Error('无法连接登录服务器，请检查网络或稍后重试');
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || '登录失败（HTTP ' + res.status + '）');
   setAuth(data.token, data.username);
   return data;
 }
 async function apiRegisterChallenge() {
-  const res = await fetch(BACKEND_URL + '/api/auth/register-challenge');
+  const res = await apiFetch('/api/auth/register-challenge');
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || '无法获取人机校验');
+  return data;
+}
+async function apiDeleteAccount() {
+  const res = await fetch(BACKEND_URL + '/api/auth/delete', { method: 'POST', headers: authHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || '删除账户失败');
   return data;
 }
 async function apiRegister(username, password, challengeId, nonce) {
@@ -387,10 +413,15 @@ const SYNCED_SETTING_KEYS = [
   'trHistory',        // 翻译作答历史（上限 100 条）
   'trQuestionStats',  // 每题最佳分/作答次数
   'trCustomBank',     // 用户导入的自定义翻译题库
+  'trSource',         // 翻译题目来源
+  'trCategory',       // 翻译题库分类
   'dictHistory',      // 查词历史（上限 12 条）
   'ankiVocabPhase',   // 生词卡两阶段进度
   'ankiStreak',       // 连续学习天数
-  'ankiLastStudy'     // 最近学习日期
+  'ankiLastStudy',     // 最近学习日期
+  // Chat persona/mode preferences (account-scoped)
+  'chatMode', 'chatScenario', 'chatDebateSide',
+  'chatLlmProvider', 'chatLlmTextModel', 'chatWorldbook'
 ];
 let _suppressSettingSync = false;
 
@@ -409,11 +440,29 @@ function syncSettingToServer(key) {
 
 /* ---------- Vocabulary ---------- */
 function getVocab() {
-  try { return JSON.parse(localStorage.getItem('ai_en_vocab') || '[]'); } catch(e) { return []; }
+  let rows;
+  try { rows = JSON.parse(localStorage.getItem('ai_en_vocab') || '[]'); } catch(e) { rows = []; }
+  if (!Array.isArray(rows)) return [];
+  // Normalize legacy entries once at read time.  Do not invent a translation:
+  // callers can show an explicit "未填写释义" state and fetch one later.
+  return rows.filter(x => x && typeof x === 'object' && String(x.word || '').trim()).map(normalizeVocabEntry);
+}
+function normalizeVocabEntry(raw) {
+  const x = Object.assign({}, raw);
+  x.word = String(x.word || x.term || '').trim();
+  x.translation = String(x.translation ?? x.meaning ?? '').trim();
+  if (/^（?(阅读中添加|待补充|暂无释义|未填写释义)）?$/.test(x.translation)) x.translation = '';
+  x.meanings = Array.isArray(x.meanings) ? x.meanings.map(v => String(v || '').trim()).filter(Boolean) : [];
+  if (!x.meanings.length && x.translation) x.meanings = x.translation.split(/\s*\/\s*/).map(v => v.trim()).filter(Boolean);
+  x.translation = x.meanings.join(' / ');
+  x.direction = x.direction === 'word-to-meaning' ? 'word-to-meaning' : 'meaning-to-word';
+  x.senseIds = Array.isArray(x.senseIds) ? x.senseIds : [];
+  return x;
 }
 function saveVocab(v) {
-  localStorage.setItem('ai_en_vocab', JSON.stringify(v));
-  apiSave('vocab', v);
+  const normalized = (Array.isArray(v) ? v : []).map(normalizeVocabEntry).filter(x => x.word);
+  localStorage.setItem('ai_en_vocab', JSON.stringify(normalized));
+  apiSave('vocab', normalized);
 }
 
 /* ---------- Weak Points ----------

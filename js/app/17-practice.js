@@ -316,7 +316,7 @@ async function submitWriting() {
     const raw = await callAPI([
       { role: 'system', content: prompt + '\n\nNo markdown, no thinking, only valid JSON.' },
       { role: 'user', content: userContent }
-    ], { temperature: 0.4, maxTokens: 4000 });
+    ], { temperature: 0.4, maxTokens: 4000, vision: !!currentTopicImageDataUrl });
     const obj = smartParseJSON(raw);
     if (obj) {
       let html = pfHero(obj.score, '综合评分');
@@ -353,6 +353,7 @@ function clearWriting() {
 // ---- Translation ----
 function translateSource(src) {
   trSource = src;
+  setSetting('trSource', src);
   document.getElementById('trBankBtn').classList.toggle('active', src === 'bank');
   document.getElementById('trAiBtn').classList.toggle('active', src === 'ai');
   const sel = document.getElementById('trCategorySelect');
@@ -375,7 +376,7 @@ function trPopulateCategories() {
     html += '<option value="' + esc(k) + '">' + esc(TRANSLATION_BANK[k].label) + ' (' + TRANSLATION_BANK[k].items.length + ')</option>';
   }
   sel.innerHTML = html;
-  if (!sel.dataset.value) sel.dataset.value = 'all';
+  if (!sel.dataset.value) sel.dataset.value = getSetting('trCategory', 'all');
   sel.value = sel.dataset.value;
   // 同步刷新右侧题库面板的分类下拉
   populateBankCategorySelect();
@@ -509,12 +510,13 @@ function trSelectQuestion(catKey, catIdx) {
   if (currentMode !== 'translation') switchMode('translation');
   setTimeout(() => {
     trSource = 'bank';
+    setSetting('trSource', 'bank');
     const btn = document.getElementById('trBankBtn');
     const aiBtn = document.getElementById('trAiBtn');
     if (btn) btn.classList.add('active');
     if (aiBtn) aiBtn.classList.remove('active');
     const sel = document.getElementById('trCategorySelect');
-    if (sel) { sel.value = catKey; sel.dataset.value = catKey; }
+    if (sel) { sel.value = catKey; sel.dataset.value = catKey; setSetting('trCategory', catKey); }
     const bank = TRANSLATION_BANK[catKey];
     if (!bank || !bank.items[catIdx]) { toastMsg('题目不存在'); return; }
     const item = bank.items[catIdx];
@@ -562,7 +564,7 @@ function updateTrQuestionProgress() {
 
 function trCategoryChanged() {
   const sel = document.getElementById('trCategorySelect');
-  if (sel) sel.dataset.value = sel.value;
+  if (sel) { sel.dataset.value = sel.value; setSetting('trCategory', sel.value); }
   currentTranslation = null;
   nextTranslate();
 }
@@ -930,4 +932,4 @@ function clearTranslateHistory() {
   setSetting('trHistory', []);
   renderTranslateHistory();
 }
-
+

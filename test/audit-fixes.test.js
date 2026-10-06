@@ -168,6 +168,56 @@ describe('前端源码回归', () => {
     const src = read('js/app/19-init.js');
     assert.match(src, /if \(!isAuthed\(\)\) return;/, '未登录时不应 POST /api/backup');
   });
+
+  test('网页复习选择题只接受答案字段开头的选项字母', () => {
+    const src = read('js/app/22-web-review.js');
+    assert.match(src, /function webReviewAnswerLetter\(/);
+    assert.match(src, /answer: webReviewAnswerLetter\(aText\)/);
+    assert.doesNotMatch(src, /aText\.match\(\/\(\[A-D\]\)\/\)/);
+  });
+
+  test('语法填空复习题保留根词提示', () => {
+    const src = read('js/app/22-web-review.js');
+    assert.match(src, /语法填空必须把给出的词根\/中文提示留在题干中/);
+    assert.match(src, /rootMatch/);
+    assert.match(src, /stem\.slice\(0, pos\) \+ .*rootMatch\[1\]/);
+  });
+
+  test('移动端关闭右侧栏会清除 drawer-open 遮罩状态', () => {
+    const src = read('js/app/11-ui-panels.js');
+    assert.match(src, /if \(mode === 'collapsed'\)[\s\S]{0,260}document\.body\.classList\.remove\('drawer-open'\)/);
+  });
+
+  test('移动端打开对话侧栏通过面板状态 helper 关闭右栏', () => {
+    const src = read('js/app/07-chat-actions.js');
+    assert.match(src, /if \(typeof setFeedbackPanelMode === 'function'\) setFeedbackPanelMode\('collapsed'\)/);
+  });
+
+  test('复习单空答案中的逗号不会被错误拆成多空', () => {
+    const src = read('js/app/22-web-review.js');
+    assert.match(src, /single blank may legitimately contain punctuation/);
+    assert.match(src, /return \[text\];/);
+  });
+
+  test('网页复习词汇卡严格区分 Front 题面与 Back 答案', () => {
+    const src = read('js/app/22-web-review.js');
+    assert.match(src, /function webReviewVocabAnswer\(/);
+    assert.match(src, /function webReviewVocabMeaningText\(/);
+    assert.match(src, /webReviewVocabAnswer\(backRaw, frontRaw\)/);
+    assert.match(src, /这张旧卡还没有中文释义，请先在生词本补充/);
+    assert.doesNotMatch(src, /const parts = backRaw\.split\('\n'\).*parts\.shift\(\)/s);
+  });
+  test('网页复习能识别带中文作答提示的旧卡反置', () => {
+    const src = read('js/app/22-web-review.js');
+    assert.match(src, /function webReviewHasEnglishHeadword\(/);
+    assert.match(src, /webReviewHasEnglishHeadword\(frontRaw\)/);
+  });
+
+  test('网页复习多空判分要求答案数量与输入数量一致', () => {
+    const src = read('js/app/22-web-review.js');
+    assert.match(src, /answers\.length === givenArr\.length/);
+    assert.match(src, /单个答案中可能包含逗号\/分号/);
+  });
 });
 
 /* ---------- USER_CACHE_KEYS 与草稿键一致性 ---------- */

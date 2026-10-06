@@ -26,6 +26,11 @@ const backupRoutes = require('./routes/backup');
 const usageRoutes = require('./routes/usage');
 const keysRoutes = require('./routes/keys');
 const proxyRoutes = require('./routes/proxy');
+const adminRoutes = require('./routes/admin');
+const feedbackRoutes = require('./routes/feedback');
+const weakPointRoutes = require('./routes/weak-points');
+const providerRoutes = require('./routes/providers');
+const readingSourceRoutes = require('./routes/reading-sources');
 const { serveStatic } = require('./routes/static');
 
 /* 启动数据准备：迁移已在 db.js 完成，这里播种默认账户（幂等） */
@@ -76,7 +81,10 @@ const server = http.createServer(async (req, res) => {
     if (method === 'POST' && pathname === '/api/sync/conversations') return await conversationSyncRoutes.peer(req, res);
 
     if (method === 'GET' && !pathname.startsWith('/api/')) {
-      serveStatic(res, pathname);
+      // The public reverse-proxy entry is /english?version=dev.  Relative
+      // assets must stay under the dev mount instead of resolving to /js/.
+      const baseHref = process.env.AI_EN_PUBLIC_BASE || null;
+      serveStatic(res, pathname, baseHref ? { baseHref } : null);
       return;
     }
 
@@ -85,6 +93,7 @@ const server = http.createServer(async (req, res) => {
     if (!au) { sendJson(res, 401, { error: 'unauthorized' }, req); return; }
     req.uid = au.uid;
     req.username = au.username;
+    req.role = au.role || 'user';
 
     if (method === 'GET' && pathname === '/api/auth/me') return authRoutes.me(req, res);
     if (method === 'POST' && pathname === '/api/auth/logout') return authRoutes.logout(req, res);
@@ -93,8 +102,21 @@ const server = http.createServer(async (req, res) => {
     if (method === 'POST' && pathname === '/api/auth/revoke-others') return authRoutes.revokeOthers(req, res);
     // 修改密码：校验旧密码 → 换哈希 → 撤销除当前会话外的所有会话
     if (method === 'POST' && pathname === '/api/auth/change-password') return await authRoutes.changePassword(req, res);
+    if (method === 'POST' && pathname === '/api/auth/delete') return await authRoutes.deleteAccount(req, res);
+    // Match admin paths before authorization so authenticated users receive a
+    // truthful 403 instead of an indistinguishable 404.
+    if (method === 'GET' && pathname === '/api/admin/users') return adminRoutes.listUsers(req, res);
+    if (method === 'POST' && pathname === '/api/admin/users/update') return await adminRoutes.updateUser(req, res);
+    if (method === 'GET' && pathname === '/api/admin/feedback') return feedbackRoutes.adminList(req, res);
+    if (method === 'POST' && pathname === '/api/admin/feedback/update') return await feedbackRoutes.adminUpdate(req, res);
+    if (method === 'GET' && pathname === '/api/feedback') return feedbackRoutes.list(req, res);
+    if (method === 'POST' && pathname === '/api/feedback') return await feedbackRoutes.create(req, res);
+    if (method === 'POST' && pathname === '/api/weak-points/cluster') return await weakPointRoutes.weakPointsCluster(req, res);
+    if (method === 'GET' && pathname === '/api/reading/sources') return await readingSourceRoutes.sources(req, res);
 
     // 用户数据读写
+    if (method === 'GET' && pathname === '/api/providers') return providerRoutes.status(req, res);
+    if (method === 'POST' && pathname === '/api/providers') return await providerRoutes.save(req, res);
     const dbMatch = pathname.match(/^\/api\/db\/(\w+)$/);
     if (dbMatch) return await userDataRoutes.dbKey(req, res, dbMatch[1]);
     if (method === 'POST' && pathname === '/api/conversations/delete') return await conversationSyncRoutes.remove(req, res);

@@ -41,6 +41,45 @@ function agentLog(agent, msg) {
   agentRuntimeLog.push({ t: new Date().toISOString(), agent, msg: String(msg).substring(0, 600) });
   if (agentRuntimeLog.length > 300) agentRuntimeLog.shift();
 }
+
+// 用户级模型偏好：默认保持 MiniMax M3；自定义 provider 通过服务端
+// OpenAI-compatible 代理解析，密钥不会进入浏览器或 user_data。
+const LLM_PROVIDER_OPTIONS = Object.freeze({
+  minimax: { label: 'MiniMax', model: 'MiniMax-M3' },
+  openai: { label: 'OpenAI', model: 'gpt-4o-mini' },
+  deepseek: { label: 'DeepSeek', model: 'deepseek-chat' },
+  qwen: { label: 'Qwen', model: 'qwen-plus' },
+  siliconflow: { label: 'SiliconFlow', model: 'Qwen/Qwen3-8B' },
+  openrouter: { label: 'OpenRouter', model: 'openai/gpt-4o-mini' },
+  ollama: { label: 'Ollama', model: 'qwen3:8b' },
+  custom: { label: 'Custom OpenAI-compatible', model: '' }
+});
+function validLlmProvider(provider) { return Object.hasOwn(LLM_PROVIDER_OPTIONS, provider) ? provider : 'minimax'; }
+function llmPreference() {
+  const provider = getSetting('llmProvider', 'minimax');
+  const validProvider = validLlmProvider(provider);
+  const visionProvider = getSetting('llmVisionProvider', 'same');
+  return {
+    provider: validProvider,
+    textModel: String(getSetting('llmTextModel', '') || LLM_PROVIDER_OPTIONS[validProvider].model).trim().slice(0, 120),
+    visionProvider: visionProvider === 'same' ? validProvider : validLlmProvider(visionProvider),
+    visionModel: String(getSetting('llmVisionModel', '') || '').slice(0, 120),
+    searchProvider: ['minimax', 'bing', 'brave', 'tavily', 'serper', 'none'].includes(getSetting('searchProvider', 'minimax')) ? getSetting('searchProvider', 'minimax') : 'minimax'
+  };
+}
+function activeTextModel() { return llmPreference().textModel; }
+function activeProvider() { return llmPreference().provider; }
+function activeVisionProvider() { return llmPreference().visionProvider; }
+function activeVisionModel() {
+  const pref = llmPreference();
+  return pref.visionModel || (pref.visionProvider === pref.provider ? pref.textModel : LLM_PROVIDER_OPTIONS[pref.visionProvider].model);
+}
+function buildVisionMessages(messages) {
+  return (messages || []).map(m => {
+    if (Array.isArray(m.content)) return { ...m, content: m.content };
+    return m;
+  });
+}
 function llmLog(type, request, response, thinking) {
   llmRuntimeLog.push({
     t: new Date().toISOString(),
@@ -262,9 +301,13 @@ For extensions: provide advanced alternatives that are genuinely useful. For exa
 /* ---------- API ---------- */
 async function callAPI(messages, options) {
   options = options || {};
+  // Chat may use a dedicated provider/model; all other calls retain the global
+  // text/vision preference. Credentials are still resolved server-side.
+  const chatPref = options.chat && typeof chatLlmPreference === 'function' ? chatLlmPreference() : null;
   const body = {
-    model: MODEL,
-    messages: messages,
+    provider: options.vision ? activeVisionProvider() : (chatPref ? chatPref.provider : activeProvider()),
+    model: (options && options.vision) ? activeVisionModel() : (chatPref ? chatPref.textModel : activeTextModel()),
+    messages: (options && options.vision) ? buildVisionMessages(messages) : messages,
     temperature: options.temperature ?? 0.8,
     max_tokens: options.maxTokens ?? 3200
   };
@@ -295,7 +338,18 @@ async function callAPI(messages, options) {
 }
 
 function buildApiMessages() {
-  return getActivePath().slice(-20).map(m => ({ role: m.role, content: m.content }));
+  // The streaming UI creates an empty assistant placeholder before the
+  // request starts.  Do not send that placeholder (or stale empty messages
+  // from an interrupted/legacy conversation) to the strict proxy validator.
+  // Multimodal content is kept as long as it contains at least one valid
+  // part; the backend performs the authoritative schema validation.
+  return getActivePath().slice(-20)
+    .filter(m => {
+      if (!m || !['user', 'assistant'].includes(m.role)) return false;
+      if (typeof m.content === 'string') return !!m.content.trim();
+      return Array.isArray(m.content) && m.content.length > 0;
+    })
+    .map(m => ({ role: m.role, content: m.content }));
 }
 
 /* ============================================================
@@ -373,6 +427,7 @@ const AudioManager = (function () {
     duckMusic();
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
+    audio.playbackRate = Math.max(0.6, Math.min(1.4, Number(getSetting('ttsRate', 1)) || 1));
     const s = { audio, url, onDone: typeof onDone === 'function' ? onDone : null };
     session = s;
     const finish = function (reason) {
@@ -398,4 +453,3 @@ const AudioManager = (function () {
 
   return { speakBlob, stopSpeech, isSpeaking };
 })();
-

@@ -106,6 +106,18 @@ function pickKey(envName, fileValue) {
 let _MINIMAX_KEY = pickKey('MINIMAX_API_KEY', env.MINIMAX_API_KEY);
 let _ELEVEN_KEY = pickKey('ELEVEN_API_KEY', env.ELEVEN_API_KEY);
 let _MINIMAX_BASE = pickKey('MINIMAX_BASE', env.MINIMAX_BASE) || 'https://api.minimaxi.com';
+// OpenAI-compatible provider registry.  Secrets stay server-side; the browser
+// only selects an allow-listed provider id and model name.
+const PROVIDER_DEFS = Object.freeze({
+  minimax: { label: 'MiniMax', base: _MINIMAX_BASE, key: () => _MINIMAX_KEY, defaultModel: 'MiniMax-M3' },
+  openai: { label: 'OpenAI-compatible', base: pickKey('OPENAI_BASE', env.OPENAI_BASE) || 'https://api.openai.com', key: () => pickKey('OPENAI_API_KEY', env.OPENAI_API_KEY), defaultModel: pickKey('OPENAI_MODEL', env.OPENAI_MODEL) || 'gpt-4o-mini' },
+  deepseek: { label: 'DeepSeek', base: pickKey('DEEPSEEK_BASE', env.DEEPSEEK_BASE) || 'https://api.deepseek.com', key: () => pickKey('DEEPSEEK_API_KEY', env.DEEPSEEK_API_KEY), defaultModel: pickKey('DEEPSEEK_MODEL', env.DEEPSEEK_MODEL) || 'deepseek-chat' },
+  qwen: { label: 'Qwen', base: pickKey('QWEN_BASE', env.QWEN_BASE) || 'https://dashscope.aliyuncs.com/compatible-mode', key: () => pickKey('QWEN_API_KEY', env.QWEN_API_KEY), defaultModel: pickKey('QWEN_MODEL', env.QWEN_MODEL) || 'qwen-plus' },
+  siliconflow: { label: 'SiliconFlow', base: pickKey('SILICONFLOW_BASE', env.SILICONFLOW_BASE) || 'https://api.siliconflow.cn', key: () => pickKey('SILICONFLOW_API_KEY', env.SILICONFLOW_API_KEY), defaultModel: pickKey('SILICONFLOW_MODEL', env.SILICONFLOW_MODEL) || 'Qwen/Qwen3-8B' },
+  openrouter: { label: 'OpenRouter', base: pickKey('OPENROUTER_BASE', env.OPENROUTER_BASE) || 'https://openrouter.ai/api', key: () => pickKey('OPENROUTER_API_KEY', env.OPENROUTER_API_KEY), defaultModel: pickKey('OPENROUTER_MODEL', env.OPENROUTER_MODEL) || 'openai/gpt-4o-mini' },
+  ollama: { label: 'Ollama', base: pickKey('OLLAMA_BASE', env.OLLAMA_BASE) || 'http://127.0.0.1:11434', key: () => pickKey('OLLAMA_API_KEY', env.OLLAMA_API_KEY), requiresKey: false, defaultModel: pickKey('OLLAMA_MODEL', env.OLLAMA_MODEL) || 'qwen3:8b' },
+  custom: { label: 'Custom OpenAI-compatible', base: pickKey('CUSTOM_LLM_BASE', env.CUSTOM_LLM_BASE), key: () => pickKey('CUSTOM_LLM_API_KEY', env.CUSTOM_LLM_API_KEY), defaultModel: pickKey('CUSTOM_LLM_MODEL', env.CUSTOM_LLM_MODEL) || '' }
+});
 const KEY_SOURCES = {
   minimax: process.env.MINIMAX_API_KEY !== undefined ? 'env' : (env.MINIMAX_API_KEY ? 'file' : 'none'),
   eleven: process.env.ELEVEN_API_KEY !== undefined ? 'env' : (env.ELEVEN_API_KEY ? 'file' : 'none')
@@ -126,7 +138,10 @@ const MINIMAX_BASE = () => _MINIMAX_BASE;
    任意第三方站点都能构造，等于给外部页面开了带凭据的跨源读权限
    （配合默认账户 + /api/keys/rotate-base 可窃取上游 API key）。
    本应用页面由本服务自身提供，不需要 file:// 支持。 */
-const ALLOWED_ORIGINS = new Set(['http://localhost:8091', 'http://127.0.0.1:8091']);
+const ALLOWED_ORIGINS = new Set([
+  'http://localhost:8091', 'http://127.0.0.1:8091',
+  'https://www.catten.cyou', 'https://catten.cyou'
+]);
 
 /* ==================== Anki 代理白名单与归属校验 ====================
    AnkiConnect 是无鉴权的本机高权限接口。代理若原样转发任意 action，
@@ -183,6 +198,7 @@ module.exports = {
   USER_DATA_KEYS,
   CONVERSATION_SYNC_SECRET, CONVERSATION_SYNC_PEER,
   MINIMAX_KEY, ELEVEN_KEY, MINIMAX_BASE, ALLOWED_ORIGINS,
+  PROVIDER_DEFS,
   KEY_SOURCES, setRuntimeKey, setMinimaxBase,
   ENV_FILE: process.env.AI_EN_ENV_FILE ? path.resolve(process.env.AI_EN_ENV_FILE) : path.join(BASE, '.env'),
   ANKI_DECK_PREFIX, ANKI_ALLOWED_MODELS, ANKI_TEMPLATE_MODELS, ANKI_MAX_NOTES, ANKI_MAX_CARDS, ANKI_MAX_MEDIA_B64,

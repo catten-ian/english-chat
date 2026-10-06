@@ -9,6 +9,13 @@ let feedbackPanelMode = 'expanded';
 function setFeedbackPanelMode(mode) {
   const panel = document.getElementById('sidePanel');
   if (!panel) return;
+  // Mobile drawers are mutually exclusive so neither panel can remain visible
+  // as a clipped strip behind the other one.
+  if (isMobile && isMobile() && mode !== 'collapsed') {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) sidebar.classList.remove('open');
+    sidebarOpen = false;
+  }
   feedbackPanelMode = mode;
   panel.classList.remove('panel-expanded', 'panel-mini', 'panel-collapsed', 'open');
   if (mode === 'expanded') {
@@ -37,7 +44,12 @@ function setFeedbackPanelMode(mode) {
     panel.style.right = '';
     panel.style.bottom = '';
   }
-  if (mode === 'collapsed') panel.classList.add('panel-collapsed');
+  if (mode === 'collapsed') {
+    panel.classList.add('panel-collapsed');
+    // Closing the right drawer must clear the shared mobile backdrop state.
+    // Otherwise the transparent overlay remains above the chat after close.
+    if (isMobile && isMobile()) document.body.classList.remove('drawer-open');
+  }
   document.body.classList.toggle('floating-panel-open', mode !== 'collapsed');
   hideTip();
   syncDrawerBackdrop();
@@ -126,7 +138,16 @@ document.addEventListener('mouseup', function() {
   resizing = null;
 });
 function isMobile() {
+  if (typeof window !== 'undefined' && Number.isFinite(window.innerWidth)) return window.innerWidth <= 767;
   return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+}
+
+if (typeof window !== 'undefined' && window.matchMedia) {
+  window.matchMedia('(max-width: 767px)').addEventListener('change', function () {
+    closeDrawers();
+    if (isMobile()) setFeedbackPanelMode('collapsed');
+    syncDrawerBackdrop();
+  });
 }
 
 /* ---------- Modal helpers ---------- */
@@ -226,4 +247,4 @@ function showSystemError(message, opts = {}) {
   container.appendChild(el);
   scrollToBottom();
 }
-
+

@@ -226,6 +226,24 @@ test('网页复习解析题目时隐藏内部测试点标识', () => {
   assert.doesNotMatch(quiz.explanation, /wp_example|测试点/);
 });
 
+test('网页复习语法填空保留括号根词提示', () => {
+  const sandbox = { document: { createElement: () => ({ innerHTML: '', querySelectorAll: () => [], textContent: '' }) } };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8'), sandbox, { filename: '22-web-review.js' });
+  const card = {
+    modelName: '英语学习-薄弱点问答', deckName: '英语学习::test::薄弱点',
+    fields: {
+      Question: { value: 'The work ___ every Friday.' },
+      Answer: { value: 'is completed (complete)' },
+      Explanation: { value: '根据被动语态（complete）判断。' }
+    }
+  };
+  const quiz = sandbox.webReviewQuizType(card);
+  assert.strictEqual(quiz.type, 'fill');
+  assert.match(quiz.stem, /___ \(complete\)/);
+});
+
 test('Anki 桌面模板内联脚本均为合法 JavaScript', () => {
   const sandbox = {};
   sandbox.globalThis = sandbox;
