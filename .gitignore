@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 .npm-cache/
+android/android/
+android/.gradle-home/
 .venv-test/
 
 # Python
