@@ -106,10 +106,7 @@ async function webReviewRefreshQueueStats(cardData) {
   st.currentQueue = webReviewQueueKind(cardData);
   try {
     // Deck statistics respect Anki's daily limits; raw is:new counts do not.
-    const [statsResult, infoResult] = await Promise.all([
-      ankiPostCall({ action: 'getDeckStats', version: 6, params: { decks: [base] } }),
-      cardData ? ankiPostCall({ action: 'cardsInfo', version: 6, params: { cards: [cardData.cardId] } }) : null
-    ]);
+    const statsResult = await ankiPostCall({ action: 'getDeckStats', version: 6, params: { decks: [base] } });
     if (webReviewState !== st || st.statsRequest !== request) return;
     const rows = Object.values(statsResult && statsResult.result && statsResult.result.result || {});
     if (!rows.length || rows.some(row => !['new_count', 'learn_count', 'review_count'].every(k => Number.isFinite(row[k]) && row[k] >= 0))) {
@@ -120,8 +117,14 @@ async function webReviewRefreshQueueStats(cardData) {
       learn: sum.learn + row.learn_count,
       review: sum.review + row.review_count
     }), { new: 0, learn: 0, review: 0 });
-    const cards = infoResult && infoResult.result && infoResult.result.result;
-    const current = Array.isArray(cards) && cards.find(card => card.cardId === cardData.cardId);
+    // guiCurrentCard normally includes queue/type. Avoid a second cardsInfo
+    // request on every card; only fall back when older Anki versions omit it.
+    let current = cardData;
+    if (cardData && webReviewQueueKind(cardData) === null) {
+      const infoResult = await ankiPostCall({ action: 'cardsInfo', version: 6, params: { cards: [cardData.cardId] } });
+      const cards = infoResult && infoResult.result && infoResult.result.result;
+      current = Array.isArray(cards) && cards.find(card => card.cardId === cardData.cardId) || cardData;
+    }
     st.currentQueue = cardData ? webReviewQueueKind(current || cardData) : null;
   } catch (e) {
     dbg('ANKI_QUEUE_STATS', e.message);

@@ -160,6 +160,7 @@ test('网页复习队列统计按用户牌组请求并汇总三色数量', async
   assert.strictEqual(vm.runInContext('webReviewState.queueStats.learn', sandbox), 2);
   assert.strictEqual(vm.runInContext('webReviewState.queueStats.review', sandbox), 7);
   assert.strictEqual(vm.runInContext('webReviewState.currentQueue', sandbox), 'new');
+  assert.strictEqual(requests.filter(r => r.action === 'cardsInfo').length, 0, '已有 queue 字段时不应重复请求 cardsInfo');
 });
 
 test('生词释义解析多词性、变形和多条释义', () => {
