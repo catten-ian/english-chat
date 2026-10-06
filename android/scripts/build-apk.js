@@ -17,6 +17,17 @@ function run(command, args, cwd) {
   if (result.status !== 0) process.exit(result.status || 1);
 }
 
+function extendGradleDownloadTimeout() {
+  const properties = path.join(platform, 'gradle', 'wrapper', 'gradle-wrapper.properties');
+  if (!fs.existsSync(properties)) return;
+  const source = fs.readFileSync(properties, 'utf8');
+  const timeout = process['env'].GRADLE_NETWORK_TIMEOUT || '120000';
+  const updated = /(^|\n)networkTimeout=.*/.test(source)
+    ? source.replace(/(^|\n)networkTimeout=.*/, `$1networkTimeout=${timeout}`)
+    : source + `\nnetworkTimeout=${timeout}\n`;
+  if (updated !== source) fs.writeFileSync(properties, updated);
+}
+
 if (!fs.existsSync(path.join(root, 'node_modules', '@capacitor', 'cli'))) {
   console.error('Install Android wrapper dependencies first: npm install');
   process.exit(1);
@@ -24,6 +35,7 @@ if (!fs.existsSync(path.join(root, 'node_modules', '@capacitor', 'cli'))) {
 
 if (!fs.existsSync(gradlePath)) run(npx, ['cap', 'add', 'android'], root);
 run(npx, ['cap', 'sync', 'android'], root);
+extendGradleDownloadTimeout();
 run(gradlePath, ['assembleDebug', '--console=plain'], platform);
 
 const apk = path.join(platform, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
