@@ -131,14 +131,14 @@ function finishGiftCall(reservationId, status) {
     .run(Number(status) >= 200 && Number(status) < 400 ? 'committed' : 'released', reservationId);
 }
 
-// Gift quota applies only to the site's M3 learning requests. Other upstream
+// Gift quota applies to the site's supported learning models. Other upstream
 // services and utility calls must not consume the daily allowance.
 function isGiftLearningRequest(entry) {
-  if (!entry || entry.provider !== 'minimax') return false;
+  if (!entry || !['minimax', 'aihub8'].includes(entry.provider)) return false;
   const kind = String(entry.kind || '');
   if (!['chat', 'chat_stream'].includes(kind)) return false;
   const model = String(entry.model || '').toLowerCase();
-  return model.includes('m3');
+  return entry.provider === 'aihub8' ? model === 'gpt-6.1-terra' : model.includes('m3');
 }
 
 /* 从 MiniMax 非流式响应里抽 usage。返回 null 表示上游没给。 */

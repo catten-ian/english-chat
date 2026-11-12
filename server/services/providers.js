@@ -16,7 +16,7 @@ function resolveProvider(input, uid) {
   const key = String(custom?.key || (id === 'minimax' ? MINIMAX_KEY() : def.key()) || '');
   const defaultModel = custom?.model || def.defaultModel;
   const configured = !!base && (!!key || def.requiresKey === false);
-  return { id, configured, base, key, defaultModel, requiresKey: def.requiresKey !== false, personal: !!custom?.key };
+  return { id, configured, base, key, defaultModel, models: Array.isArray(def.models) ? def.models.slice() : null, requiresKey: def.requiresKey !== false, personal: !!custom?.key };
 }
 
 function sanitizeModel(model, provider) {

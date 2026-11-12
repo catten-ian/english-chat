@@ -15,7 +15,7 @@ function modules(globals = {}) {
     const exports = {};
     const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
     cache.set(file, exports);
-    vm.runInNewContext(source, { exports, ...globals, require(id) { return id.endsWith('.css') ? {} : load(path.relative(path.resolve(__dirname, '../game/src'), path.resolve(path.dirname(file), id + '.ts'))); } }, { filename: file });
+    vm.runInNewContext(source, { exports, ...globals, require(id) { return globals.__moduleMocks?.[id] || (id.endsWith('.css') ? {} : load(path.relative(path.resolve(__dirname, '../game/src'), path.resolve(path.dirname(file), id + '.ts')))); } }, { filename: file });
     return exports;
   }
   return load;
@@ -189,4 +189,80 @@ test('previous device feedback remains readable without restarting paid requests
   assert.match(document.querySelector('#wg-feedback-list').textContent, /saved on this device/);
   assert.equal(document.querySelector('#wg-feedback-list button'), null);
   assert.equal(writes, 0, 'original browser history remains intact');
+});
+
+test('provider failures surface configuration guidance rather than chapter-lock or network guesses', () => {
+  const { providerError, chapterError, GameApiError } = modules()('services/journey.ts');
+  const configured = providerError(503, { error: 'provider_not_configured', provider: 'aihub8' });
+  assert.match(configured, /AIHub8 is not configured/);
+  assert.match(configured, /provider settings/);
+  assert.match(chapterError(new GameApiError(503, { error: 'provider_not_configured', provider: 'minimax' })), /MiniMax is not configured/);
+  assert.match(chapterError(new GameApiError(403, { error: '赠送调用仅支持' })), /sponsored calls/);
+  assert.match(providerError(401, { error: 'upstream_error' }), /rejected its credentials/);
+  assert.equal(providerError(503, { error: 'provider_not_configured', provider: '<script>alert(1)</script>' }).includes('<script>'), false);
+});
+
+test('feedback badge reconciles ready and total replies; retry stays disabled until its request finishes', async () => {
+  const { document, window } = parseHTML('<html><body><main id="game-root"></main></body></html>');
+  const hud = modules({ document, HTMLButtonElement: window.HTMLButtonElement })('ui/hud.ts').createHud(document.querySelector('#game-root'));
+  const records = [
+    { id: 'ready', stageId: 'low-tide', npcName: 'Eli', text: 'Hello.', createdAt: 1, status: 'ready', attempts: 1, feedback: 'Natural.' },
+    { id: 'failed', stageId: 'low-tide', npcName: 'Eli', text: 'Why?', createdAt: 2, status: 'failed', attempts: 1, error: 'AIHub8 is not configured.' },
+    { id: 'pending', stageId: 'low-tide', npcName: 'Mara', text: 'Where?', createdAt: 3, status: 'pending', attempts: 0 }
+  ];
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  hud.refreshFeedback(records, () => pending);
+  assert.equal(document.querySelector('#wg-feedback-count').textContent, '1/3');
+  assert.match(document.querySelector('#wg-feedback-toggle').getAttribute('aria-label'), /1 ready of 3 replies/);
+  const retry = document.querySelector('#wg-feedback-list button'); retry.click();
+  assert.equal(retry.disabled, true);
+  hud.setFeedbackStatus('Provider configuration needs attention.');
+  hud.refreshFeedback(records);
+  assert.equal(document.querySelector('#wg-feedback-service-status').hidden, false, 'an unchanged poll does not erase explicit recovery guidance');
+  release(); await pending; await new Promise(resolve => setImmediate(resolve));
+  assert.equal(retry.disabled, false);
+  assert.equal(document.querySelector('#wg-feedback-panel').hidden, true);
+});
+
+test('main surfaces rejected NPC provider configuration, reconciles its feedback job and recovers retry conflicts', async () => {
+  const { document, window } = parseHTML('<html><body><main id="game-root"></main></body></html>');
+  const calls = [];
+  let retried = false;
+  const records = () => [{ id: 'job-1', stageId: 'low-tide', npcName: 'Eli', text: 'What did you hear?', createdAt: 1, attempts: 1, status: retried ? 'pending' : 'failed', error: 'AIHub8 is not configured.' }];
+  let load;
+  load = modules({
+    document, window, HTMLButtonElement: window.HTMLButtonElement, AbortController, AbortSignal, TextDecoder, URLSearchParams,
+    crypto: { randomUUID: () => 'test-turn-1234' }, performance: { now: () => 0 },
+    location: { pathname: '/english', search: '?version=beta/world-game' },
+    localStorage: { getItem: key => key === 'ai_en_token' ? 'test-token' : key === 'ai_en_user' ? 'isolated-user' : null, setItem() {} },
+    sessionStorage: { getItem: () => null }, setTimeout: () => ({}), clearTimeout() {},
+    requestAnimationFrame: () => 1, cancelAnimationFrame() {},
+    __moduleMocks: { './render/renderer': { createRenderer: () => ({ setMode() {}, render() {}, dispose() {} }) } },
+    async fetch(url, options) {
+      calls.push(url);
+      let status = 200, data;
+      if (url.endsWith('/state')) data = { stageId: 'low-tide', unlockedStageIds: ['low-tide'], completedStageIds: [], stages: load('content/world.ts').STAGES, position: { x: 1.2, z: -10.5 }, evidence: [], visitedNpcIds: [], feedback: { records: records(), summaries: [] } };
+      else if (url.endsWith('/move')) data = { position: { x: 1.2, z: -10.5 } };
+      else if (url.endsWith('/npc')) { status = 503; data = { error: 'provider_not_configured', provider: 'aihub8' }; }
+      else if (url.endsWith('/feedback/retry')) { retried = true; status = 409; data = { error: 'feedback cannot be retried' }; }
+      else if (url.endsWith('/feedback')) data = { records: records(), summaries: [] };
+      else assert.fail(`unexpected request ${url}`);
+      return { ok: status === 200, status, json: async () => data };
+    }
+  });
+  load('main.ts');
+  await new Promise(resolve => setImmediate(resolve));
+  document.querySelector('#wg-interact').click();
+  document.querySelector('#wg-input').value = 'What did you hear?';
+  await document.querySelector('#wg-form').onsubmit({ preventDefault() {} });
+  assert.match(document.querySelector('#wg-transcript').textContent, /AIHub8 is not configured/);
+  const npcIndex = calls.findIndex(url => url.endsWith('/npc'));
+  assert.equal(calls.slice(npcIndex + 1).some(url => url.endsWith('/feedback')), true, 'rejected NPC requests still reconcile their server feedback job');
+  assert.equal(document.querySelector('#wg-feedback-count').textContent, '0/1');
+  document.querySelector('#wg-feedback-list button').click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(document.querySelector('#wg-feedback-service-status').textContent, /already queued or ready/);
+  assert.equal(document.querySelector('#wg-feedback-list button'), null, 'conflicting retry refreshes authoritative pending state');
+  window.dispatchEvent(new window.Event('pagehide'));
 });

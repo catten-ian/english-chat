@@ -135,6 +135,7 @@ describe('Bellweather world game boundaries', () => {
     assert.equal(entry.status, 200);
     assert.match(entry.headers['content-type'], /text\/html/);
     assert.match(entry.body, /Bellweather: The Quiet Tide/);
+    assert.match(entry.headers['content-security-policy'], /connect-src[^;]*\bblob:/);
     assert.doesNotMatch(entry.body, /id="gameArea"/);
     const betaEntry = await request({ port: server.port, path: '/?version=beta%2Fworld-game' });
     assert.equal(betaEntry.status, 200);
@@ -144,7 +145,7 @@ describe('Bellweather world game boundaries', () => {
       const resource = await request({ port: server.port, path: asset.replace(/^\/english-beta/, '') });
       assert.equal(resource.status, 200, asset);
     }
-    const harborAsset = await request({ port: server.port, path: '/world-game/assets/environment/bellweather-harbor-v3.glb' });
+    const harborAsset = await request({ port: server.port, path: '/world-game/assets/environment/bellweather-harbor-v4.glb' });
     assert.equal(harborAsset.status, 200);
     assert.equal(harborAsset.headers['content-type'], 'model/gltf-binary');
     const hdr = await request({ port: server.port, path: '/world-game/assets/environment/small-harbour-sunset.hdr' });

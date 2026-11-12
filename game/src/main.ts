@@ -4,7 +4,7 @@ import { createState, movePlayer, nearestNpc, saveState } from './simulation/sta
 import { createRenderer } from './render/renderer';
 import { createHud } from './ui/hud';
 import { createChapterPanel } from './ui/chapter';
-import { chapterError, createJourneyApi, GameApiError, type ChapterQuiz, type Journey } from './services/journey';
+import { chapterError, createJourneyApi, GameApiError, providerError, type ChapterQuiz, type Journey } from './services/journey';
 import { mergeArchivedFeedback, readArchivedFeedback } from './services/feedback';
 import { createNpcStreamReader } from './services/npc-stream';
 
@@ -23,6 +23,7 @@ let moveRequest: Promise<boolean> | undefined;
 let lastSynced: { x: number; z: number; at: number } | undefined;
 let conversationRequest: AbortController | undefined;
 let feedbackTimer: ReturnType<typeof setTimeout> | undefined;
+const feedbackRetries = new Set<string>();
 let journey: Journey | undefined;
 let currentQuiz: ChapterQuiz | undefined;
 const token = localStorage.getItem('ai_en_token') || sessionStorage.getItem('ai_en_token') || '';
@@ -38,8 +39,8 @@ const apiBase = location.pathname.startsWith('/english-beta/') || releaseVersion
 root.querySelector<HTMLAnchorElement>('#wg-back')!.href = apiBase === '/api-beta' ? '/english/?version=beta' : apiBase === '/api-dev' ? '/english/?version=dev' : '/';
 const api = createJourneyApi({ apiBase, headers, provider: providerSettings });
 const showFeedback = (feedback: Journey['feedback']) => {
-  hud.refreshFeedback(mergeArchivedFeedback(feedback.records, archivedFeedback), id => { void retryFeedback(id); });
-  hud.refreshSummaries(feedback.summaries, id => { void retryFeedback(id); });
+  hud.refreshFeedback(mergeArchivedFeedback(feedback.records, archivedFeedback), retryFeedback);
+  hud.refreshSummaries(feedback.summaries, retryFeedback);
 };
 showFeedback({ records: [], summaries: [] });
 const chapter = createChapterPanel(root, {
@@ -99,8 +100,23 @@ async function pollFeedback() {
   finally { if (!disposed) feedbackTimer = setTimeout(() => { void pollFeedback(); }, document.hidden ? 15000 : 4000); }
 }
 async function retryFeedback(id: string) {
-  try { await api.retryFeedback(id); showFeedback(await api.feedback()); }
-  catch { hud.setFeedbackStatus('The feedback service could not be reached. You can retry this note when the connection returns.'); }
+  if (feedbackRetries.has(id)) return;
+  feedbackRetries.add(id);
+  try { showFeedback(await api.retryFeedback(id)); hud.setFeedbackStatus(''); }
+  catch (error) {
+    if (error instanceof GameApiError && error.status === 409) {
+      try {
+        const feedback = await api.feedback(); showFeedback(feedback);
+        const record = feedback.records.find(item => item.id === id) || feedback.summaries.find(item => item.id === id);
+        hud.setFeedbackStatus(record && record.status !== 'failed' ? 'This note is already queued or ready. Its latest status is shown below.' : 'This note cannot be retried right now. Its latest saved status is shown below.');
+        return;
+      } catch { /* Keep the saved note and offer a later recovery. */ }
+    }
+    hud.setFeedbackStatus(error instanceof GameApiError && error.status === 401
+      ? 'Sign in from the English app to retry feedback.'
+      : error instanceof GameApiError && providerError(error.status, error.detail)
+        || 'The feedback service could not be reached. Your saved note is still available; retry when the connection returns.');
+  } finally { feedbackRetries.delete(id); }
 }
 async function startQuiz() {
   chapter.busy('Gathering your chapter questions…');
@@ -166,7 +182,8 @@ function interact() {
         body: JSON.stringify({ stageId: state.currentStage, npcId: npc.id, text, turnId: crypto.randomUUID(), ...providerSettings() })
       });
       if (!response.ok || !response.body) {
-        line.textContent = response.status === 401 ? 'Sign in from the English app, then return here.' : 'The harbor line was interrupted. Your saved notes are unchanged; please try again.';
+        const detail = await response.json().catch(() => ({}));
+        line.textContent = providerError(response.status, detail) || (response.status === 401 ? 'Sign in from the English app, then return here.' : response.status === 429 ? 'The harbor line or your call allowance is busy. Wait a moment, then try again.' : 'The harbor line was interrupted. Your saved notes are unchanged; please try again.');
         return;
       }
       const reader = response.body.getReader(), decoder = new TextDecoder();
@@ -185,7 +202,11 @@ function interact() {
       line.textContent = partialAnswer.trim()
         ? `${partialAnswer}\n\nThis reply was interrupted and was not recorded as evidence. You can ask again.`
         : 'The connection was interrupted. You can try speaking again.';
-    } finally { clearTimeout(timeout); if (conversationRequest === controller) conversationRequest = undefined; }
+    } finally {
+      clearTimeout(timeout); if (conversationRequest === controller) conversationRequest = undefined;
+      // Even a rejected NPC provider call can have a durable learner-feedback job.
+      if (!disposed) { try { showFeedback(await api.feedback()); } catch { /* Scheduled polling will reconcile later. */ } }
+    }
   });
 }
 root.querySelector<HTMLButtonElement>('#wg-interact')!.addEventListener('click', interact);

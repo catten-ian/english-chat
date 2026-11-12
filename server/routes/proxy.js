@@ -10,7 +10,7 @@
 
 const { corsHeaders, sendJson, readBody } = require('../helpers');
 const {
-  MINIMAX_KEY, ELEVEN_KEY, MINIMAX_BASE,
+  MINIMAX_KEY, ELEVEN_KEY, MINIMAX_BASE, AIHUB8_MODEL,
   PROXY_TIMEOUT, STREAM_IDLE_TIMEOUT, STREAM_TOTAL_TIMEOUT, MAX_ANKI_BODY
 } = require('../config');
 const { proxyRequest } = require('../services/proxy');
@@ -34,14 +34,17 @@ function prepareChatPayload(input, uid, stream) {
     part && ((part.type === 'text' && typeof part.text === 'string' && !!part.text.trim()) ||
       (part.type === 'image_url' && typeof part.image_url?.url === 'string' && /^(https:\/\/|data:image\/(png|jpeg|webp|gif);base64,)/i.test(part.image_url.url))));
   if (!input.messages.every(m => m && ['system', 'user', 'assistant'].includes(m.role) && validContent(m.content))) return { status: 400, error: 'invalid messages' };
-  const upstream = resolveProvider(input.provider, uid);
+  const requestedProvider = input.provider || (String(input.model || '').startsWith('MiniMax-') ? 'minimax' : 'aihub8');
+  const upstream = resolveProvider(requestedProvider, uid);
   const unlimited = user.username === 'catten' || user.username === 'test';
   const gift = !upstream.personal;
-  if (gift && !unlimited && (upstream.id !== 'minimax' || (input.model && input.model !== 'MiniMax-M3'))) {
-    return { status: 403, error: '赠送调用仅支持 MiniMax-M3，其他模型请配置个人 API key' };
+  if (gift && !unlimited && ((upstream.id === 'minimax' && input.model && !['MiniMax-M3', 'MiniMax-M3.1'].includes(input.model)) ||
+      (upstream.id === 'aihub8' && input.model && input.model !== 'gpt-6.1-terra') || !['minimax', 'aihub8'].includes(upstream.id))) {
+    return { status: 403, error: '赠送调用仅支持 gpt-6.1-terra / MiniMax-M3.1，其他模型请配置个人 API key' };
   }
   if (!upstream.configured) return { status: 503, error: 'provider_not_configured', provider: upstream.id };
-  const payload = { ...input, model: gift && !unlimited ? 'MiniMax-M3' : sanitizeModel(input.model, upstream), stream: !!stream };
+  const giftModel = upstream.id === 'aihub8' ? AIHUB8_MODEL() : (input.model === 'MiniMax-M3' ? 'MiniMax-M3' : 'MiniMax-M3.1');
+  const payload = { ...input, model: gift && !unlimited ? giftModel : sanitizeModel(input.model, upstream), stream: !!stream };
   // Credentials and accounting flags are server-owned, never forwarded from clients.
   for (const key of ['provider', 'personal', 'reservationId', 'userId', 'user_id', 'uid', 'quota']) delete payload[key];
   if (upstream.id !== 'minimax') delete payload.thinking;

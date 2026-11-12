@@ -6,7 +6,7 @@ const characterFiles = ['protagonist.glb', 'eli-turner.glb', 'mara-quinn.glb', '
   .filter(file => existsSync(resolve('public/assets/characters', file)));
 const shippingAssets = [
   ...characterFiles.map(file => `assets/characters/${file}`),
-  'assets/environment/bellweather-harbor-v3.glb',
+  'assets/environment/bellweather-harbor-v4.glb',
   'assets/environment/small-harbour-sunset.hdr'
 ];
 

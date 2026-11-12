@@ -8,8 +8,8 @@ export type Hud = {
   root: HTMLElement;
   update(state: GameState, nearby?: Npc): void;
   openDialogue(npc: Npc, send: (text: string) => Promise<void>): void;
-  refreshFeedback(records: readonly FeedbackRecord[], retry?: (id: string) => void): void;
-  refreshSummaries(summaries: readonly StageFeedback[], retry?: (id: string) => void): void;
+  refreshFeedback(records: readonly FeedbackRecord[], retry?: (id: string) => void | Promise<void>): void;
+  refreshSummaries(summaries: readonly StageFeedback[], retry?: (id: string) => void | Promise<void>): void;
   resetDialogue(): void;
   setFeedbackStatus(text: string): void;
 };
@@ -97,12 +97,13 @@ export function createHud(root: HTMLElement): Hud {
       finally { sending = false; sendButton.disabled = false; input.disabled = false; }
     };
   };
-  const refreshFeedback = (records: readonly FeedbackRecord[], retry?: (id: string) => void) => {
-    root.querySelector<HTMLElement>('#wg-feedback-service-status')!.hidden = true;
+  const refreshFeedback = (records: readonly FeedbackRecord[], retry?: (id: string) => void | Promise<void>) => {
     const signature = JSON.stringify(records);
     if (signature === lastFeedback) return;
     lastFeedback = signature;
-    root.querySelector('#wg-feedback-count')!.textContent = String(records.filter((record) => record.status === 'ready').length);
+    const readyCount = records.filter((record) => record.status === 'ready').length;
+    root.querySelector('#wg-feedback-count')!.textContent = `${readyCount}/${records.length}`;
+    feedbackToggle.setAttribute('aria-label', `English feedback, ${readyCount} ready of ${records.length} replies`);
     root.querySelector<HTMLElement>('#wg-feedback-empty')!.hidden = records.length > 0;
     const focusedId = document.activeElement instanceof HTMLButtonElement ? document.activeElement.dataset.feedbackRetry : undefined;
     feedbackList.replaceChildren(...records.map((record) => {
@@ -121,7 +122,7 @@ export function createHud(root: HTMLElement): Hud {
       if (record.status === 'failed' && !record.archived && retry) {
         const button = document.createElement('button');
         button.textContent = 'Retry feedback'; button.dataset.feedbackRetry = record.id;
-        button.addEventListener('click', () => retry(record.id)); item.append(button);
+        button.addEventListener('click', async () => { button.disabled = true; try { await retry(record.id); } finally { button.disabled = false; } }); item.append(button);
       }
       return item;
     }));
@@ -129,7 +130,7 @@ export function createHud(root: HTMLElement): Hud {
       if (button.dataset.feedbackRetry === focusedId) button.focus({ preventScroll: true });
     });
   };
-  const refreshSummaries = (summaries: readonly StageFeedback[], retry?: (id: string) => void) => {
+  const refreshSummaries = (summaries: readonly StageFeedback[], retry?: (id: string) => void | Promise<void>) => {
     const signature = JSON.stringify(summaries);
     if (signature === lastSummaries) return;
     lastSummaries = signature;
@@ -149,7 +150,7 @@ export function createHud(root: HTMLElement): Hud {
       detail.append(title, text);
       if (item.status === 'failed' && item.id && retry) {
         const button = document.createElement('button'); button.textContent = 'Retry chapter report';
-        button.addEventListener('click', () => retry(item.id!)); detail.append(button);
+        button.addEventListener('click', async () => { button.disabled = true; try { await retry(item.id!); } finally { button.disabled = false; } }); detail.append(button);
       }
       return detail;
     }));

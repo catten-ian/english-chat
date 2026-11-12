@@ -120,7 +120,7 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
     texture.dispose(); environmentGenerator.dispose();
   }).catch(error => { environmentGenerator.dispose();if (!disposed) console.warn('Harbor environment unavailable.', error); });
   const waterMaterials: THREE.MeshStandardMaterial[] = [];
-  void new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}assets/environment/bellweather-harbor-v3.glb`).then((gltf) => {
+  void new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}assets/environment/bellweather-harbor-v4.glb`).then((gltf) => {
     if (disposed) { releaseObject(gltf.scene); return; }
     gltf.scene.position.y = 0.025;
     gltf.scene.traverse((object) => {
@@ -149,7 +149,7 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   // Practical lights illuminate faces and nearby timber, with no extra shadow maps.
   for (const [x,z] of [[1.5,-3.6],[7.5,8]]) {
     const lamp = new THREE.PointLight('#ffbc72', 16, 8, 2);
-    lamp.position.set(x, 2.25, z); scene.add(lamp);
+    lamp.position.set(-x, 2.25, z); scene.add(lamp);
   }
 
   const player = new THREE.Group(); scene.add(player);
@@ -159,7 +159,7 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   void loadCharacter(playerRig, CHARACTER_FILES.player, () => disposed);
   const npcMeshes = new Map<string, THREE.Group>();
   const addNpc = (npc: Npc) => {
-    const group = new THREE.Group(); group.position.set(npc.position.x, 0, npc.position.z);
+    const group = new THREE.Group(); group.position.set(-npc.position.x, 0, npc.position.z);
     scene.add(group);
     const rig = { root: group, fallback: addFallbackCharacter(group, npc.accent), actions: new Map<string, THREE.AnimationAction>() } satisfies CharacterRig;
     characters.set(npc.id, rig);
@@ -177,10 +177,12 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   const smoothedLook = new THREE.Vector3();
   const resize = () => { const rect = canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return; camera.aspect = rect.width / rect.height; camera.updateProjectionMatrix(); renderer.setSize(rect.width, rect.height, false); };
   const render = (state: GameState, dt: number) => {
-    player.position.set(state.player.x, 0, state.player.z);
+    // The harbor asset reflects logical X once. Keep simulation/save coordinates
+    // unchanged and apply the same presentation transform to every runtime actor.
+    player.position.set(-state.player.x, 0, state.player.z);
     const dx = state.player.x - lastPlayer.x, dz = state.player.z - lastPlayer.z;
     const moving = Math.hypot(dx, dz) > 0.002;
-    if (moving) facing = Math.atan2(dx, dz);
+    if (moving) facing = Math.atan2(-dx, dz);
     const turn = Math.atan2(Math.sin(facing-player.rotation.y),Math.cos(facing-player.rotation.y));
     player.rotation.y += turn * Math.min(1, dt * 12);
     lastPlayer = { ...state.player };
@@ -201,22 +203,23 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
     }
     for (const [id, group] of npcMeshes) {
       group.visible = state.activeNpcIds.includes(id as Npc['id']);
-      if (state.nearbyNpc === id) group.rotation.y = Math.atan2(state.player.x-group.position.x,state.player.z-group.position.z);
+      if (state.nearbyNpc === id) group.rotation.y = Math.atan2(player.position.x-group.position.x,player.position.z-group.position.z);
     }
     const partnerId = state.activeNpc || state.nearbyNpc;
     const partner = partnerId && state.activeNpcIds.includes(partnerId) ? npcMeshes.get(partnerId) : undefined;
-    const close = partner && Math.hypot(partner.position.x-state.player.x,partner.position.z-state.player.z)<4;
-    const focusX = close ? (state.player.x+partner.position.x)/2 : state.player.x;
+    const close = partner && Math.hypot(partner.position.x-player.position.x,partner.position.z-player.position.z)<4;
+    if (close && !moving) facing = Math.atan2(partner.position.x-player.position.x,partner.position.z-player.position.z);
+    const focusX = close ? (player.position.x+partner.position.x)/2 : player.position.x;
     const focusZ = close ? (state.player.z+partner.position.z)/2 : state.player.z;
     const narrow = camera.aspect < .85;
-    cameraPosition.set(focusX + .5, close ? 2.05 : 3.0, focusZ - (close ? (narrow ? 5.1 : 3.8) : 6.7));
-    cameraLook.set(focusX - (narrow ? 0 : .6), close ? 1.05 : 1.1, focusZ + .6);
+    cameraPosition.set(focusX + .5, close ? 1.8 : 3.0, focusZ - (close ? (narrow ? 4.3 : 2.7) : 6.7));
+    cameraLook.set(focusX - (narrow ? 0 : .4), close ? 1.05 : 1.1, focusZ + .4);
     const smoothing = 1 - Math.exp(-dt * 4);
     if (!cameraInitialized) { camera.position.copy(cameraPosition); smoothedLook.copy(cameraLook); cameraInitialized=true; }
     else { camera.position.lerp(cameraPosition,smoothing);smoothedLook.lerp(cameraLook,smoothing); }
     camera.lookAt(smoothedLook);
-    sun.target.position.set(state.player.x,0,state.player.z);
-    sun.position.set(state.player.x-26,17,state.player.z+24);
+    sun.target.position.set(player.position.x,0,player.position.z);
+    sun.position.set(player.position.x+26,17,player.position.z+24);
     elapsed += dt;
     for (const surface of waterMaterials) if (surface.normalMap) surface.normalMap.offset.set(elapsed*.006,elapsed*.003);
     renderer.render(scene, camera);

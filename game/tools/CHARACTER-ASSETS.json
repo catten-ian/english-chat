@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "provider": "Tripo",
+  "region": "ov",
+  "generatedAt": "2026-11-12T09:27:21.420Z",
+  "scopedSpendCredits": 215,
+  "spendScope": "This NPC update only; pre-existing reference/model/rig tasks excluded where marked prior or existing.",
+  "generationPolicy": "Image references inspected before model generation. No uncertain running task was resubmitted. Rig polling interruption resumed existing task.",
+  "shippingPolicy": {
+    "maxBytesPerNpc": 8388608,
+    "forward": "+Z",
+    "format": "GLB 2.0",
+    "optimization": "P2 source face budget 20000, single embedded 2048 JPEG, no geometry recompression needed under budget. Root orientation normalization changes only GLB JSON; binary payload and animation channel indices unchanged."
+  },
+  "verification": {
+    "tool": "Blender 5.2.3 background process; separate from live harbor scene",
+    "source": "game/art/verify-character-assets.py",
+    "report": "game/art/character-acceptance/validation.json",
+    "renders": [
+      "game/art/character-acceptance/eli-turner.png",
+      "game/art/character-acceptance/mara-quinn.png",
+      "game/art/character-acceptance/jonah-reed.png"
+    ],
+    "observations": "All three imported with 78-bone rig and idle animation; front-facing rendered previews inspected, arms lowered. Runtime browser acceptance remains a separate check."
+  },
+  "characters": [
+    {
+      "id": "eli-turner",
+      "reference": {
+        "type": "existing-authored-Tripo-character",
+        "source": "existing Eli generation; no new reference or model generated in this pass"
+      },
+      "existingRigTaskId": "9ee09598-b533-406e-82c8-62421b63c5ab",
+      "tasks": [
+        {
+          "capability": "idle-animation",
+          "taskId": "a0de5f8a-306a-4f75-ab79-dc0139cd1483",
+          "credits": 10
+        }
+      ],
+      "shipping": {
+        "file": "game/public/assets/characters/eli-turner.glb",
+        "bytes": 1727944,
+        "sha256": "b782fe29617dbd03bbb1d482c06dc79445227384e0b36be86e74a8446bf6f6f5",
+        "meshCount": 1,
+        "triangles": 5306,
+        "skinCount": 1,
+        "bones": 78,
+        "animations": [
+          "idle"
+        ],
+        "texture": {
+          "embedded": true,
+          "mimeType": "image/jpeg",
+          "resolution": [
+            2048,
+            2048
+          ]
+        },
+        "orientation": {
+          "slug": "eli-turner",
+          "sourceForwardFromFootToToe": [
+            0.9987522570401577,
+            0,
+            -0.04993925367074458
+          ],
+          "yawDegrees": -92.86249912080521,
+          "normalizedForward": [
+            0,
+            0,
+            1
+          ],
+          "bytes": 1727944,
+          "animations": [
+            "idle"
+          ],
+          "skins": 1,
+          "binaryPayloadUnchanged": true
+        }
+      }
+    },
+    {
+      "id": "mara-quinn",
+      "reference": {
+        "type": "image-to-model",
+        "file": "game/art/mara-reference/tripo-out/a-single-beautiful-adult-woman-m-3ffcffc0/generated_image.png",
+        "imageModel": "chat_image_2",
+        "taskId": "3ffcffc0-402f-4d1c-997a-f54cde7efb90",
+        "priorCredits": 25,
+        "sha256": "43dc2a7569f0d87e76942627ee8ab7293a8fe8ebfef1c113f869a4c95437d55c"
+      },
+      "existingModelTaskId": "960b667c-b4a9-42ae-b376-7ea01b0e5b9e",
+      "existingGenerationModel": "P2-20260801",
+      "priorModelCredits": 110,
+      "tasks": [
+        {
+          "capability": "rig-check",
+          "taskId": "f9256cae-3e08-426d-a0d7-8dd78b95de0e",
+          "credits": 0,
+          "riggable": true,
+          "rigType": "biped"
+        },
+        {
+          "capability": "rig",
+          "taskId": "1740ebd5-5e05-4249-8489-55c85ebf6e6c",
+          "model": "v3.0-20260909",
+          "credits": 25
+        },
+        {
+          "capability": "idle-animation",
+          "taskId": "435a1151-8708-45bc-be02-e256c74895f3",
+          "credits": 10
+        }
+      ],
+      "shipping": {
+        "file": "game/public/assets/characters/mara-quinn.glb",
+        "bytes": 2718228,
+        "sha256": "937b9e32d135528e9030abb1678b5f8a1696e6f91a9c2a5b08396bbd29209096",
+        "meshCount": 1,
+        "triangles": 19693,
+        "skinCount": 1,
+        "bones": 78,
+        "animations": [
+          "idle"
+        ],
+        "texture": {
+          "embedded": true,
+          "mimeType": "image/jpeg",
+          "resolution": [
+            2048,
+            2048
+          ]
+        },
+        "orientation": {
+          "slug": "mara-quinn",
+          "sourceForwardFromFootToToe": [
+            0.9999999999999923,
+            0,
+            -1.23061147368662e-7
+          ],
+          "yawDegrees": -90.00000705088438,
+          "normalizedForward": [
+            0,
+            0,
+            0.9999999999999998
+          ],
+          "bytes": 2718228,
+          "animations": [
+            "idle"
+          ],
+          "skins": 1,
+          "binaryPayloadUnchanged": true
+        }
+      }
+    },
+    {
+      "id": "jonah-reed",
+      "reference": {
+        "type": "image-to-model",
+        "file": "game/art/jonah-reference/tripo-out/a-single-adult-man-jonah-reed-35-3c79de48/generated_image.png",
+        "imageModel": "chat_image_2",
+        "taskId": "3c79de48-ce33-4862-8017-bb4b7be8509f",
+        "sha256": "28328aa84252a77a78100e58d6aecc761d9827b52917a90a7028babea65a6189"
+      },
+      "tasks": [
+        {
+          "capability": "reference-image",
+          "taskId": "3c79de48-ce33-4862-8017-bb4b7be8509f",
+          "model": "chat_image_2",
+          "credits": 25
+        },
+        {
+          "capability": "image-to-model",
+          "taskId": "571622b5-2c8e-41f7-8393-157776ba4374",
+          "model": "P2-20260801",
+          "faceLimit": 20000,
+          "textureQuality": "standard",
+          "pbr": false,
+          "credits": 110
+        },
+        {
+          "capability": "rig-check",
+          "taskId": "aa980347-d43a-4485-a317-bbfb03c77395",
+          "credits": 0,
+          "riggable": true,
+          "rigType": "biped"
+        },
+        {
+          "capability": "rig",
+          "taskId": "38d9e255-68f3-48ff-ad7c-21a49dc5b8c5",
+          "model": "v3.0-20260909",
+          "credits": 25
+        },
+        {
+          "capability": "idle-animation",
+          "taskId": "fc6aec61-875f-4044-9fd4-c7210ea80284",
+          "credits": 10
+        }
+      ],
+      "shipping": {
+        "file": "game/public/assets/characters/jonah-reed.glb",
+        "bytes": 2813000,
+        "sha256": "b5e88b49e14f707048de1c41e25f92e255a7f41146be0f177935450e80ede802",
+        "meshCount": 1,
+        "triangles": 22398,
+        "skinCount": 1,
+        "bones": 78,
+        "animations": [
+          "idle"
+        ],
+        "texture": {
+          "embedded": true,
+          "mimeType": "image/jpeg",
+          "resolution": [
+            2048,
+            2048
+          ]
+        },
+        "orientation": {
+          "slug": "jonah-reed",
+          "sourceForwardFromFootToToe": [
+            0.9999999999999901,
+            0,
+            1.408482672221727e-7
+          ],
+          "yawDegrees": -89.99999192998874,
+          "normalizedForward": [
+            2.220446049250313e-16,
+            0,
+            0.9999999999999999
+          ],
+          "bytes": 2813000,
+          "animations": [
+            "idle"
+          ],
+          "skins": 1,
+          "binaryPayloadUnchanged": true
+        }
+      }
+    }
+  ]
+}

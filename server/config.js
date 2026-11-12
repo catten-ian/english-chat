@@ -107,10 +107,15 @@ function pickKey(envName, fileValue) {
 let _MINIMAX_KEY = pickKey('MINIMAX_API_KEY', env.MINIMAX_API_KEY);
 let _ELEVEN_KEY = pickKey('ELEVEN_API_KEY', env.ELEVEN_API_KEY);
 let _MINIMAX_BASE = pickKey('MINIMAX_BASE', env.MINIMAX_BASE) || 'https://api.minimaxi.com';
+// Existing English-app provider choices also apply to the standalone game.
+const AIHUB8_BASE = () => pickKey('AIHUB8_BASE', env.AIHUB8_BASE) || 'https://api.aihub8.top';
+const AIHUB8_KEY = () => pickKey('AIHUB8_API_KEY', env.AIHUB8_API_KEY);
+const AIHUB8_MODEL = () => pickKey('AIHUB8_MODEL', env.AIHUB8_MODEL) || 'gpt-6.1-terra';
 // OpenAI-compatible provider registry.  Secrets stay server-side; the browser
 // only selects an allow-listed provider id and model name.
 const PROVIDER_DEFS = Object.freeze({
-  minimax: { label: 'MiniMax', base: _MINIMAX_BASE, key: () => _MINIMAX_KEY, defaultModel: 'MiniMax-M3' },
+  aihub8: { label: 'AIHub8', base: AIHUB8_BASE(), key: AIHUB8_KEY, defaultModel: AIHUB8_MODEL(), models: ['gpt-6.1-terra'] },
+  minimax: { label: 'MiniMax', base: _MINIMAX_BASE, key: () => _MINIMAX_KEY, defaultModel: 'MiniMax-M3.1', models: ['MiniMax-M3', 'MiniMax-M3.1'] },
   openai: { label: 'OpenAI-compatible', base: pickKey('OPENAI_BASE', env.OPENAI_BASE) || 'https://api.openai.com', key: () => pickKey('OPENAI_API_KEY', env.OPENAI_API_KEY), defaultModel: pickKey('OPENAI_MODEL', env.OPENAI_MODEL) || 'gpt-4o-mini' },
   deepseek: { label: 'DeepSeek', base: pickKey('DEEPSEEK_BASE', env.DEEPSEEK_BASE) || 'https://api.deepseek.com', key: () => pickKey('DEEPSEEK_API_KEY', env.DEEPSEEK_API_KEY), defaultModel: pickKey('DEEPSEEK_MODEL', env.DEEPSEEK_MODEL) || 'deepseek-chat' },
   qwen: { label: 'Qwen', base: pickKey('QWEN_BASE', env.QWEN_BASE) || 'https://dashscope.aliyuncs.com/compatible-mode', key: () => pickKey('QWEN_API_KEY', env.QWEN_API_KEY), defaultModel: pickKey('QWEN_MODEL', env.QWEN_MODEL) || 'qwen-plus' },
@@ -199,7 +204,7 @@ module.exports = {
   PROXY_TIMEOUT, STREAM_IDLE_TIMEOUT, STREAM_TOTAL_TIMEOUT, SESSION_TTL_DAYS,
   USER_DATA_KEYS,
   CONVERSATION_SYNC_SECRET, CONVERSATION_SYNC_PEER,
-  MINIMAX_KEY, ELEVEN_KEY, MINIMAX_BASE, ALLOWED_ORIGINS,
+  MINIMAX_KEY, ELEVEN_KEY, MINIMAX_BASE, AIHUB8_BASE, AIHUB8_KEY, AIHUB8_MODEL, ALLOWED_ORIGINS,
   PROVIDER_DEFS,
   KEY_SOURCES, setRuntimeKey, setMinimaxBase,
   ENV_FILE: process.env.AI_EN_ENV_FILE ? path.resolve(process.env.AI_EN_ENV_FILE) : path.join(BASE, '.env'),

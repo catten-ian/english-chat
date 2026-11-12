@@ -52,7 +52,7 @@ export function createJourneyApi(options: { apiBase: string; headers(): HeadersI
     answer: (quizId: string, index: number, choice: number) => request<QuizAnswer>('answer', { quizId, index, choice }),
     settle: (quizId: string) => request<ChapterSettlement>('settle', { quizId }),
     feedback: () => request<Journey['feedback']>('feedback'),
-    retryFeedback: (id: string) => request('feedback/retry', { id }),
+    retryFeedback: (id: string) => request<Journey['feedback']>('feedback/retry', { id }),
     dispose() { disposed = true; for (const controller of controllers) controller.abort(); controllers.clear(); }
   };
 }
@@ -60,8 +60,19 @@ export function createJourneyApi(options: { apiBase: string; headers(): HeadersI
 export function nextQuestion(quiz: ChapterQuiz) {
   return quiz.questions.findIndex((_, index) => !quiz.answers[index]);
 }
+export function providerError(status: number, detail: Record<string, unknown>): string | undefined {
+  if (detail.error === 'provider_not_configured') {
+    const label = ({ aihub8: 'AIHub8', minimax: 'MiniMax', openai: 'OpenAI', deepseek: 'DeepSeek', qwen: 'Qwen', openrouter: 'OpenRouter', custom: 'Your selected AI provider' } as Record<string, string>)[String(detail.provider)] || 'Your selected AI provider';
+    return `${label} is not configured for this account. Open the English app’s provider settings to add credentials or choose an available provider.`;
+  }
+  if (detail.error === 'upstream_error' && [401, 403].includes(status)) return 'The AI provider rejected its credentials. Check the provider settings in the English app before trying again.';
+  if (status === 403 && typeof detail.error === 'string' && detail.error.includes('赠送调用')) return 'This model is unavailable with sponsored calls. Choose a supported model or add personal credentials in the English app’s provider settings.';
+  return undefined;
+}
 export function chapterError(error: unknown) {
   if (error instanceof GameApiError) {
+    const serviceError = providerError(error.status, error.detail);
+    if (serviceError) return serviceError;
     if (error.status === 401) return 'Sign in from the English app, then return to continue your journey.';
     if (Array.isArray(error.detail.missingNpcIds)) return 'There are still residents to interview. Return to the harbor and compare their accounts.';
     if (error.status === 403) return 'This chapter is not yet unlocked. Finish the current investigation first.';
