@@ -271,3 +271,13 @@ node scripts/backup_cli.js restore latest --yes        # 执行：先自动存�
 ```
 
 > ⚠️ 恢复前请先停止服务。CLI 会检测 `app.db-wal` 并警告；恢复时会自动删除 `app.db-wal`/`app.db-shm`（否则旧 WAL 会与替换后的主库不一致），恢复后自动重新校验，并在 `backups/` 留下 `*_prerestore_chat.db` 回滚快照。
+
+## Bellweather 游戏 beta
+
+独立入口：<https://www.catten.cyou/english?version=beta/world-game>。在英语应用登录后进入，靠近居民再按 E 或 Talk 对话；WASD/方向键移动，触屏使用方向按钮。
+
+`game/` 使用 TypeScript + Vite + Three.js。2D 是同一地图的 Canvas2D 简化渲染；初始选择 2D 时不加载 Three.js 或 GLB，切回 2D 会释放 GPU 资源。低配置设备可直接访问入口加 `&view=2d`。构建：`cd game` 后运行 `npm install`、`npm run build -- --base=/english-beta/world-game/`。
+
+English 抽屉默认关闭，逐条保存口语反馈，失败按 1/2/4/8/16 秒退避，最多六次请求后可手动重试。历史和位置目前按账户保存在当前浏览器。NPC 不接收客户端提供的历史，只保留同一账户/阶段/角色最近四轮完整成功回复，最多保留一小时，服务重启清空。
+
+当前仍是开发 beta：完整章节推进、跨设备旅程/反馈存档、阶段英语总评、外部 Chat 互通及最终人物/场景美术尚未验收。不能把入口可访问或构建通过视为 Dream Loop 美术达标。

@@ -1,0 +1,35 @@
+.wg-feedback {
+  position: absolute;
+  z-index: 8;
+  top: max(24px, env(safe-area-inset-top));
+  right: max(24px, env(safe-area-inset-right));
+  bottom: 82px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 23px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #d9c197a3;
+  border-radius: 6px;
+  background: #17211ff5;
+  box-shadow: 0 18px 70px #060d0dc9;
+  color: #f5ecdd;
+}
+.wg-feedback header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wg-feedback header small { color: #d9b985; font-size: 10px; letter-spacing: .13em; }
+.wg-feedback h2 { margin: 6px 0 0; font: 500 24px Georgia, serif; }
+.wg-feedback button { min-height: 42px; padding: 9px 12px; border: 1px solid #d8c1969c; border-radius: 3px; background: #25312cd9; color: #f3e8d2; cursor: pointer; }
+.wg-feedback-intro, #wg-feedback-empty { color: #c4c7ba; font-size: 13px; line-height: 1.6; }
+#wg-feedback-list { display: grid; gap: 23px; margin: 25px 0 0; padding: 0; list-style: none; }
+#wg-feedback-list li { border-top: 1px solid #d6c19536; padding-top: 16px; }
+.wg-feedback-meta { color: #d9b985; font-size: 11px; }
+.wg-feedback blockquote { margin: 12px 0; padding: 0 0 0 12px; border-left: 2px solid #d9b98566; color: #f3e8d2; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wg-feedback-result { color: #d9e4d4; font-size: 14px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wg-feedback-status { color: #b4bdae; font-size: 13px; line-height: 1.5; }
+.wg-panel button:disabled { opacity: .55; cursor: wait; }
+#wg-feedback-toggle { min-width: 96px; }
+#wg-feedback-count, #wg-clue-count { margin-left: 4px; font-weight: 500; opacity: .75; }
+@media (max-width: 640px) {
+  .wg-feedback { top: max(12px, env(safe-area-inset-top)); right: 12px; bottom: max(60px, env(safe-area-inset-bottom)); padding: 17px; }
+  #wg-feedback-toggle { min-width: 80px; padding-inline: 8px; }
+  .wg-controls { flex-wrap: wrap; max-width: calc(100vw - 24px); }
+}

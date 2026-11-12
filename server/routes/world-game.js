@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { Readable } = require('node:stream');
+const { StringDecoder } = require('node:string_decoder');
 const { readBody, sendJson } = require('../helpers');
 const proxyRoutes = require('./proxy');
 const WORLD = require('../services/world-game');
@@ -9,6 +10,12 @@ const WORLD = require('../services/world-game');
 const quizzes = new Map();
 const positions = new Map();
 const unlockedStages = new Map();
+// Server-owned, process-local conversation memory. A restart intentionally clears it;
+// this is not yet the durable journey save. Never accept role/history from a client.
+const npcSessions = new Map();
+const npcTurns = new Set();
+const NPC_HISTORY_TTL = 60 * 60 * 1000;
+const NPC_HISTORY_LIMIT = 1000;
 const MAX_BODY = 64 * 1024;
 const getStage = id => WORLD.stages.find(stage => stage.id === id);
 function stageUnlocked(uid, stageId) {
@@ -25,6 +32,59 @@ function cleanSessions() {
   const cutoff = Date.now() - 60 * 60 * 1000;
   for (const [id, value] of quizzes) if (value.updatedAt < cutoff) quizzes.delete(id);
   while (quizzes.size > 5000) quizzes.delete(quizzes.keys().next().value);
+  for (const [id, value] of npcSessions) if (value.updatedAt < Date.now() - NPC_HISTORY_TTL) npcSessions.delete(id);
+  while (npcSessions.size > NPC_HISTORY_LIMIT) npcSessions.delete(npcSessions.keys().next().value);
+}
+
+// Observe bytes without replacing the real response stream or its backpressure /
+// close events. A bounded parser rejects errors and truncated provider replies.
+function observeNpcStream(res) {
+  const decoder = new StringDecoder('utf8');
+  let buffer = '', answer = '', done = false, stopped = false, invalid = false, ended = false, aborted = false;
+  const consumeEvent = event => {
+    if (/^event:\s*error\s*$/im.test(event)) invalid = true;
+    const data = event.split(/\r?\n/).filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n').trim();
+    if (!data) return;
+    if (data === '[DONE]') { done = true; return; }
+    let item;
+    try { item = JSON.parse(data); } catch (_) { invalid = true; return; }
+    if (item.error) invalid = true;
+    const choice = item.choices?.[0];
+    if (choice?.finish_reason === 'stop') stopped = true;
+    else if (choice?.finish_reason) invalid = true;
+    if (typeof choice?.delta?.content === 'string') answer += choice.delta.content;
+    if (answer.length > 6000) { answer = ''; invalid = true; }
+  };
+  const consume = chunk => {
+    if (chunk === undefined || chunk === null || invalid) return;
+    buffer += typeof chunk === 'string' ? chunk : decoder.write(Buffer.from(chunk));
+    let match;
+    while ((match = /\r?\n\r?\n/.exec(buffer))) {
+      consumeEvent(buffer.slice(0, match.index));
+      buffer = buffer.slice(match.index + match[0].length);
+    }
+    if (buffer.length > 16000) { buffer = ''; invalid = true; }
+  };
+  const onClose = () => { if (!res.writableFinished) aborted = true; };
+  res.once?.('close', onClose);
+  const response = new Proxy(res, {
+    get(target, name) {
+      if (name === 'write') return (chunk, ...args) => { consume(chunk); return target.write(chunk, ...args); };
+      if (name === 'end') return (chunk, ...args) => {
+        consume(chunk); buffer += decoder.end();
+        if (buffer.trim()) consumeEvent(buffer);
+        buffer = ''; ended = true;
+        return target.end(chunk, ...args);
+      };
+      const value = Reflect.get(target, name, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    }
+  });
+  return {
+    response,
+    result() { return ended && !aborted && !invalid && res.statusCode === 200 && (done || stopped) ? answer.trim() : ''; },
+    dispose() { res.removeListener?.('close', onClose); }
+  };
 }
 
 async function readInput(req, res) {
@@ -111,9 +171,10 @@ async function npc(req, res) {
   const playerPosition = positions.get(sessionKey(req.uid, stage.id))?.position;
   const npcPosition = NPC_POSITIONS[input.npcId];
   if (!playerPosition || !npcPosition || distance(playerPosition, npcPosition) > NPC_RADIUS) return sendJson(res, 409, { error: 'npc is out of interaction range' }, req);
-  const history = Array.isArray(input.history) ? input.history.slice(-8).filter(item =>
-    item && ['user', 'assistant'].includes(item.role) && typeof item.content === 'string' && item.content.trim() && item.content.length <= 1200
-  ) : [];
+  cleanSessions();
+  const conversationKey = JSON.stringify([req.uid, stage.id, input.npcId]);
+  if (npcTurns.has(conversationKey)) return sendJson(res, 409, { error: 'npc reply is already in progress' }, req);
+  const history = npcSessions.get(conversationKey)?.messages || [];
   const scope = scopedNpc(stage, input.npcId);
   const messages = [
     { role: 'system', content: `Roleplay as ${npc.name}, the ${npc.role}. Voice: ${npc.voice}. Give a concise natural reply in English and use only this scoped worldbook. Do not claim knowledge outside it.\nWORLD BOOK (scoped): ${JSON.stringify(scope)}` },
@@ -122,7 +183,17 @@ async function npc(req, res) {
   ];
   const payload = providerPayload(input, messages, true, 'low');
   if (!payload) return sendJson(res, 400, { error: 'invalid provider' }, req);
-  await proxyRoutes.chatStream(internalRequest(req, payload), res);
+  npcTurns.add(conversationKey);
+  const observed = observeNpcStream(res);
+  try {
+    await proxyRoutes.chatStream(internalRequest(req, payload), observed.response);
+    const answer = observed.result();
+    if (answer) {
+      npcSessions.delete(conversationKey);
+      npcSessions.set(conversationKey, { messages: [...history, { role: 'user', content: text }, { role: 'assistant', content: answer }].slice(-8), updatedAt: Date.now() });
+      cleanSessions();
+    }
+  } finally { observed.dispose(); npcTurns.delete(conversationKey); }
 }
 
 async function questions(req, res) {

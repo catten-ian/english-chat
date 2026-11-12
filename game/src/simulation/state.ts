@@ -13,18 +13,19 @@ export type GameState = {
 
 const STORAGE_KEY = 'bellweather:run:v2';
 
-export function createState(): GameState {
+export function createState(accountId = 'guest'): GameState {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') as Partial<GameState> | null;
+    const saved = JSON.parse(localStorage.getItem(`${STORAGE_KEY}:${encodeURIComponent(accountId)}`) || 'null') as Partial<GameState> | null;
     if (saved && saved.player && Number.isFinite(saved.player.x) && Number.isFinite(saved.player.z)) {
-      return { mode: saved.mode === '2d' ? '2d' : '3d', player: saved.player, currentStage: WORLD.stageId, clues: Array.isArray(saved.clues) ? saved.clues : [] };
+      return { mode: saved.mode === '2d' ? '2d' : '3d', player: { x: Math.min(WORLD.bounds.maxX, Math.max(WORLD.bounds.minX, saved.player.x)), z: Math.min(WORLD.bounds.maxZ, Math.max(WORLD.bounds.minZ, saved.player.z)) }, currentStage: WORLD.stageId, clues: Array.isArray(saved.clues) ? saved.clues.filter((clue): clue is string => typeof clue === 'string') : [] };
     }
   } catch { /* A corrupt local draft must not block a new run. */ }
   return { mode: '3d', player: { ...WORLD.playerSpawn }, currentStage: WORLD.stageId, clues: [] };
 }
 
-export function saveState(state: GameState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+export function saveState(state: GameState, accountId = 'guest') {
+  try { localStorage.setItem(`${STORAGE_KEY}:${encodeURIComponent(accountId)}`, JSON.stringify(state)); }
+  catch { /* Storage denial must not stop the render loop. */ }
 }
 
 export function distance(a: { x: number; z: number }, b: { x: number; z: number }) {
