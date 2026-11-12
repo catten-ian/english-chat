@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GameState } from '../simulation/state';
 import { Npc, WORLD } from '../content/world';
 
@@ -32,8 +33,12 @@ type CharacterRig = { root: THREE.Group; fallback: THREE.Group; mixer?: THREE.An
 const CHARACTER_FILES: Record<string, string> = {
   player: 'protagonist.glb',
   eli: 'eli-turner.glb',
-  mara: 'mara-quinn.glb'
+  mara: 'mara-quinn.glb',
+  jonah: 'jonah-reed.glb'
 };
+// The build exposes only completed, shipped files. Pending Tripo jobs are never
+// requested by the browser, including NPCs not yet present in this chapter.
+const availableCharacters = new Set<string>(import.meta.env.WORLD_GAME_CHARACTER_FILES || []);
 
 function addFallbackCharacter(root: THREE.Group, color: string, isPlayer = false) {
   const fallback = new THREE.Group();
@@ -46,6 +51,7 @@ function addFallbackCharacter(root: THREE.Group, color: string, isPlayer = false
 }
 
 async function loadCharacter(rig: CharacterRig, file: string, isDisposed: () => boolean) {
+  if (!availableCharacters.has(file)) return;
   const loader = new GLTFLoader();
   try {
     const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/characters/${file}`);
@@ -56,7 +62,7 @@ async function loadCharacter(rig: CharacterRig, file: string, isDisposed: () => 
     });
     const bounds = new THREE.Box3().setFromObject(model);
     const size = bounds.getSize(new THREE.Vector3());
-    if (!Number.isFinite(size.y) || size.y < 0.2) return;
+    if (!Number.isFinite(size.y) || size.y < 0.2) { releaseObject(model); return; }
     model.scale.setScalar(1.86 / size.y);
     const normalized = new THREE.Box3().setFromObject(model);
     const center = normalized.getCenter(new THREE.Vector3());
@@ -79,34 +85,60 @@ async function loadCharacter(rig: CharacterRig, file: string, isDisposed: () => 
 export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   let disposed = false;
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#263b43');
-  scene.fog = new THREE.FogExp2('#657773', 0.012);
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 240);
+  scene.background = new THREE.Color('#c7b6a5');
+  scene.fog = new THREE.FogExp2('#adbdba', 0.009);
+  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 240);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.28;
+  renderer.toneMappingExposure = 1.04;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.35));
 
-  scene.add(new THREE.HemisphereLight('#c4d9e2', '#22353a', 1.65));
-  const sun = new THREE.DirectionalLight('#ffcfaa', 2.6); sun.position.set(-24, 34, 18); sun.castShadow = true; sun.shadow.mapSize.set(1536, 1536); sun.shadow.camera.left = -40; sun.shadow.camera.right = 40; sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40; scene.add(sun);
-  const harborFill = new THREE.DirectionalLight('#8bb8c5', 0.75); harborFill.position.set(18, 12, -26); scene.add(harborFill);
-  void new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}assets/environment/bellweather-harbor-v2.glb`).then((gltf) => {
+  scene.add(new THREE.HemisphereLight('#c9dcdf', '#48534a', 0.65));
+  const sun = new THREE.DirectionalLight('#ffd1a3', 3.1);
+  sun.position.set(-26, 17, 24); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 100 });
+  sun.shadow.normalBias = .025; sun.shadow.bias = -.00015;
+  sun.shadow.camera.updateProjectionMatrix(); scene.add(sun);scene.add(sun.target);
+  const harborFill = new THREE.DirectionalLight('#c2e2e9', 0.6);
+  harborFill.position.set(8, 9, -24); scene.add(harborFill);
+  const environmentGenerator = new THREE.PMREMGenerator(renderer);
+  let environment: THREE.WebGLRenderTarget | undefined;
+  void new RGBELoader().loadAsync(`${import.meta.env.BASE_URL}assets/environment/small-harbour-sunset.hdr`).then(texture => {
+    if (disposed) { texture.dispose(); return; }
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    environment = environmentGenerator.fromEquirectangular(texture);
+    scene.environment = environment.texture;
+    scene.environmentIntensity = .8;
+    scene.background = environment.texture;
+    scene.backgroundBlurriness = .15;
+    scene.backgroundIntensity = .65;
+    scene.environmentRotation.y = scene.backgroundRotation.y = .6;
+    texture.dispose(); environmentGenerator.dispose();
+  }).catch(error => { environmentGenerator.dispose();if (!disposed) console.warn('Harbor environment unavailable.', error); });
+  const waterMaterials: THREE.MeshStandardMaterial[] = [];
+  void new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}assets/environment/bellweather-harbor-v3.glb`).then((gltf) => {
     if (disposed) { releaseObject(gltf.scene); return; }
     gltf.scene.position.y = 0.025;
     gltf.scene.traverse((object) => {
       if (object instanceof THREE.Mesh) {
-        object.castShadow = object.name !== 'Sculpted harbor water Mesh';
-        object.receiveShadow = object.name !== 'Sculpted harbor water Mesh';
+        const isWater = /Sculpted.harbor.water/i.test(object.name);
+        object.castShadow = !isWater;
+        object.receiveShadow = !isWater;
         if (object.name === 'Cube') object.visible = false;
-      if (object.name === 'Sculpted harbor water Mesh' && object instanceof THREE.Mesh) {
+      if (isWater) {
         const materials = Array.isArray(object.material) ? object.material : [object.material];
         for (const surface of materials) {
           if (surface instanceof THREE.MeshStandardMaterial) {
-            surface.roughness = 0.32;
-            surface.metalness = 0.08;
-            if (surface.normalMap) surface.normalScale.setScalar(0.12);
+            surface.color.set('#456f75');
+            surface.roughness = 0.2;
+            surface.metalness = 0.23;
+            surface.envMapIntensity = 1.5;
+            if (surface.normalMap) surface.normalScale.setScalar(0.18);
+            waterMaterials.push(surface);
           }
         }
       }
@@ -114,6 +146,11 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
     });
     scene.add(gltf.scene);
   }).catch((error) => { if (!disposed) console.warn('World-game harbor asset unavailable.', error); });
+  // Practical lights illuminate faces and nearby timber, with no extra shadow maps.
+  for (const [x,z] of [[1.5,-3.6],[7.5,8]]) {
+    const lamp = new THREE.PointLight('#ffbc72', 16, 8, 2);
+    lamp.position.set(x, 2.25, z); scene.add(lamp);
+  }
 
   const player = new THREE.Group(); scene.add(player);
   const characters = new Map<string, CharacterRig>();
@@ -132,10 +169,20 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   WORLD.npcs.forEach(addNpc);
 
   let lastPlayer: { x: number; z: number } = { x: WORLD.playerSpawn.x, z: WORLD.playerSpawn.z };
+  let facing = Math.PI;
+  let elapsed = 0;
+  let cameraInitialized = false;
+  const cameraPosition = new THREE.Vector3();
+  const cameraLook = new THREE.Vector3();
+  const smoothedLook = new THREE.Vector3();
   const resize = () => { const rect = canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return; camera.aspect = rect.width / rect.height; camera.updateProjectionMatrix(); renderer.setSize(rect.width, rect.height, false); };
   const render = (state: GameState, dt: number) => {
     player.position.set(state.player.x, 0, state.player.z);
-    const moving = Math.hypot(state.player.x - lastPlayer.x, state.player.z - lastPlayer.z) > 0.002;
+    const dx = state.player.x - lastPlayer.x, dz = state.player.z - lastPlayer.z;
+    const moving = Math.hypot(dx, dz) > 0.002;
+    if (moving) facing = Math.atan2(dx, dz);
+    const turn = Math.atan2(Math.sin(facing-player.rotation.y),Math.cos(facing-player.rotation.y));
+    player.rotation.y += turn * Math.min(1, dt * 12);
     lastPlayer = { ...state.player };
     for (const [id, rig] of characters) {
       if (rig.mixer) {
@@ -152,12 +199,27 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
         }
       }
     }
-    for (const [id, group] of npcMeshes) group.scale.setScalar(state.nearbyNpc === id ? 1.05 : 1);
-      camera.position.lerp(new THREE.Vector3(state.player.x + 10, 5.6, state.player.z - 10), Math.min(1, dt * 4));
-      camera.lookAt(state.player.x + 0.4, 2.0, state.player.z - 0.3);
-      camera.fov = 50;
-      camera.updateProjectionMatrix();
-      renderer.render(scene, camera);
+    for (const [id, group] of npcMeshes) {
+      group.visible = state.activeNpcIds.includes(id as Npc['id']);
+      if (state.nearbyNpc === id) group.rotation.y = Math.atan2(state.player.x-group.position.x,state.player.z-group.position.z);
+    }
+    const partnerId = state.activeNpc || state.nearbyNpc;
+    const partner = partnerId && state.activeNpcIds.includes(partnerId) ? npcMeshes.get(partnerId) : undefined;
+    const close = partner && Math.hypot(partner.position.x-state.player.x,partner.position.z-state.player.z)<4;
+    const focusX = close ? (state.player.x+partner.position.x)/2 : state.player.x;
+    const focusZ = close ? (state.player.z+partner.position.z)/2 : state.player.z;
+    const narrow = camera.aspect < .85;
+    cameraPosition.set(focusX + .5, close ? 2.05 : 3.0, focusZ - (close ? (narrow ? 5.1 : 3.8) : 6.7));
+    cameraLook.set(focusX - (narrow ? 0 : .6), close ? 1.05 : 1.1, focusZ + .6);
+    const smoothing = 1 - Math.exp(-dt * 4);
+    if (!cameraInitialized) { camera.position.copy(cameraPosition); smoothedLook.copy(cameraLook); cameraInitialized=true; }
+    else { camera.position.lerp(cameraPosition,smoothing);smoothedLook.lerp(cameraLook,smoothing); }
+    camera.lookAt(smoothedLook);
+    sun.target.position.set(state.player.x,0,state.player.z);
+    sun.position.set(state.player.x-26,17,state.player.z+24);
+    elapsed += dt;
+    for (const surface of waterMaterials) if (surface.normalMap) surface.normalMap.offset.set(elapsed*.006,elapsed*.003);
+    renderer.render(scene, camera);
   };
   resize(); window.addEventListener('resize', resize);
   return {
@@ -167,6 +229,8 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
       window.removeEventListener('resize', resize);
       for (const rig of characters.values()) rig.mixer?.stopAllAction();
       releaseObject(scene);
+      environment?.dispose();
+      environmentGenerator.dispose();
       sun.shadow.map?.dispose();
       renderer.dispose();
       renderer.forceContextLoss();

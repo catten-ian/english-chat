@@ -160,7 +160,7 @@ export function createMapRenderer(canvas: HTMLCanvasElement): Renderer {
 
   function render(state: GameState) {
     if (!width || !height) { resize(); return; }
-    const key = `${state.player.x.toFixed(3)}:${state.player.z.toFixed(3)}:${state.nearbyNpc || ''}:${revision}`;
+    const key = `${state.currentStage}:${state.activeNpcIds.join(',')}:${state.player.x.toFixed(3)}:${state.player.z.toFixed(3)}:${state.nearbyNpc || ''}:${revision}`;
     if (key === lastKey) return;
     lastKey = key;
     const dx = state.player.x - previous.x, dz = state.player.z - previous.z;
@@ -191,6 +191,7 @@ export function createMapRenderer(canvas: HTMLCanvasElement): Renderer {
       ink.fillStyle = player ? '#d6d1b9' : '#d5b180'; ink.fillRect(x - 5, y - 3, 10, 2);
     }
     for (const npc of WORLD.npcs) {
+      if (!state.activeNpcIds.includes(npc.id)) continue;
       const point = project(npc.position.x, npc.position.z);
       const nearby = state.nearbyNpc === npc.id;
       if (nearby) {

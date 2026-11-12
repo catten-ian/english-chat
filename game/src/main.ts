@@ -1,100 +1,254 @@
 import './styles.css';
-import { WORLD } from './content/world';
+import { WORLD, type StageId } from './content/world';
 import { createState, movePlayer, nearestNpc, saveState } from './simulation/state';
 import { createRenderer } from './render/renderer';
 import { createHud } from './ui/hud';
-import { createFeedbackQueue } from './services/feedback';
+import { createChapterPanel } from './ui/chapter';
+import { chapterError, createJourneyApi, GameApiError, type ChapterQuiz, type Journey } from './services/journey';
+import { mergeArchivedFeedback, readArchivedFeedback } from './services/feedback';
+import { createNpcStreamReader } from './services/npc-stream';
 
 const root = document.querySelector<HTMLElement>('#game-root')!;
 const accountId = localStorage.getItem('ai_en_user') || sessionStorage.getItem('ai_en_user') || 'guest';
+const archivedFeedback = readArchivedFeedback(accountId);
 const state = createState(accountId);
 if (new URLSearchParams(location.search).get('view') === '2d') state.mode = '2d';
 const hud = createHud(root);
 const canvas = root.querySelector<HTMLCanvasElement>('#wg-canvas')!;
 const renderer = createRenderer(canvas);
 const keys = new Set<string>();
-let last = performance.now();
-let syncElapsed = 0;
-let saveElapsed = 0;
-let frameId = 0;
-let disposed = false;
+let last = performance.now(), syncElapsed = 0, saveElapsed = 0, frameId = 0;
+let disposed = false, loadingJourney = false, journeyReady = false;
 let moveRequest: Promise<boolean> | undefined;
 let lastSynced: { x: number; z: number; at: number } | undefined;
 let conversationRequest: AbortController | undefined;
-const storedSettings = (() => { try { return JSON.parse(localStorage.getItem('ai_en_settings_backup') || '{}') as Record<string, string>; } catch { return {}; } })();
-const provider = storedSettings.llmProvider || 'aihub8';
-const model = storedSettings.llmTextModel || undefined;
+let feedbackTimer: ReturnType<typeof setTimeout> | undefined;
+let journey: Journey | undefined;
+let currentQuiz: ChapterQuiz | undefined;
 const token = localStorage.getItem('ai_en_token') || sessionStorage.getItem('ai_en_token') || '';
 const headers = () => ({ 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) });
+const providerSettings = () => {
+  try {
+    const settings = JSON.parse(localStorage.getItem('ai_en_settings_backup') || '{}') as Record<string, string>;
+    return { provider: settings.llmProvider || 'aihub8', model: settings.llmTextModel || undefined };
+  } catch { return { provider: 'aihub8' }; }
+};
 const releaseVersion = new URLSearchParams(location.search).get('version') || '';
 const apiBase = location.pathname.startsWith('/english-beta/') || releaseVersion.startsWith('beta') ? '/api-beta' : location.pathname.startsWith('/english-dev/') || releaseVersion.startsWith('dev') ? '/api-dev' : '';
 root.querySelector<HTMLAnchorElement>('#wg-back')!.href = apiBase === '/api-beta' ? '/english/?version=beta' : apiBase === '/api-dev' ? '/english/?version=dev' : '/';
-const feedback = createFeedbackQueue({ accountId, apiBase, headers,
-  onChange: (records) => hud.refreshFeedback(records, (id) => feedback.retry(id)) });
+const api = createJourneyApi({ apiBase, headers, provider: providerSettings });
+const showFeedback = (feedback: Journey['feedback']) => {
+  hud.refreshFeedback(mergeArchivedFeedback(feedback.records, archivedFeedback), id => { void retryFeedback(id); });
+  hud.refreshSummaries(feedback.summaries, id => { void retryFeedback(id); });
+};
+showFeedback({ records: [], summaries: [] });
+const chapter = createChapterPanel(root, {
+  start: () => { void startQuiz(); },
+  answer: (index, choice) => { void answerQuiz(index, choice); },
+  settle: () => { void settleChapter(); },
+  switchStage: stageId => { void switchChapter(stageId); },
+  refresh: () => { void refreshJourney(true); }
+});
 const feedbackIsOpen = () => !root.querySelector<HTMLElement>('#wg-feedback-panel')!.hidden;
+const paused = () => Boolean(root.querySelector('dialog[open]')) || feedbackIsOpen() || loadingJourney || Boolean(conversationRequest) || Boolean(token && !journeyReady);
 
-function setMode(mode: typeof state.mode) { state.mode = mode; renderer.setMode(mode); root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((button) => { button.classList.toggle('active', button.dataset.mode === mode); button.setAttribute('aria-pressed', String(button.dataset.mode === mode)); }); }
+function setMode(mode: typeof state.mode) {
+  state.mode = mode; renderer.setMode(mode);
+  root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(button => {
+    button.classList.toggle('active', button.dataset.mode === mode);
+    button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
+  });
+}
 canvas.addEventListener('world-game-renderer-fallback', () => setMode('2d'));
-function updateNearby() { state.nearbyNpc = nearestNpc(state, WORLD.npcs)?.id; hud.update(state, state.nearbyNpc ? WORLD.npcs.find((npc) => npc.id === state.nearbyNpc) : undefined); }
+function updateNearby() {
+  state.nearbyNpc = nearestNpc(state, WORLD.npcs)?.id;
+  hud.update(state, state.nearbyNpc ? WORLD.npcs.find(npc => npc.id === state.nearbyNpc) : undefined);
+}
+function applyJourney(next: Journey, reposition = false) {
+  const changedStage = state.currentStage !== next.stageId;
+  journey = next; journeyReady = true;
+  state.currentStage = next.stageId;
+  state.activeNpcIds = [...(next.stages.find(stage => stage.id === next.stageId)?.npcs || [])];
+  state.clues = next.evidence.filter(item => item.stageId === next.stageId).map(item => `${item.text} — ${WORLD.npcs.find(npc => npc.id === item.source)?.name || item.source}`);
+  if (reposition || changedStage) {
+    state.player = { ...next.position }; lastSynced = undefined; keys.clear();
+    state.activeNpc = undefined; state.nearbyNpc = undefined;
+    hud.resetDialogue();
+  }
+  if (changedStage) currentQuiz = undefined;
+  chapter.update(next);
+  showFeedback(next.feedback);
+  updateNearby();
+}
+async function refreshJourney(reposition = false) {
+  if (!token) { chapter.error('Sign in from the English app, then return to load your saved journey.'); return; }
+  if (loadingJourney || disposed) return;
+  loadingJourney = true;
+  try { applyJourney(await api.load(), reposition); chapter.idle(); }
+  catch (error) { chapter.error(chapterError(error)); }
+  finally { loadingJourney = false; }
+}
+async function pollFeedback() {
+  if (disposed || !token) return;
+  try {
+    const feedback = await api.feedback();
+    if (disposed) return;
+    showFeedback(feedback);
+    if (journey) journey.feedback = feedback;
+  } catch { /* Durable workers continue while the player reconnects. */ }
+  finally { if (!disposed) feedbackTimer = setTimeout(() => { void pollFeedback(); }, document.hidden ? 15000 : 4000); }
+}
+async function retryFeedback(id: string) {
+  try { await api.retryFeedback(id); showFeedback(await api.feedback()); }
+  catch { hud.setFeedbackStatus('The feedback service could not be reached. You can retry this note when the connection returns.'); }
+}
+async function startQuiz() {
+  chapter.busy('Gathering your chapter questions…');
+  try {
+    currentQuiz = await api.questions(state.currentStage);
+    chapter.showQuiz(currentQuiz);
+  } catch (error) { chapter.error(chapterError(error)); }
+}
+async function answerQuiz(index: number, choice: number) {
+  if (!currentQuiz) return;
+  chapter.busy('Checking your conclusion…');
+  try {
+    const result = await api.answer(currentQuiz.quizId, index, choice);
+    currentQuiz.answers[index] = result;
+    chapter.showQuiz(currentQuiz);
+  } catch (error) {
+    // If a response was lost after the server accepted it, resume the same saved
+    // quiz instead of submitting a second answer or silently starting over.
+    if (error instanceof GameApiError && error.status === 409) {
+      try { const saved = await api.load(); applyJourney(saved); if (saved.quiz) { currentQuiz = saved.quiz; chapter.showQuiz(currentQuiz); return; } } catch { /* Show the original reconnect guidance. */ }
+    }
+    chapter.error(chapterError(error));
+  }
+}
+async function settleChapter() {
+  if (!currentQuiz) return;
+  chapter.busy('Recording your investigation…');
+  try {
+    const result = await api.settle(currentQuiz.quizId);
+    currentQuiz = undefined;
+    try { applyJourney(await api.load()); }
+    catch { /* The settlement itself is authoritative; a lost refresh must not hide it. */ }
+    chapter.showSettlement(result);
+  } catch (error) { chapter.error(chapterError(error)); }
+}
+async function switchChapter(stageId: StageId) {
+  if (conversationRequest || loadingJourney) return;
+  loadingJourney = true; keys.clear(); chapter.busy('Opening your next chapter…');
+  try {
+    if (moveRequest) await moveRequest;
+    applyJourney(await api.switchStage(stageId), true);
+    currentQuiz = undefined; chapter.idle();
+  } catch (error) { chapter.error(chapterError(error)); }
+  finally { loadingJourney = false; }
+}
 function interact() {
-  const npc = nearestNpc(state, WORLD.npcs); if (!npc) return;
+  const npc = nearestNpc(state, WORLD.npcs); if (!npc || paused()) return;
   state.activeNpc = npc.id;
-  hud.openDialogue(npc, async (text) => {
+  hud.openDialogue(npc, async text => {
     const line = root.querySelector<HTMLElement>('#wg-transcript')!;
     if (!token) { line.textContent = 'Sign in from the English app, then return here.'; return; }
     if (nearestNpc(state, [npc])?.id !== npc.id) { line.textContent = `Walk back to ${npc.name} to continue speaking.`; return; }
     keys.clear();
-    // Finish any periodic update before sending the final position for this turn.
     if (moveRequest) await moveRequest;
     if (!await syncPosition()) { line.textContent = 'Your position could not be confirmed. Wait a moment, then try again.'; return; }
     if (nearestNpc(state, [npc])?.id !== npc.id) { line.textContent = `Walk back to ${npc.name} to continue speaking.`; return; }
-    feedback.enqueue({ text, stageId: state.currentStage, npcName: npc.name });
-    conversationRequest?.abort();
     const controller = new AbortController(); conversationRequest = controller;
     const timeout = setTimeout(() => controller.abort(), 90000);
+    let partialAnswer = '';
     try {
-    const response = await fetch(`${apiBase}/api/world-game/npc`, { method: 'POST', headers: headers(), signal: controller.signal, body: JSON.stringify({ stageId: WORLD.stageId, npcId: npc.id, text, provider, model }) });
-    if (!response.ok || !response.body) { line.textContent = response.status === 401 ? 'Sign in from the English app, then return here.' : 'The connection was interrupted. Your journal was not changed.'; return; }
-    const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ''; let answer = '';
-    while (true) {
-      const { done, value } = await reader.read(); if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split(/\r?\n\r?\n/); buffer = events.pop() || '';
-      for (const event of events) for (const row of event.split(/\r?\n/)) if (row.startsWith('data:')) {
-        const raw = row.slice(5).trim(); if (!raw || raw === '[DONE]') continue;
-        try { const delta = JSON.parse(raw).choices?.[0]?.delta?.content; if (typeof delta === 'string') { answer += delta; line.textContent = answer; } } catch { /* Ignore provider metadata events. */ }
+      const response = await fetch(`${apiBase}/api/world-game/npc`, {
+        method: 'POST', headers: headers(), signal: controller.signal,
+        body: JSON.stringify({ stageId: state.currentStage, npcId: npc.id, text, turnId: crypto.randomUUID(), ...providerSettings() })
+      });
+      if (!response.ok || !response.body) {
+        line.textContent = response.status === 401 ? 'Sign in from the English app, then return here.' : 'The harbor line was interrupted. Your saved notes are unchanged; please try again.';
+        return;
       }
-    }
-    if (!answer.trim()) line.textContent = 'The connection ended before the resident could answer.';
+      const reader = response.body.getReader(), decoder = new TextDecoder();
+      const stream = createNpcStreamReader(text => { partialAnswer = text; line.textContent = text; });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) { stream.push(decoder.decode()); break; }
+        stream.push(decoder.decode(value, { stream: true }));
+      }
+      const result = stream.finish();
+      if (!result.complete) line.textContent = result.text ? `${result.text}\n\nThis reply was interrupted and was not recorded as evidence. You can ask again.` : 'The connection ended before the resident could answer. You can ask again.';
+      // Evidence and English jobs are awarded by the server only after a real
+      // successful turn. They are never inferred from text or client keywords.
+      await refreshJourney();
+    } catch {
+      line.textContent = partialAnswer.trim()
+        ? `${partialAnswer}\n\nThis reply was interrupted and was not recorded as evidence. You can ask again.`
+        : 'The connection was interrupted. You can try speaking again.';
     } finally { clearTimeout(timeout); if (conversationRequest === controller) conversationRequest = undefined; }
   });
 }
 root.querySelector<HTMLButtonElement>('#wg-interact')!.addEventListener('click', interact);
-window.addEventListener('keydown', (event) => { const target = event.target as HTMLElement; if (feedbackIsOpen()) { if (event.key === 'Escape') root.querySelector<HTMLButtonElement>('#wg-feedback-close')!.click(); return; } if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName) || target?.closest('#wg-feedback-panel') || root.querySelector('dialog[open]')) return; if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) event.preventDefault(); keys.add(event.key.toLowerCase()); if (event.key.toLowerCase() === 'e' && !event.repeat) interact(); });
-window.addEventListener('keyup', (event) => keys.delete(event.key.toLowerCase()));
+window.addEventListener('keydown', event => {
+  const target = event.target as HTMLElement;
+  if (feedbackIsOpen()) { if (event.key === 'Escape') root.querySelector<HTMLButtonElement>('#wg-feedback-close')!.click(); return; }
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName) || paused()) return;
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) event.preventDefault();
+  keys.add(event.key.toLowerCase()); if (event.key.toLowerCase() === 'e' && !event.repeat) interact();
+});
+window.addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
 window.addEventListener('blur', () => keys.clear());
-root.addEventListener('focusin', (event) => { if ((event.target as HTMLElement)?.closest('#wg-feedback-panel, #wg-input')) keys.clear(); });
-root.addEventListener('click', (event) => { if ((event.target as HTMLElement)?.closest('#wg-journal, #wg-journal-close, #wg-feedback-toggle, #wg-feedback-close')) keys.clear(); });
+root.addEventListener('focusin', event => { if ((event.target as HTMLElement)?.closest('#wg-feedback-panel, #wg-input, dialog')) keys.clear(); });
+root.addEventListener('click', event => { if ((event.target as HTMLElement)?.closest('#wg-journal, #wg-journal-close, #wg-feedback-toggle, #wg-feedback-close, #wg-chapter-toggle')) keys.clear(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) keys.clear(); });
-root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((button) => button.addEventListener('click', () => setMode(button.dataset.mode as typeof state.mode)));
-root.querySelectorAll<HTMLButtonElement>('[data-move]').forEach((button) => { const key = button.dataset.move!; const down = (event: PointerEvent) => { event.preventDefault(); button.setPointerCapture(event.pointerId); keys.add(key); }; const up = () => keys.delete(key); button.addEventListener('pointerdown', down); button.addEventListener('pointerup', up); button.addEventListener('pointercancel', up); button.addEventListener('lostpointercapture', up); });
-setMode(state.mode);
+root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode as typeof state.mode)));
+root.querySelectorAll<HTMLButtonElement>('[data-move]').forEach(button => {
+  const key = button.dataset.move!;
+  button.addEventListener('pointerdown', event => { event.preventDefault(); if (paused()) return; button.setPointerCapture(event.pointerId); keys.add(key); });
+  const up = () => keys.delete(key);
+  for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(name, up);
+});
 function syncPosition(): Promise<boolean> {
-  if (!token) return Promise.resolve(false);
+  if (!token || !journeyReady) return Promise.resolve(false);
   if (moveRequest) return moveRequest;
   if (lastSynced && Date.now() - lastSynced.at < 1000 && Math.hypot(state.player.x - lastSynced.x, state.player.z - lastSynced.z) < .01) return Promise.resolve(true);
-  const sentPosition = { ...state.player };
-  moveRequest = (async () => { try {
-    const response = await fetch(`${apiBase}/api/world-game/move`, { method: 'POST', headers: headers(), signal: AbortSignal.timeout(10000), body: JSON.stringify({ stageId: WORLD.stageId, position: sentPosition }) });
-    if (response.status === 409) {
-      const result = await response.json();
-      if (Number.isFinite(result.position?.x) && Number.isFinite(result.position?.z)) state.player = result.position;
-    }
-    if (response.ok) lastSynced = { ...sentPosition, at: Date.now() };
-    return response.ok;
-  } catch { return false; } finally { moveRequest = undefined; } })();
+  const sentPosition = { ...state.player }, sentStage = state.currentStage;
+  moveRequest = (async () => {
+    try {
+      const response = await fetch(`${apiBase}/api/world-game/move`, { method: 'POST', headers: headers(), signal: AbortSignal.timeout(10000), body: JSON.stringify({ stageId: sentStage, position: sentPosition }) });
+      if (response.status === 409) {
+        const result = await response.json();
+        if (state.currentStage === sentStage && Number.isFinite(result.position?.x) && Number.isFinite(result.position?.z)) state.player = result.position;
+        if (result.stageId && result.stageId !== state.currentStage) void refreshJourney(true);
+      }
+      if (response.ok) lastSynced = { ...sentPosition, at: Date.now() };
+      return response.ok;
+    } catch { return false; } finally { moveRequest = undefined; }
+  })();
   return moveRequest;
 }
-function frame(now: number) { if (disposed) return; const dt = Math.min(0.05, (now - last) / 1000); last = now; let dx = 0; let dz = 0; if (!document.hidden && !root.querySelector('dialog[open]') && !feedbackIsOpen() && !conversationRequest) { if (keys.has('w') || keys.has('arrowup') || keys.has('up')) dz -= 1; if (keys.has('s') || keys.has('arrowdown') || keys.has('down')) dz += 1; if (keys.has('a') || keys.has('arrowleft') || keys.has('left')) dx -= 1; if (keys.has('d') || keys.has('arrowright') || keys.has('right')) dx += 1; } movePlayer(state, dx, dz, dt); syncElapsed += dt; saveElapsed += dt; if (syncElapsed >= .5) { syncElapsed = 0; void syncPosition(); } updateNearby(); renderer.render(state, dt); if (saveElapsed >= .5) { saveElapsed = 0; saveState(state, accountId); } frameId = requestAnimationFrame(frame); }
+function frame(now: number) {
+  if (disposed) return;
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  let dx = 0, dz = 0;
+  if (!document.hidden && !paused()) {
+    if (keys.has('w') || keys.has('arrowup') || keys.has('up')) dz -= 1;
+    if (keys.has('s') || keys.has('arrowdown') || keys.has('down')) dz += 1;
+    if (keys.has('a') || keys.has('arrowleft') || keys.has('left')) dx -= 1;
+    if (keys.has('d') || keys.has('arrowright') || keys.has('right')) dx += 1;
+  }
+  movePlayer(state, dx, dz, dt); syncElapsed += dt; saveElapsed += dt;
+  if (syncElapsed >= .5) { syncElapsed = 0; if (!loadingJourney) void syncPosition(); }
+  updateNearby(); renderer.render(state, dt);
+  if (saveElapsed >= .5) { saveElapsed = 0; saveState(state, accountId); }
+  frameId = requestAnimationFrame(frame);
+}
+setMode(state.mode);
+if (token) { void refreshJourney(true); void pollFeedback(); }
 frameId = requestAnimationFrame(frame);
-window.addEventListener('pagehide', (event) => { saveState(state, accountId); if (event.persisted) return; disposed = true; cancelAnimationFrame(frameId); conversationRequest?.abort(); feedback.dispose(); renderer.dispose(); });
+window.addEventListener('pagehide', event => {
+  saveState(state, accountId); if (event.persisted) return;
+  disposed = true; cancelAnimationFrame(frameId); conversationRequest?.abort(); api.dispose();
+  if (feedbackTimer !== undefined) clearTimeout(feedbackTimer);
+  renderer.dispose();
+});

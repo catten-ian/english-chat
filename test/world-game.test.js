@@ -1,11 +1,22 @@
 'use strict';
 
-const { test, describe } = require('node:test');
+const { test, describe, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { PassThrough } = require('node:stream');
 const { APP_DIR, startServer, request, login } = require('./helpers');
+const os = require('node:os');
+const isolatedRouteData = fs.mkdtempSync(path.join(os.tmpdir(), 'bellweather-route-'));
+process.env.AI_EN_DATA_DIR = isolatedRouteData;
+process.env.AI_EN_GAME_WORKER = '0';
+process.env.MINIMAX_API_KEY = '';
+process.env.AIHUB8_API_KEY = '';
+after(() => {
+  require('../server/routes/world-game').stopWorker();
+  require('../server/db').db.close();
+  fs.rmSync(isolatedRouteData, { recursive: true, force: true });
+});
 
 describe('Bellweather world game boundaries', () => {
   let server, token;
@@ -29,7 +40,9 @@ describe('Bellweather world game boundaries', () => {
     try {
       const req = new PassThrough();
       req.headers = { 'content-length': '0' };
-      req.uid = 'test-user';
+      const { db } = require('../server/db');
+      const uid = Number(db.prepare('INSERT INTO users(username,password_hash) VALUES(?,?)').run('route-context-test', 'fixture').lastInsertRowid);
+      req.uid = uid;
       req.username = 'test';
       req.id = 'test-request';
       const result = { statusCode: 0, writeHead(status) { this.statusCode = status; }, end() {} };
@@ -40,7 +53,7 @@ describe('Bellweather world game boundaries', () => {
         if (index) await new Promise(resolve => setTimeout(resolve, 85));
         const moveReq = new PassThrough();
         moveReq.headers = { 'content-length': '0' };
-        moveReq.uid = 'test-user'; moveReq.username = 'test'; moveReq.id = 'move-request-' + index;
+        moveReq.uid = uid; moveReq.username = 'test'; moveReq.id = 'move-request-' + index;
         const moveResult = { statusCode: 0, writeHead(status) { this.statusCode = status; }, end() {} };
         const moved = route.move(moveReq, moveResult);
         moveReq.end(JSON.stringify({ stageId: 'low-tide', position: { x: position[0], z: position[1] }, dt: 1 }));
@@ -75,6 +88,21 @@ describe('Bellweather world game boundaries', () => {
     const unauthorized = await request({ port: server.port, method: 'POST', path: '/api/world-game/questions', json: { stageId: 'low-tide' } });
     assert.equal(unauthorized.status, 401);
 
+    const blocked = await request({ port: server.port, method: 'POST', path: '/api/world-game/questions', token, json: { stageId: 'low-tide', provider: 'minimax' } });
+    assert.equal(blocked.status, 409);
+    assert.deepEqual(JSON.parse(blocked.body).missingNpcIds.sort(), ['eli', 'mara']);
+    // Provider-independent auth test: seed only this disposable server's completed
+    // conversation fixtures. Real streamed-turn gating is covered in context tests.
+    const { DatabaseSync } = require('node:sqlite');
+    const fixtureDb = new DatabaseSync(path.join(server.dataDir, 'app.db'));
+    const fixtureStore = require('../server/services/world-game-store').createWorldGameStore(fixtureDb);
+    const uid = fixtureDb.prepare('SELECT id FROM users WHERE username=?').get('test').id;
+    fixtureStore.ensureJourney(uid);
+    for (const npc of ['eli', 'mara']) {
+      const turn = fixtureStore.beginTurn(uid, 'low-tide', npc, 'What did you see?', 'fixture-' + npc, { provider: 'minimax' });
+      fixtureStore.finishTurn(uid, turn.id, 'A fixture reply.');
+    }
+    fixtureDb.close();
     const generated = await request({ port: server.port, method: 'POST', path: '/api/world-game/questions', token, json: { stageId: 'low-tide', provider: 'minimax' } });
     assert.equal(generated.status, 200);
     const quiz = JSON.parse(generated.body);
@@ -96,7 +124,7 @@ describe('Bellweather world game boundaries', () => {
     const invalidStage = await request({ port: server.port, method: 'POST', path: '/api/world-game/questions', token, json: { stageId: '../../future' } });
     assert.equal(invalidStage.status, 400);
 
-    const remoteNpc = await request({ port: server.port, method: 'POST', path: '/api/world-game/npc', token, json: { stageId: 'low-tide', npcId: 'eli', text: 'Tell me the truth.', provider: 'minimax' } });
+    const remoteNpc = await request({ port: server.port, method: 'POST', path: '/api/world-game/npc', token, json: { stageId: 'low-tide', npcId: 'mara', text: 'Tell me the truth.', provider: 'minimax' } });
     assert.equal(remoteNpc.status, 409);
   });
 
@@ -116,14 +144,38 @@ describe('Bellweather world game boundaries', () => {
       const resource = await request({ port: server.port, path: asset.replace(/^\/english-beta/, '') });
       assert.equal(resource.status, 200, asset);
     }
-    const harborAsset = await request({ port: server.port, path: '/world-game/assets/environment/bellweather-harbor-v2.glb' });
+    const harborAsset = await request({ port: server.port, path: '/world-game/assets/environment/bellweather-harbor-v3.glb' });
     assert.equal(harborAsset.status, 200);
     assert.equal(harborAsset.headers['content-type'], 'model/gltf-binary');
+    const hdr = await request({ port: server.port, path: '/world-game/assets/environment/small-harbour-sunset.hdr' });
+    assert.equal(hdr.status, 200);
+    assert.equal(hdr.headers['content-type'], 'image/vnd.radiance');
     const metadata = await request({ port: server.port, path: '/world-game/assets/characters/task.json' });
     assert.equal(metadata.status, 404);
     const response = await request({ port: server.port, path: '/img/world-game-target.png' });
     assert.equal(response.status, 200);
     assert.equal(response.headers['content-type'], 'image/png');
+  });
+
+  test('HTTP state resumes server-owned progress and feedback stays within its account', async () => {
+    const state = await request({ port: server.port, path: '/api/world-game/state', token });
+    assert.equal(state.status, 200);
+    const resumed = JSON.parse(state.body);
+    assert.equal(resumed.stageId, 'low-tide');
+    assert.deepEqual(resumed.visitedNpcIds.sort(), ['eli', 'mara']);
+    assert.equal(resumed.quiz.answers[0].correct, true);
+    assert.deepEqual(resumed.stages[1].publicFacts, []);
+    assert.equal(resumed.feedback.records.length, 2);
+    const feedback = await request({ port: server.port, path: '/api/world-game/feedback', token });
+    assert.equal(feedback.status, 200);
+    assert.deepEqual(JSON.parse(feedback.body), resumed.feedback);
+    const anotherToken = await login(server.port, 'catten', 'catten');
+    const privateFeedback = await request({ port: server.port, path: '/api/world-game/feedback', token: anotherToken });
+    assert.deepEqual(JSON.parse(privateFeedback.body), { records: [], summaries: [] });
+    const crossAccountRetry = await request({ port: server.port, method: 'POST', path: '/api/world-game/feedback/retry', token: anotherToken, json: { id: resumed.feedback.records[0].id } });
+    assert.equal(crossAccountRetry.status, 409);
+    const unauthorized = await request({ port: server.port, path: '/api/world-game/state' });
+    assert.equal(unauthorized.status, 401);
   });
 
   test('world-game services are stopped after the API checks', async () => {

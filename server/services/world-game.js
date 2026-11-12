@@ -8,9 +8,24 @@ const WORLD = Object.freeze({
     { id: 'beacon', title: 'CHAPTER 03 · FIRST LIGHT', name: 'The Beacon Returns', objective: 'Restore the beacon before the rescue drill.', publicFacts: ['The beacon needs inspection before the rescue drill.', 'The keeper has opened the workshop.', 'The tide will fall before first light.'], clues: ['A dry ceramic fuse is available.', 'The switch box needs drying first.', 'The beam must point toward open water.'], npcs: ['eli', 'jonah'], judgeOnly: 'Dry the switch box first, install the dry ceramic fuse, then aim the beam toward open water after the tide falls.', questions: [{ q: 'What is the safest order to restore the beacon?', options: ['Fit the fuse, then dry the box', 'Dry the box, fit the fuse, then aim toward open water', 'Aim the lens before opening the switch box', 'Pour fresh oil into the electrical box'], answer: 1, why: 'Dry the switch box before fitting the dry fuse, then aim the beam toward open water.' }] }
   ],
   npcs: {
-    eli: { name: 'Eli Turner', role: 'lighthouse keeper', voice: 'measured, weathered, quietly hopeful', privateFacts: ['Eli keeps a dry ceramic fuse in his workshop.', 'Eli checked the lens this morning and found it intact.'] },
-    mara: { name: 'Mara Quinn', role: 'harbor electrician', voice: 'practical, direct, observant', privateFacts: ['Mara found the wet fuse beside the east pier.', 'Mara believes the storm surge reached the lower switch box.'] },
-    jonah: { name: 'Jonah Reed', role: 'ferry pilot', voice: 'warm, concise, confident on the water', privateFacts: ['Jonah knows the north channel has submerged rocks.', 'Jonah follows the bell buoy through the east channel.'] }
+    eli: { name: 'Eli Turner', role: 'lighthouse keeper', voice: 'measured, weathered, quietly hopeful',
+      privateFacts: ['Eli has tended the lighthouse for decades and keeps a notebook of his maintenance checks.', 'Eli has difficulty hearing through his left ear; during the storm, wind and loose metal blurred the sounds from the pier. He remembers hearing a bell but cannot recall how many times it rang.', 'Eli did not inspect the lower harbor switch box during the storm.'],
+      stagePrivateFacts: {
+        'low-tide': ['Eli checked the lens this morning and found it intact.', 'Eli filled the lantern with fresh oil before the storm; the reservoir was still full when he checked it afterward.'],
+        beacon: ['Eli keeps a dry ceramic fuse in his workshop.', 'Eli has disconnected the beacon supply for inspection. His maintenance notebook requires drying the switch box completely before a replacement fuse can be fitted.', 'The beacon must stay disconnected until the box is dry and the dry ceramic fuse has been fitted.']
+      } },
+    mara: { name: 'Mara Quinn', role: 'harbor electrician', voice: 'practical, direct, observant',
+      privateFacts: ['Mara repairs harbor wiring and checks the tide gauge on her rounds.', 'Mara has no first-hand account of the Wren ferry crossing during the storm.'],
+      stagePrivateFacts: {
+        'low-tide': ['Mara found the wet fuse beside the east pier.', 'Mara believes the storm surge reached the lower switch box. The damp tide mark ends just above its door.'],
+        'storm-line': ['Mara compared the harbor gauge with the current tide chart: a second storm surge is forecast at midnight.', 'Mara has marked the midnight surge in the harbor office tide chart.']
+      } },
+    jonah: { name: 'Jonah Reed', role: 'ferry pilot', voice: 'warm, concise, confident on the water',
+      privateFacts: ['Jonah pilots the Wren and has learned the harbor channels through years of crossings.', 'Jonah has not inspected the harbor electrical equipment.'],
+      stagePrivateFacts: {
+        'storm-line': ['Jonah knows the north channel has submerged rocks.', 'Jonah follows the bell buoy through the east channel. Its marked passage stays clear of the shoals during the expected surge.'],
+        beacon: ['Jonah checked the harbor markers after the storm. Once the tide has fallen, the beacon beam needs to point toward open water, along the outer channel markers.', 'A beam aimed at the inner shoals would lead an approaching boat toward rocks.']
+      } }
   }
 });
 

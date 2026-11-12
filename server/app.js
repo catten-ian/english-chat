@@ -125,6 +125,9 @@ const server = http.createServer(async (req, res) => {
     if (method === 'POST' && pathname === '/api/world-game/answer') return await worldGameRoutes.answer(req, res);
     if (method === 'POST' && pathname === '/api/world-game/settle') return await worldGameRoutes.settle(req, res);
     if (method === 'POST' && pathname === '/api/world-game/feedback') return await worldGameRoutes.feedback(req, res);
+    if (['GET', 'POST'].includes(method) && pathname === '/api/world-game/state') return await worldGameRoutes.state(req, res);
+    if (method === 'GET' && pathname === '/api/world-game/feedback') return await worldGameRoutes.feedback(req, res);
+    if (method === 'POST' && pathname === '/api/world-game/feedback/retry') return await worldGameRoutes.retryFeedback(req, res);
     const dbMatch = pathname.match(/^\/api\/db\/(\w+)$/);
     if (dbMatch) return await userDataRoutes.dbKey(req, res, dbMatch[1]);
     if (method === 'POST' && pathname === '/api/conversations/delete') return await conversationSyncRoutes.remove(req, res);
@@ -207,6 +210,7 @@ let shuttingDown = false;
 function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
+  worldGameRoutes.stopWorker();
   logger.info(`收到 ${signal}，正在优雅关闭...`);
   clearInterval(sessionTimer);
   clearInterval(checkpointTimer);
@@ -230,6 +234,7 @@ let dbClosed = false;
 function finalizeDb() {
   if (dbClosed) return;
   dbClosed = true;
+  worldGameRoutes.stopWorker();
   try {
     // WAL checkpoint：把 -wal 内容并回主库，避免只复制 app.db 时状态不完整
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
@@ -259,6 +264,7 @@ process.on('uncaughtException', (err) => {
 
 /* 入口：由 server.js 调用。端口支持 argv[2] / PORT / 默认 8091 */
 function main() {
+  worldGameRoutes.startWorker();
   const PORT = Number(process.argv[2] || process.env.PORT || 8091);
   server.listen(PORT, '127.0.0.1', () => {
     logger.info(`Server: http://localhost:${PORT}  (127.0.0.1 only)`);

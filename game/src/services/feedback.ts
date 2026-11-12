@@ -11,6 +11,8 @@ export type FeedbackRecord = {
   feedback?: string;
   error?: string;
   nextAttemptAt?: number;
+  /** Historical browser records are displayed without restarting paid requests. */
+  archived?: boolean;
 };
 
 export type FeedbackQueueOptions = {
@@ -30,6 +32,26 @@ function isRecord(value: unknown): value is FeedbackRecord {
     && typeof record.stageId === 'string' && typeof record.npcName === 'string'
     && Number.isFinite(record.createdAt) && Number.isInteger(record.attempts)
     && record.attempts >= 0 && ['pending', 'retry', 'ready', 'failed'].includes(record.status);
+}
+
+/** Read-only compatibility with notes written before durable server feedback. */
+export function readArchivedFeedback(accountId: string): FeedbackRecord[] {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(`bellweather:feedback:v1:${encodeURIComponent(accountId)}`) || '[]');
+    if (!Array.isArray(stored)) return [];
+    return stored.filter(isRecord).map(record => ({
+      ...record, archived: true,
+      ...(record.status === 'ready' ? {} : {
+        status: 'failed' as const,
+        error: 'Saved on this device before background feedback moved to your account. This earlier note has no completed feedback.'
+      })
+    }));
+  } catch { return []; }
+}
+
+export function mergeArchivedFeedback(records: readonly FeedbackRecord[], archived: readonly FeedbackRecord[]): FeedbackRecord[] {
+  const currentIds = new Set(records.map(record => record.id));
+  return [...archived.filter(record => !currentIds.has(record.id)), ...records].sort((a, b) => a.createdAt - b.createdAt);
 }
 
 /** Independent from NPC messages: only learner utterances are sent to this endpoint. */

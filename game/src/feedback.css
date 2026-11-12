@@ -28,6 +28,10 @@
 .wg-panel button:disabled { opacity: .55; cursor: wait; }
 #wg-feedback-toggle { min-width: 96px; }
 #wg-feedback-count, #wg-clue-count { margin-left: 4px; font-weight: 500; opacity: .75; }
+.wg-feedback-summary { margin: 18px 0; padding: 15px 0; border-block: 1px solid #d6c19536; }
+.wg-feedback-summary summary { color: #e5c596; font: 500 17px/1.5 Georgia, serif; cursor: pointer; }
+.wg-feedback-summary p { font-size: 14px; color: #d9e4d4; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+#wg-feedback-service-status { color: #efc19c; font-size: 13px; line-height: 1.6; }
 @media (max-width: 640px) {
   .wg-feedback { top: max(12px, env(safe-area-inset-top)); right: 12px; bottom: max(60px, env(safe-area-inset-bottom)); padding: 17px; }
   #wg-feedback-toggle { min-width: 80px; padding-inline: 8px; }

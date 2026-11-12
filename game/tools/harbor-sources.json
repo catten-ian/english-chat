@@ -1,0 +1,250 @@
+[
+  {
+    "asset": "coastal_cliff_01",
+    "file": "game\\art\\polyhaven\\coastal_cliff_01\\coastal_cliff_01_1k.gltf",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/coastal_cliff_01/coastal_cliff_01_1k.gltf",
+    "license": "CC0-1.0",
+    "sha256": "2e6bb1f77965b314208b309ac89b94b8148c6a08ee6c9808cd71455e5475602d",
+    "bytes": 2825
+  },
+  {
+    "asset": "coastal_cliff_01",
+    "file": "game\\art\\polyhaven\\coastal_cliff_01\\textures\\coastal_cliff_01_diff_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/coastal_cliff_01/coastal_cliff_01_diff_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "6c9626fdb5550ba260b195638c8c89053faedc22005f4ca94d3be5df72ae525a",
+    "bytes": 699457
+  },
+  {
+    "asset": "coastal_cliff_01",
+    "file": "game\\art\\polyhaven\\coastal_cliff_01\\coastal_cliff_01.bin",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/coastal_cliff_01/coastal_cliff_01.bin",
+    "license": "CC0-1.0",
+    "sha256": "6833dfaf75e0d039e64bc09ad642c4be3361739f20048af32ad50fd8e6471a65",
+    "bytes": 13179840
+  },
+  {
+    "asset": "coastal_cliff_01",
+    "file": "game\\art\\polyhaven\\coastal_cliff_01\\textures\\coastal_cliff_01_arm_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/coastal_cliff_01/coastal_cliff_01_arm_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "7f287d0b44a3162b5e360fe45ccc8b6009c189d21bd33c1094060eef613c6fa6",
+    "bytes": 640985
+  },
+  {
+    "asset": "coastal_cliff_01",
+    "file": "game\\art\\polyhaven\\coastal_cliff_01\\textures\\coastal_cliff_01_nor_gl_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/coastal_cliff_01/coastal_cliff_01_nor_gl_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "afbe8c2f9ff62dd616f776c074b996d2d275eef982a40aee1f28f4f3b3a3cf0e",
+    "bytes": 853524
+  },
+  {
+    "asset": "dark_wooden_planks",
+    "file": "game\\art\\polyhaven\\dark_wooden_planks\\dark_wooden_planks_nor_gl_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_wooden_planks/dark_wooden_planks_nor_gl_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "87a7b26bc674477865d4589c6589200bfa649a6461422bf56f5600c05a470206",
+    "bytes": 658444
+  },
+  {
+    "asset": "dark_wooden_planks",
+    "file": "game\\art\\polyhaven\\dark_wooden_planks\\dark_wooden_planks_diff_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_wooden_planks/dark_wooden_planks_diff_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "e8216baa6b2d701b5523fcb904d45570acf7b96d160ef815e96e2dbfa82bdd9b",
+    "bytes": 701221
+  },
+  {
+    "asset": "dark_wooden_planks",
+    "file": "game\\art\\polyhaven\\dark_wooden_planks\\dark_wooden_planks_arm_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_wooden_planks/dark_wooden_planks_arm_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "8cb87b3d886d26a3baf72a829e4fb3f0e2b97b5f43dad44bdd7fd7fe4d4ea762",
+    "bytes": 777830
+  },
+  {
+    "asset": "roof_slates_02",
+    "file": "game\\art\\polyhaven\\roof_slates_02\\roof_slates_02_diff_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/roof_slates_02/roof_slates_02_diff_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "de3d2729ab385c5f7dd7106d3b435c737f6d2c3ea8883cea37de53cec2a34867",
+    "bytes": 515626
+  },
+  {
+    "asset": "roof_slates_02",
+    "file": "game\\art\\polyhaven\\roof_slates_02\\roof_slates_02_rough_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/roof_slates_02/roof_slates_02_rough_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "737f95fdbb09e49670cbce09a78fe75c18bbaed597524db832f0227df0dce2cd",
+    "bytes": 307076
+  },
+  {
+    "asset": "roof_slates_02",
+    "file": "game\\art\\polyhaven\\roof_slates_02\\roof_slates_02_nor_gl_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/roof_slates_02/roof_slates_02_nor_gl_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "32be0c0ba1565856156a315dc98a773d72f1a03415930657b8a8ad62bf60c1bf",
+    "bytes": 763206
+  },
+  {
+    "asset": "stone_wall_02",
+    "file": "game\\art\\polyhaven\\stone_wall_02\\stone_wall_02_rough_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/stone_wall_02/stone_wall_02_rough_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "b857cb67f7dd2c439f8e6d31ef3e279fa18ae2cec66b320382d03a83593178e5",
+    "bytes": 264278
+  },
+  {
+    "asset": "stone_wall_02",
+    "file": "game\\art\\polyhaven\\stone_wall_02\\stone_wall_02_diff_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/stone_wall_02/stone_wall_02_diff_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "546c51130575b57db1c9690766c55df19e80bf122bd3630f25f82f2832998fa8",
+    "bytes": 621925
+  },
+  {
+    "asset": "stone_wall_02",
+    "file": "game\\art\\polyhaven\\stone_wall_02\\stone_wall_02_nor_gl_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/stone_wall_02/stone_wall_02_nor_gl_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "47c4ee16834a755da49feafe920161db2fd5147be97dd9d24f3b659d9b462c1e",
+    "bytes": 981733
+  },
+  {
+    "asset": "small_harbour_sunset",
+    "file": "game\\art\\polyhaven\\small_harbour_sunset_1k.hdr",
+    "source": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/small_harbour_sunset_1k.hdr",
+    "license": "CC0-1.0",
+    "sha256": "54830a0200d6845076a1fa0c7cd3f89068d687d20970427661ef9f96b71f1369",
+    "bytes": 1499733
+  },
+  {
+    "asset": "wooden_crate_01",
+    "file": "game\\art\\polyhaven\\wooden_crate_01\\wooden_crate_01_1k.gltf",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_crate_01/wooden_crate_01_1k.gltf",
+    "license": "CC0-1.0",
+    "sha256": "fd9c6073acfc671e12b64666053f2805ae33aff5d3dbbcfe5c97c08c06644927",
+    "bytes": 5612
+  },
+  {
+    "asset": "wooden_crate_01",
+    "file": "game\\art\\polyhaven\\wooden_crate_01\\textures\\wooden_crate_01_diff_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wooden_crate_01/wooden_crate_01_diff_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "16653f4abaf4c1d9bca94bde3bd8c54d0ea9a5298d1648abcf57de1f7ecc34cc",
+    "bytes": 711292
+  },
+  {
+    "asset": "wooden_crate_01",
+    "file": "game\\art\\polyhaven\\wooden_crate_01\\textures\\wooden_crate_01_nor_gl_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wooden_crate_01/wooden_crate_01_nor_gl_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "f4ea44c7dc1686123d337039cb713d74e8a2dbc6d1bd2beeac276d06f5df3fab",
+    "bytes": 594076
+  },
+  {
+    "asset": "wooden_crate_01",
+    "file": "game\\art\\polyhaven\\wooden_crate_01\\wooden_crate_01.bin",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/wooden_crate_01/wooden_crate_01.bin",
+    "license": "CC0-1.0",
+    "sha256": "85f381f8035f7a6f2f3b848640894c6d3333b261946dd8a338c0fe19e0bea21e",
+    "bytes": 189408
+  },
+  {
+    "asset": "wooden_crate_01",
+    "file": "game\\art\\polyhaven\\wooden_crate_01\\textures\\wooden_crate_01_arm_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wooden_crate_01/wooden_crate_01_arm_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "cd0b031c3924905e16ffd78ead062c2cc274148c4104d09635310097738b4679",
+    "bytes": 776699
+  },
+  {
+    "asset": "pine_sapling_small",
+    "file": "game\\art\\polyhaven\\pine_sapling_small\\pine_sapling_small_1k.gltf",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/pine_sapling_small/pine_sapling_small_1k.gltf",
+    "license": "CC0-1.0",
+    "sha256": "f358c01926861dd082f32dba60f7c9fba232b585a985cf38c0d2229eecf4bc48",
+    "bytes": 11442
+  },
+  {
+    "asset": "pine_sapling_small",
+    "file": "game\\art\\polyhaven\\pine_sapling_small\\textures\\pine_sapling_small_twig_arm_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_small/pine_sapling_small_twig_arm_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "2eb0aa44124b5a4ae9401e00b23b3c916f4c3f421616ce1bb932f248fc061288",
+    "bytes": 394056
+  },
+  {
+    "asset": "pine_sapling_small",
+    "file": "game\\art\\polyhaven\\pine_sapling_small\\textures\\pine_sapling_small_twig_diff_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_small/pine_sapling_small_twig_diff_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "54af7d6fb664b5a38bcb118b557bc50e01e86ec54d6f1a573c3e32c649a53362",
+    "bytes": 477942
+  },
+  {
+    "asset": "pine_sapling_small",
+    "file": "game\\art\\polyhaven\\pine_sapling_small\\textures\\pine_sapling_small_bark_nor_gl_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_small/pine_sapling_small_bark_nor_gl_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "05c46455531781b6cf18cae0648cf627f60ee942adaa8bcbfd1592fc2506a9e0",
+    "bytes": 1016849
+  },
+  {
+    "asset": "pine_sapling_small",
+    "file": "game\\art\\polyhaven\\pine_sapling_small\\pine_sapling_small.bin",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/pine_sapling_small/pine_sapling_small.bin",
+    "license": "CC0-1.0",
+    "sha256": "b4d2fc73d53f1d8717eb5ef9a2c66957d2a53152787e543aace88fcd6fca94ef",
+    "bytes": 17771796
+  },
+  {
+    "asset": "pine_sapling_small",
+    "file": "game\\art\\polyhaven\\pine_sapling_small\\textures\\pine_sapling_small_bark_diff_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_small/pine_sapling_small_bark_diff_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "5c76836b01c3536fa0e24207b67bf4f3315b53ebe2b4ecc6f08dfcf3f8d74929",
+    "bytes": 725265
+  },
+  {
+    "asset": "pine_sapling_small",
+    "file": "game\\art\\polyhaven\\pine_sapling_small\\textures\\pine_sapling_small_bark_arm_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_small/pine_sapling_small_bark_arm_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "336a4680cd571b6076b67afee2310b290b8900d9d126eb39ec1ae92e95be2ea9",
+    "bytes": 801278
+  },
+  {
+    "asset": "pine_sapling_small",
+    "file": "game\\art\\polyhaven\\pine_sapling_small\\textures\\pine_sapling_small_twig_nor_gl_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_small/pine_sapling_small_twig_nor_gl_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "76af87821d7ff00e25768d5d97a449394fe64a21ae55d099da7f5ed46d9098c8",
+    "bytes": 692711
+  },
+  {
+    "asset": "cobblestone_floor_08",
+    "file": "game\\art\\polyhaven\\cobblestone_floor_08\\cobblestone_floor_08_diff_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/cobblestone_floor_08/cobblestone_floor_08_diff_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "ec131f7a99a1e7f9df25d4725609c55a6dad1df487630685e9a66ecbf41ec33a",
+    "bytes": 585727
+  },
+  {
+    "asset": "cobblestone_floor_08",
+    "file": "game\\art\\polyhaven\\cobblestone_floor_08\\cobblestone_floor_08_nor_gl_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/cobblestone_floor_08/cobblestone_floor_08_nor_gl_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "26bfff70b266a4e86983814c7e56a9b48daf93cd34dcdc16a5db13e4fabcfbb6",
+    "bytes": 1002410
+  },
+  {
+    "asset": "cobblestone_floor_08",
+    "file": "game\\art\\polyhaven\\cobblestone_floor_08\\cobblestone_floor_08_rough_1k.jpg",
+    "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/cobblestone_floor_08/cobblestone_floor_08_rough_1k.jpg",
+    "license": "CC0-1.0",
+    "sha256": "f92bcaf897cd98bc3cf11e6409b3e42145e7d0f659eaaad8807dfb0c5d16afc6",
+    "bytes": 408718
+  }
+]

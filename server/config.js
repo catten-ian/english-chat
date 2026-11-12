@@ -180,7 +180,7 @@ const ANKI_GUARDED_ACTIONS = new Set([
    - 任何 '..' / 反斜杠 / NUL / 绝对路径一律拒绝
    - 扩展名必须在白名单内（不再用 octet-stream 兜底，避免 .env/.db 被下载）
 */
-const STATIC_MIME = { '.glb': 'model/gltf-binary', '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.wav': 'audio/wav', '.webm': 'audio/webm', '.flac': 'audio/flac', '.opus': 'audio/ogg', '.aac': 'audio/aac' };
+const STATIC_MIME = { '.hdr': 'image/vnd.radiance', '.glb': 'model/gltf-binary', '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.wav': 'audio/wav', '.webm': 'audio/webm', '.flac': 'audio/flac', '.opus': 'audio/ogg', '.aac': 'audio/aac' };
 // URL 前缀 → 物理根目录（只有这些目录对外可见）
 const STATIC_DIRS = {
   '/world-game/': GAME_DIR,

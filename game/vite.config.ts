@@ -1,15 +1,18 @@
 import { defineConfig } from 'vite';
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
+const characterFiles = ['protagonist.glb', 'eli-turner.glb', 'mara-quinn.glb', 'jonah-reed.glb']
+  .filter(file => existsSync(resolve('public/assets/characters', file)));
 const shippingAssets = [
-  'assets/characters/protagonist.glb',
-  'assets/characters/eli-turner.glb',
-  'assets/environment/bellweather-harbor-v2.glb'
+  ...characterFiles.map(file => `assets/characters/${file}`),
+  'assets/environment/bellweather-harbor-v3.glb',
+  'assets/environment/small-harbour-sunset.hdr'
 ];
 
 export default defineConfig(({ command }) => ({
   base: '/world-game/',
+  define: { 'import.meta.env.WORLD_GAME_CHARACTER_FILES': JSON.stringify(characterFiles) },
   publicDir: command === 'build' ? false : 'public',
   plugins: [{ name: 'shipping-assets', closeBundle() {
     if (command !== 'build') return;

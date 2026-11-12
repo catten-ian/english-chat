@@ -7,10 +7,13 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-// Stub the provider before importing the route: no SQLite profile or external API
-// is opened, and all responses below travel through a real Node stream.
+// Stub the provider before importing the route. SQLite and all streams below
+// use an isolated disposable directory; no external API is called.
 const temporaryData = fs.mkdtempSync(path.join(os.tmpdir(), 'bellweather-context-'));
 process.env.AI_EN_DATA_DIR = temporaryData;
+process.env.AI_EN_GAME_WORKER = '0';
+process.env.MINIMAX_API_KEY = '';
+process.env.AIHUB8_API_KEY = '';
 const proxyPath = require.resolve('../server/routes/proxy');
 const originalProxy = require.cache[proxyPath];
 const captured = [];
@@ -39,6 +42,12 @@ const fakeProxy = {
 };
 require.cache[proxyPath] = { id: proxyPath, filename: proxyPath, loaded: true, exports: fakeProxy };
 const routes = require('../server/routes/world-game');
+const { db } = require('../server/db');
+const userIds = new Map();
+function userId(name) {
+  if (!userIds.has(name)) { const user = db.prepare('INSERT INTO users(username,password_hash) VALUES(?,?)').run(name, 'fixture'); userIds.set(name, Number(user.lastInsertRowid)); }
+  return userIds.get(name);
+}
 const actualNow = Date.now;
 let clock = actualNow();
 Date.now = () => clock;
@@ -46,6 +55,8 @@ after(() => {
   Date.now = actualNow;
   if (originalProxy) require.cache[proxyPath] = originalProxy;
   else delete require.cache[proxyPath];
+  routes.stopWorker();
+  db.close();
   fs.rmSync(temporaryData, { recursive: true, force: true });
 });
 
@@ -56,7 +67,8 @@ class Response extends PassThrough {
 }
 async function call(name, uid, input) {
   const request = new PassThrough();
-  request.uid = uid; request.username = uid; request.id = 'context-test'; request.headers = {};
+  request.method = 'POST';
+  request.uid = userId(uid); request.username = uid; request.id = 'context-test'; request.headers = {};
   const response = new Response();
   const pending = routes[name](request, response);
   request.end(JSON.stringify(input));
@@ -89,6 +101,33 @@ async function unlockNext(uid) {
   assert.equal(JSON.parse(result.body).complete, true);
 }
 
+test('stage books mount only for the current stage and each private book stays with its owner', () => {
+  const world = require('../server/services/world-game');
+  const lowEli = JSON.stringify(routes.scopedNpc(world.stages[0], 'eli'));
+  const lowMara = JSON.stringify(routes.scopedNpc(world.stages[0], 'mara'));
+  const stormMara = JSON.stringify(routes.scopedNpc(world.stages[1], 'mara'));
+  const stormJonah = JSON.stringify(routes.scopedNpc(world.stages[1], 'jonah'));
+  const beaconEli = JSON.stringify(routes.scopedNpc(world.stages[2], 'eli'));
+  const beaconJonah = JSON.stringify(routes.scopedNpc(world.stages[2], 'jonah'));
+  assert.match(lowEli, /lens this morning and found it intact|reservoir was still full/);
+  assert.match(lowEli, /cannot recall how many times it rang/);
+  assert.doesNotMatch(lowEli, /pretend|dry ceramic fuse|second storm surge|wet fuse/i);
+  assert.match(lowMara, /wet fuse|damp tide mark/);
+  assert.doesNotMatch(lowMara, /midnight|dry ceramic fuse|reservoir was still full/);
+  assert.match(stormMara, /second storm surge is forecast at midnight/);
+  assert.doesNotMatch(stormMara, /wet fuse|submerged rocks|dry ceramic fuse/);
+  assert.match(stormJonah, /north channel has submerged rocks|bell buoy through the east channel/);
+  assert.doesNotMatch(stormJonah, /midnight|drying the switch box/);
+  assert.match(beaconEli, /drying the switch box completely before a replacement fuse/);
+  assert.match(beaconEli, /dry ceramic fuse/);
+  assert.doesNotMatch(beaconEli, /outer channel markers|forecast at midnight/);
+  assert.match(beaconJonah, /tide has fallen.*point toward open water/);
+  assert.doesNotMatch(beaconJonah, /dry ceramic fuse|drying the switch box/);
+  for (const scope of [lowEli, lowMara, stormMara, stormJonah, beaconEli, beaconJonah]) {
+    assert.doesNotMatch(scope, /judgeOnly|judge_only|player_evidence|feedback|runtime/);
+  }
+});
+
 test('forged client history is excluded; only completed server turns are remembered', async () => {
   await approach('history-owner', 'eli');
   reply = 'The lens was intact — café by the harbor.';
@@ -117,9 +156,11 @@ test('NPC histories are isolated by account, stage and NPC', async () => {
   await speak('another-owner', 'eli', 'ANOTHER_QUESTION');
   assert.deepEqual(lastMessages(), [{ role: 'user', content: 'ANOTHER_QUESTION' }]);
   await unlockNext('isolation-owner');
+  await call('state', 'isolation-owner', { stageId: 'storm-line' });
   await approach('isolation-owner', 'mara', 'storm-line');
   await speak('isolation-owner', 'mara', 'NEW_STAGE', { stageId: 'storm-line' });
   assert.deepEqual(lastMessages(), [{ role: 'user', content: 'NEW_STAGE' }]);
+  await call('state', 'isolation-owner', { stageId: 'low-tide' });
   await approach('isolation-owner', 'mara');
   await speak('isolation-owner', 'mara', 'BACK_TO_STAGE_ONE');
   assert.equal(lastMessages()[0].content, 'MARA_QUESTION');
@@ -138,7 +179,7 @@ test('partial, errored, truncated and aborted streams never enter conversation m
   }
 });
 
-test('conversation memory expires and retains at most four complete turns', async () => {
+test('conversation memory survives idle time and retains at most four complete turns', async () => {
   const uid = 'bounded-history';
   await approach(uid, 'eli');
   for (let index = 0; index < 7; index++) {
@@ -149,7 +190,9 @@ test('conversation memory expires and retains at most four complete turns', asyn
   assert.equal(lastMessages()[0].content, 'question-2');
   clock += 60 * 60 * 1000 + 1;
   await speak(uid, 'eli', 'after-expiry');
-  assert.deepEqual(lastMessages(), [{ role: 'user', content: 'after-expiry' }]);
+  assert.equal(lastMessages().length, 9);
+  assert.equal(lastMessages()[0].content, 'question-3');
+  assert.equal(lastMessages().at(-1).content, 'after-expiry');
 });
 
 test('concurrent turns for one NPC are rejected and the lock is released on completion', async () => {
