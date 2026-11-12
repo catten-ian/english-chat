@@ -10,7 +10,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { sendJson } = require('../helpers');
-const { STATIC_MIME, STATIC_DIRS, INDEX_FILE } = require('../config');
+const { STATIC_MIME, STATIC_DIRS, INDEX_FILE, GAME_DIR } = require('../config');
 
 // 严格 CSP：脚本只允许同源外链（所有 inline onclick / <script> 已改为 data-action 委托）；
 // 样式保留 'unsafe-inline'（大量 style 属性 / KaTeX 注入）；图片/音频放开 data: 与 blob:
@@ -85,6 +85,7 @@ function serveStatic(res, pathname, opts) {
 
   for (const [prefix, root] of Object.entries(STATIC_DIRS)) {
     if (!decoded.startsWith(prefix)) continue;
+    if (decoded === prefix) { sendFile(res, path.join(root, 'index.html')); return; }
     const abs = resolveInside(root, decoded.slice(prefix.length));
     if (!abs) { sendJson(res, 404, { error: 'not found' }); return; }
     sendFile(res, abs);
@@ -93,4 +94,6 @@ function serveStatic(res, pathname, opts) {
   sendJson(res, 404, { error: 'not found' });
 }
 
-module.exports = { serveStatic };
+function serveGamePage(res) { sendFile(res, path.join(GAME_DIR, 'index.html')); }
+
+module.exports = { serveStatic, serveGamePage };

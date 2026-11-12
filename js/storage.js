@@ -15,7 +15,9 @@ const _queryVersion = (typeof location !== 'undefined' && typeof location.search
 // relative URL which browsers resolve against an unexpected subpath.
 const BACKEND_URL = (typeof location !== 'undefined' && location.protocol === 'file:') ? 'http://localhost:8091'
   : ((typeof location !== 'undefined' && /^(www\.)?catten\.cyou$/.test(location.hostname)
-      && (_queryVersion === 'dev' || location.pathname.startsWith('/english-dev/'))) ? '/api-dev' : '');
+      && (_queryVersion === 'beta' || location.pathname.startsWith('/english-beta/'))) ? '/api-beta'
+    : ((typeof location !== 'undefined' && /^(www\.)?catten\.cyou$/.test(location.hostname)
+      && (_queryVersion === 'dev' || location.pathname.startsWith('/english-dev/'))) ? '/api-dev' : ''));
 
 const LOCAL_FILE_MODE = typeof location !== 'undefined' && location.protocol === 'file:';
 

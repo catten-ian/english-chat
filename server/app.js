@@ -31,7 +31,8 @@ const feedbackRoutes = require('./routes/feedback');
 const weakPointRoutes = require('./routes/weak-points');
 const providerRoutes = require('./routes/providers');
 const readingSourceRoutes = require('./routes/reading-sources');
-const { serveStatic } = require('./routes/static');
+const worldGameRoutes = require('./routes/world-game');
+const { serveStatic, serveGamePage } = require('./routes/static');
 
 /* 启动数据准备：迁移已在 db.js 完成，这里播种默认账户（幂等） */
 seedUsers(db);
@@ -81,6 +82,7 @@ const server = http.createServer(async (req, res) => {
     if (method === 'POST' && pathname === '/api/sync/conversations') return await conversationSyncRoutes.peer(req, res);
 
     if (method === 'GET' && !pathname.startsWith('/api/')) {
+      if (['/', '/english', '/english/'].includes(pathname) && ['dev/world-game', 'beta/world-game'].includes(url.searchParams.get('version'))) { serveGamePage(res); return; }
       // The public reverse-proxy entry is /english?version=dev.  Relative
       // assets must stay under the dev mount instead of resolving to /js/.
       const baseHref = process.env.AI_EN_PUBLIC_BASE || null;
@@ -117,6 +119,12 @@ const server = http.createServer(async (req, res) => {
     // 用户数据读写
     if (method === 'GET' && pathname === '/api/providers') return providerRoutes.status(req, res);
     if (method === 'POST' && pathname === '/api/providers') return await providerRoutes.save(req, res);
+    if (method === 'POST' && pathname === '/api/world-game/npc') return await worldGameRoutes.npc(req, res);
+    if (method === 'POST' && pathname === '/api/world-game/move') return await worldGameRoutes.move(req, res);
+    if (method === 'POST' && pathname === '/api/world-game/questions') return await worldGameRoutes.questions(req, res);
+    if (method === 'POST' && pathname === '/api/world-game/answer') return await worldGameRoutes.answer(req, res);
+    if (method === 'POST' && pathname === '/api/world-game/settle') return await worldGameRoutes.settle(req, res);
+    if (method === 'POST' && pathname === '/api/world-game/feedback') return await worldGameRoutes.feedback(req, res);
     const dbMatch = pathname.match(/^\/api\/db\/(\w+)$/);
     if (dbMatch) return await userDataRoutes.dbKey(req, res, dbMatch[1]);
     if (method === 'POST' && pathname === '/api/conversations/delete') return await conversationSyncRoutes.remove(req, res);

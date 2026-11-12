@@ -33,3 +33,16 @@ music/
 history.txt
 *.zip
 .chrome-*
+.dream-loop/
+.tripo/
+game/art/
+game/dist/
+game/*.tsbuildinfo
+game/public/assets/source/
+game/public/assets/characters/animated/
+game/public/assets/characters/rigged/
+game/public/assets/characters/eli-task/
+game/public/assets/characters/model.glb
+game/public/assets/characters/preview.png
+game/public/assets/characters/rendered_image.webp
+game/public/assets/characters/task.json

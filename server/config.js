@@ -15,6 +15,7 @@ const BASE = path.join(__dirname, '..');
 // DATA_DIR / DB_PATH 可用环境变量覆盖，便于测试使用临时目录（绝不碰真实 data/app.db）
 const DATA_DIR = process.env.AI_EN_DATA_DIR ? path.resolve(process.env.AI_EN_DATA_DIR) : path.join(BASE, 'data');
 const MUSIC_DIR = path.join(BASE, 'music');
+const GAME_DIR = path.join(BASE, 'game', 'dist');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const DB_PATH = process.env.AI_EN_DB_PATH ? path.resolve(process.env.AI_EN_DB_PATH) : path.join(DATA_DIR, 'app.db');
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -179,9 +180,10 @@ const ANKI_GUARDED_ACTIONS = new Set([
    - 任何 '..' / 反斜杠 / NUL / 绝对路径一律拒绝
    - 扩展名必须在白名单内（不再用 octet-stream 兜底，避免 .env/.db 被下载）
 */
-const STATIC_MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.wav': 'audio/wav', '.webm': 'audio/webm', '.flac': 'audio/flac', '.opus': 'audio/ogg', '.aac': 'audio/aac' };
+const STATIC_MIME = { '.glb': 'model/gltf-binary', '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.wav': 'audio/wav', '.webm': 'audio/webm', '.flac': 'audio/flac', '.opus': 'audio/ogg', '.aac': 'audio/aac' };
 // URL 前缀 → 物理根目录（只有这些目录对外可见）
 const STATIC_DIRS = {
+  '/world-game/': GAME_DIR,
   '/css/': path.join(BASE, 'css'),
   '/js/': path.join(BASE, 'js'),
   '/vendor/': path.join(BASE, 'vendor'),
@@ -203,5 +205,5 @@ module.exports = {
   ENV_FILE: process.env.AI_EN_ENV_FILE ? path.resolve(process.env.AI_EN_ENV_FILE) : path.join(BASE, '.env'),
   ANKI_DECK_PREFIX, ANKI_ALLOWED_MODELS, ANKI_TEMPLATE_MODELS, ANKI_MAX_NOTES, ANKI_MAX_CARDS, ANKI_MAX_MEDIA_B64,
   ANKI_READONLY_ACTIONS, ANKI_GUI_ACTIONS, ANKI_GUARDED_ACTIONS,
-  STATIC_MIME, STATIC_DIRS, INDEX_FILE
+  STATIC_MIME, STATIC_DIRS, INDEX_FILE, GAME_DIR
 };

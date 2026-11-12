@@ -5,6 +5,11 @@ and `?version=stable` on the existing checkout and port 8091. Dev runs on
 port 8092. Both the dev entry and `/english-dev/*` must proxy to the dev
 application, not expose the whole checkout with `file_server`.
 
+The public beta entry is `/english?version=beta`. Beta assets use the isolated
+`/english-beta/*` mount and API requests use `/api-beta/*`; beta runs on port
+8096 with its own `AI_EN_DATA_DIR` and SQLite database. Do not reuse the stable
+or dev database. Build its entry with `node scripts/build-beta-index.js <staging-index-path>`.
+
 Generate the deployment HTML with:
 
 ```powershell
