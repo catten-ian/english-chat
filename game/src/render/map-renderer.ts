@@ -28,11 +28,8 @@ function paintHarbor() {
   }
   // Coastline and pale stone breakwater follow the 3D shore at z ≈ -5.
   const coast = new Path2D();
-  coast.moveTo(-44, 6); coast.bezierCurveTo(-31, 4, -35, -7, -24, -5);
-  coast.bezierCurveTo(-14, -3, -9, -5.5, -2, -4.8);
-  coast.bezierCurveTo(10, -5.2, 18, -2, 26, -5);
-  coast.bezierCurveTo(35, -8, 39, -5, 44, -8);
-  coast.lineTo(44, 50); coast.lineTo(-44, 50); coast.closePath();
+  coast.moveTo(44,-5);coast.lineTo(-3,-5);coast.lineTo(-3,14);
+  coast.lineTo(2,14);coast.lineTo(2,50);coast.lineTo(44,50);coast.closePath();
   ink.lineWidth = 1.15; ink.strokeStyle = '#aac2ad35'; ink.stroke(coast);
   ink.fillStyle = '#717e6b'; ink.fill(coast);
   ink.lineWidth = .28; ink.strokeStyle = '#b5b49a'; ink.stroke(coast);
@@ -53,7 +50,9 @@ function paintHarbor() {
     ink.strokeStyle = '#d4c7a044'; ink.lineWidth = .12; ink.stroke();
   }
   path([[-.5, 2], [-.5, 11], [8, 11], [18, 10], [29, 7]], 2.6);
-  path([[-.5, 10], [-7, 11], [-13, 14], [-17, 18]], 2.4);
+  ink.fillStyle='#647568';ink.fillRect(-17,14,14,3);
+  ink.beginPath();ink.ellipse(-17,19,6.8,7,0,0,Math.PI*2);ink.fill();
+  path([[-.5, 10],[-.5,15],[-13,15],[-17,18]], 2.4);
   path([[6, 11], [6, 2]], 2.1);
 
   function pier(x: number, z: number, width: number, height: number, vertical = false) {
@@ -99,10 +98,9 @@ function paintHarbor() {
       ink.fillStyle = '#172e31'; ink.fillText(label, x + width / 2, z + height + .7);
     }
   }
-  house(2.1, 4.35, 5.8, 5.3, '#4b6266', 'TIDE OFFICE');
-  house(4.8, 9.8, 8.4, 6.4, '#45545c', 'CHANDLERY');
-  house(14.3, 12.5, 7.4, 7, '#5e615d');
-  house(-7.1, 15.3, 6.2, 5.4, '#665b57');
+  house(4.4, -3.6, 5.2, 5.2, '#4b6266', 'TIDE OFFICE');
+  house(6.1, 4, 7.8, 8, '#45545c', 'CHANDLERY');
+  house(13.8, 13, 8.4, 8, '#5e615d');
 
   // Lighthouse and keeper cottage occupy the same harbor landmark as the GLB.
   ink.fillStyle = '#55685c'; ink.beginPath(); ink.ellipse(-17, 18, 4.6, 4, -.25, 0, Math.PI * 2); ink.fill();

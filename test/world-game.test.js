@@ -145,10 +145,10 @@ describe('Bellweather world game boundaries', () => {
       const resource = await request({ port: server.port, path: asset.replace(/^\/english-beta/, '') });
       assert.equal(resource.status, 200, asset);
     }
-    const harborAsset = await request({ port: server.port, path: '/world-game/assets/environment/bellweather-harbor-v4.glb' });
+    const harborAsset = await request({ port: server.port, path: '/world-game/assets/environment/bellweather-harbor-v5.glb' });
     assert.equal(harborAsset.status, 200);
     assert.equal(harborAsset.headers['content-type'], 'model/gltf-binary');
-    const hdr = await request({ port: server.port, path: '/world-game/assets/environment/small-harbour-sunset.hdr' });
+    const hdr = await request({ port: server.port, path: '/world-game/assets/environment/bellweather-dusk.hdr' });
     assert.equal(hdr.status, 200);
     assert.equal(hdr.headers['content-type'], 'image/vnd.radiance');
     const metadata = await request({ port: server.port, path: '/world-game/assets/characters/task.json' });

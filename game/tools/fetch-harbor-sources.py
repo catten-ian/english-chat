@@ -14,8 +14,8 @@ manifest = json.loads(Path(__file__).with_name('harbor-sources.json').read_text(
 
 def fetch(row):
     target = ROOT / row['file'].replace('\\', '/')
-    if not target.resolve().is_relative_to((ROOT / 'game/art/polyhaven').resolve()):
-        raise ValueError('Source destination must stay inside game/art/polyhaven')
+    if not target.resolve().is_relative_to((ROOT / 'game/art/polyhaven').resolve()) and target.resolve() != (ROOT / 'game/public/assets/environment/bellweather-dusk.hdr').resolve():
+        raise ValueError('Source destination must stay inside pinned harbor source directories')
     if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() == row['sha256']:
         return
     request = urllib.request.Request(row['source'], headers={'User-Agent': 'Bellweather-asset-pipeline/1.0'})

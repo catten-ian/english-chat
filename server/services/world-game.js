@@ -29,4 +29,19 @@ const WORLD = Object.freeze({
   }
 });
 
+// Provider outages preserve the same three-question settlement contract. Each
+// authored question is supported by facts the chapter's residents can share.
+WORLD.stages[0].questions.push(
+  { q: 'Which observation makes an empty oil reservoir unlikely?', options: ['The ferry is overdue', 'Eli found the reservoir still full', 'The tide chart is in the office', 'Mara heard four bells'], answer: 1, why: 'Eli checked the reservoir after the storm and found it full.' },
+  { q: 'Whose direct observations help investigate the electrical fault?', options: ['Jonah inspected the lower switch box', 'A visitor saw the lens crack', 'Mara found a wet fuse and a high tide mark', 'Eli counted every bell precisely'], answer: 2, why: 'Mara found the wet fuse and saw a damp mark above the switch-box door; Eli did not inspect that box.' }
+);
+WORLD.stages[1].questions.push(
+  { q: 'When is the next storm surge forecast?', options: ['At sunrise', 'At noon', 'At midnight', 'After the rescue drill'], answer: 2, why: 'Mara compared the gauge and current tide chart, which forecast a second surge at midnight.' },
+  { q: 'Why should the boat avoid the north channel?', options: ['It has submerged rocks', 'The lighthouse lens is broken', 'The east bell buoy is missing', 'The north channel has no water at all'], answer: 0, why: 'Jonah knows the north channel has submerged rocks; the bell buoy marks a clear east passage.' }
+);
+WORLD.stages[2].questions.push(
+  { q: 'Which replacement is available in Eli’s workshop?', options: ['A wet wire fuse', 'A dry ceramic fuse', 'A new ferry propeller', 'A cracked lens'], answer: 1, why: 'Eli keeps a dry ceramic fuse in the workshop.' },
+  { q: 'Where should the restored beam point after the tide falls?', options: ['At the inner shoals', 'At the switch-box door', 'Toward open water along the outer markers', 'At the harbor office windows'], answer: 2, why: 'Jonah checked the outer markers. A beam toward the inner shoals would lead boats toward rocks.' }
+);
+
 module.exports = WORLD;

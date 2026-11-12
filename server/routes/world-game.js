@@ -119,6 +119,24 @@ function numberPair(value) {
 
 function distance(a, b) { return Math.hypot(a.x - b.x, a.z - b.z); }
 
+function eligibleResident(snapshot) {
+  const stage = getStage(snapshot.stageId);
+  return stage?.npcs.map(id => ({ id, distance: distance(snapshot.position, NPC_POSITIONS[id]) }))
+    .filter(item => item.distance <= NPC_RADIUS).sort((a, b) => a.distance - b.distance)[0]?.id;
+}
+function continuation(uid, snapshot) {
+  const eligible = eligibleResident(snapshot);
+  const npcId = eligible || snapshot.lastNpcId;
+  const character = WORLD.npcs[npcId];
+  const available = !!eligible;
+  return {
+    ...(character ? { npcId, name: character.name, role: character.role } : {}),
+    available,
+    reason: available ? '' : character ? 'Return to this resident in the game to continue speaking.' : 'Walk up to a resident in the game to begin speaking.',
+    history: character ? store().history(uid, snapshot.stageId, npcId) : []
+  };
+}
+
 async function state(req, res) {
   const db = store();
   if (req.method === 'POST') {
@@ -128,7 +146,8 @@ async function state(req, res) {
     if (!db.changeStage(req.uid, input.stageId)) return sendJson(res, 403, { error: 'stage is locked' }, req);
   }
   startDefaultWorker();
-  return sendJson(res, 200, { ...db.state(req.uid), npcPositions: NPC_POSITIONS }, req);
+  const snapshot = db.state(req.uid);
+  return sendJson(res, 200, { ...snapshot, continuation: continuation(req.uid, snapshot), npcPositions: NPC_POSITIONS }, req);
 }
 
 async function move(req, res) {
@@ -173,6 +192,9 @@ async function npc(req, res) {
   if (!stage || !stageUnlocked(req.uid, stage.id)) return sendJson(res, 403, { error: 'stage is locked' }, req);
   if (!currentStage(req, res, stage.id)) return;
   if (!character || !stage.npcs.includes(input.npcId) || !text || text.length > 1200) return sendJson(res, 400, { error: 'invalid turn' }, req);
+  if (input.channel === 'english-chat' && eligibleResident({ stageId: stage.id, position: store().getPosition(req.uid, stage.id) }) !== input.npcId) {
+    return sendJson(res, 409, { error: 'resident continuation changed' }, req);
+  }
   const playerPosition = store().getPosition(req.uid, stage.id);
   const npcPosition = NPC_POSITIONS[input.npcId];
   if (!npcPosition || distance(playerPosition, npcPosition) > NPC_RADIUS) return sendJson(res, 409, { error: 'npc is out of interaction range' }, req);

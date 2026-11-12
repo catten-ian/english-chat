@@ -20,6 +20,16 @@ function modules(globals = {}) {
   }
   return load;
 }
+
+test('screen movement follows the 3D camera and keeps the map north-up', () => {
+  const { movementFromScreen } = modules()('simulation/input.ts');
+  const up = movementFromScreen('3d', 0, -1), right = movementFromScreen('3d', 1, 0);
+  assert.ok(up.z > .95 && up.x < 0, '3D forward moves into the scene');
+  assert.ok(right.x > .95 && right.z > 0, '3D right follows the diagonal view');
+  assert.ok(Math.abs(up.x * right.x + up.z * right.z) < 1e-10, 'screen axes remain orthogonal');
+  const map = movementFromScreen('2d', 0, -1);
+  assert.equal(map.x, 0); assert.equal(map.z, -1);
+});
 function harness() {
   const { document, window } = parseHTML('<html><body><main id="game-root"><div class="wg-shell"><div class="wg-controls"></div></div></main></body></html>');
   window.HTMLElement.prototype.showModal = function () { this.setAttribute('open', ''); this.open = true; };

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 import { GameState } from '../simulation/state';
 import { Npc, WORLD } from '../content/world';
 
@@ -85,42 +86,54 @@ async function loadCharacter(rig: CharacterRig, file: string, isDisposed: () => 
 export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   let disposed = false;
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#c7b6a5');
-  scene.fog = new THREE.FogExp2('#adbdba', 0.009);
-  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 240);
+  scene.background = new THREE.Color('#65758c');
+  scene.fog = new THREE.FogExp2('#78899b', 0.012);
+  const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 240);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.04;
+  renderer.toneMappingExposure = .95;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.35));
 
-  scene.add(new THREE.HemisphereLight('#c9dcdf', '#48534a', 0.65));
-  const sun = new THREE.DirectionalLight('#ffd1a3', 3.1);
+  scene.add(new THREE.HemisphereLight('#aabbd5', '#242e38', 0.55));
+  const sun = new THREE.DirectionalLight('#ffc6a0', 1.15);
   sun.position.set(-26, 17, 24); sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 100 });
   sun.shadow.normalBias = .025; sun.shadow.bias = -.00015;
   sun.shadow.camera.updateProjectionMatrix(); scene.add(sun);scene.add(sun.target);
-  const harborFill = new THREE.DirectionalLight('#c2e2e9', 0.6);
+  const harborFill = new THREE.DirectionalLight('#9cb6df', 0.4);
   harborFill.position.set(8, 9, -24); scene.add(harborFill);
   const environmentGenerator = new THREE.PMREMGenerator(renderer);
   let environment: THREE.WebGLRenderTarget | undefined;
-  void new RGBELoader().loadAsync(`${import.meta.env.BASE_URL}assets/environment/small-harbour-sunset.hdr`).then(texture => {
+  let skyTexture: THREE.DataTexture | undefined;
+  void new RGBELoader().loadAsync(`${import.meta.env.BASE_URL}assets/environment/bellweather-dusk.hdr`).then(texture => {
     if (disposed) { texture.dispose(); return; }
     texture.mapping = THREE.EquirectangularReflectionMapping;
     environment = environmentGenerator.fromEquirectangular(texture);
     scene.environment = environment.texture;
-    scene.environmentIntensity = .8;
-    scene.background = environment.texture;
-    scene.backgroundBlurriness = .15;
-    scene.backgroundIntensity = .65;
-    scene.environmentRotation.y = scene.backgroundRotation.y = .6;
-    texture.dispose(); environmentGenerator.dispose();
+    scene.environmentIntensity = .65;
+    skyTexture = texture;
+    scene.background = texture;
+    scene.backgroundBlurriness = .015;
+    scene.backgroundIntensity = .45;
+    scene.environmentRotation.y = scene.backgroundRotation.y = 2.8;
+    environmentGenerator.dispose();
   }).catch(error => { environmentGenerator.dispose();if (!disposed) console.warn('Harbor environment unavailable.', error); });
   const waterMaterials: THREE.MeshStandardMaterial[] = [];
-  void new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}assets/environment/bellweather-harbor-v4.glb`).then((gltf) => {
+  // A single half-resolution planar pass gives the wet quay real window and
+  // character reflections. Phones keep the PBR clearcoat without the extra pass.
+  const wetDeck = new Reflector(new THREE.PlaneGeometry(30.1,5.68), {
+    textureWidth: 512, textureHeight: 256, multisample: 0, clipBias: .003, color: 0x687b87
+  });
+  wetDeck.rotation.x=-Math.PI/2;wetDeck.position.set(4.14,.079,-7.76);
+  const wetDeckMaterial=wetDeck.material as THREE.ShaderMaterial;
+  wetDeckMaterial.transparent=true;wetDeckMaterial.depthWrite=false;
+  wetDeckMaterial.fragmentShader=wetDeckMaterial.fragmentShader.replace('color ), 1.0','color ), 0.24');
+  scene.add(wetDeck);
+  void new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}assets/environment/bellweather-harbor-v5.glb`).then((gltf) => {
     if (disposed) { releaseObject(gltf.scene); return; }
     gltf.scene.position.y = 0.025;
     gltf.scene.traverse((object) => {
@@ -133,10 +146,10 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
         const materials = Array.isArray(object.material) ? object.material : [object.material];
         for (const surface of materials) {
           if (surface instanceof THREE.MeshStandardMaterial) {
-            surface.color.set('#456f75');
-            surface.roughness = 0.2;
-            surface.metalness = 0.23;
-            surface.envMapIntensity = 1.5;
+            surface.color.set('#12303b');
+            surface.roughness = 0.12;
+            surface.metalness = 0.14;
+            surface.envMapIntensity = 1.1;
             if (surface.normalMap) surface.normalScale.setScalar(0.18);
             waterMaterials.push(surface);
           }
@@ -147,8 +160,8 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
     scene.add(gltf.scene);
   }).catch((error) => { if (!disposed) console.warn('World-game harbor asset unavailable.', error); });
   // Practical lights illuminate faces and nearby timber, with no extra shadow maps.
-  for (const [x,z] of [[1.5,-3.6],[7.5,8]]) {
-    const lamp = new THREE.PointLight('#ffbc72', 16, 8, 2);
+  for (const [x,z] of [[7,-4],[10,4.2],[18,13]]) {
+    const lamp = new THREE.PointLight('#ffb56b', 36, 10, 2);
     lamp.position.set(-x, 2.25, z); scene.add(lamp);
   }
 
@@ -175,7 +188,7 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   const cameraPosition = new THREE.Vector3();
   const cameraLook = new THREE.Vector3();
   const smoothedLook = new THREE.Vector3();
-  const resize = () => { const rect = canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return; camera.aspect = rect.width / rect.height; camera.updateProjectionMatrix(); renderer.setSize(rect.width, rect.height, false); };
+  const resize = () => { const rect = canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return; camera.aspect = rect.width / rect.height; camera.updateProjectionMatrix(); renderer.setSize(rect.width, rect.height, false);wetDeck.visible=rect.width>900&&window.matchMedia('(pointer: fine)').matches; };
   const render = (state: GameState, dt: number) => {
     // The harbor asset reflects logical X once. Keep simulation/save coordinates
     // unchanged and apply the same presentation transform to every runtime actor.
@@ -212,8 +225,8 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
     const focusX = close ? (player.position.x+partner.position.x)/2 : player.position.x;
     const focusZ = close ? (state.player.z+partner.position.z)/2 : state.player.z;
     const narrow = camera.aspect < .85;
-    cameraPosition.set(focusX + .5, close ? 1.8 : 3.0, focusZ - (close ? (narrow ? 4.3 : 2.7) : 6.7));
-    cameraLook.set(focusX - (narrow ? 0 : .4), close ? 1.05 : 1.1, focusZ + .4);
+    cameraPosition.set(focusX - .6, close ? 1.8 : 3.0, focusZ - (close ? (narrow ? 5.2 : 3.8) : 6.7));
+    cameraLook.set(focusX + (narrow ? .15 : .5), close ? 1.8 : 1.8, focusZ + 1.5);
     const smoothing = 1 - Math.exp(-dt * 4);
     if (!cameraInitialized) { camera.position.copy(cameraPosition); smoothedLook.copy(cameraLook); cameraInitialized=true; }
     else { camera.position.lerp(cameraPosition,smoothing);smoothedLook.lerp(cameraLook,smoothing); }
@@ -232,7 +245,9 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
       window.removeEventListener('resize', resize);
       for (const rig of characters.values()) rig.mixer?.stopAllAction();
       releaseObject(scene);
+      wetDeck.dispose();
       environment?.dispose();
+      skyTexture?.dispose();
       environmentGenerator.dispose();
       sun.shadow.map?.dispose();
       renderer.dispose();

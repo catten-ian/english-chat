@@ -7,6 +7,7 @@ import { createChapterPanel } from './ui/chapter';
 import { chapterError, createJourneyApi, GameApiError, providerError, type ChapterQuiz, type Journey } from './services/journey';
 import { mergeArchivedFeedback, readArchivedFeedback } from './services/feedback';
 import { createNpcStreamReader } from './services/npc-stream';
+import { movementFromScreen } from './simulation/input';
 
 const root = document.querySelector<HTMLElement>('#game-root')!;
 const accountId = localStorage.getItem('ai_en_user') || sessionStorage.getItem('ai_en_user') || 'guest';
@@ -258,7 +259,8 @@ function frame(now: number) {
     if (keys.has('a') || keys.has('arrowleft') || keys.has('left')) dx -= 1;
     if (keys.has('d') || keys.has('arrowright') || keys.has('right')) dx += 1;
   }
-  movePlayer(state, dx, dz, dt); syncElapsed += dt; saveElapsed += dt;
+  const movement = movementFromScreen(state.mode, dx, dz);
+  movePlayer(state, movement.x, movement.z, dt); syncElapsed += dt; saveElapsed += dt;
   if (syncElapsed >= .5) { syncElapsed = 0; if (!loadingJourney) void syncPosition(); }
   updateNearby(); renderer.render(state, dt);
   if (saveElapsed >= .5) { saveElapsed = 0; saveState(state, accountId); }

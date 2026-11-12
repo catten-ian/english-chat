@@ -6,8 +6,8 @@ const characterFiles = ['protagonist.glb', 'eli-turner.glb', 'mara-quinn.glb', '
   .filter(file => existsSync(resolve('public/assets/characters', file)));
 const shippingAssets = [
   ...characterFiles.map(file => `assets/characters/${file}`),
-  'assets/environment/bellweather-harbor-v4.glb',
-  'assets/environment/small-harbour-sunset.hdr'
+  'assets/environment/bellweather-harbor-v5.glb',
+  'assets/environment/bellweather-dusk.hdr'
 ];
 
 export default defineConfig(({ command }) => ({

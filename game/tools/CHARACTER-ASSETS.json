@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "provider": "Tripo",
   "region": "ov",
-  "generatedAt": "2026-11-12T09:27:21.420Z",
+  "generatedAt": "2026-11-12T09:59:32.808Z",
   "scopedSpendCredits": 215,
   "spendScope": "This NPC update only; pre-existing reference/model/rig tasks excluded where marked prior or existing.",
   "generationPolicy": "Image references inspected before model generation. No uncertain running task was resubmitted. Rig polling interruption resumed existing task.",
@@ -17,13 +17,78 @@
     "source": "game/art/verify-character-assets.py",
     "report": "game/art/character-acceptance/validation.json",
     "renders": [
+      "game/art/character-acceptance/protagonist.png",
       "game/art/character-acceptance/eli-turner.png",
       "game/art/character-acceptance/mara-quinn.png",
       "game/art/character-acceptance/jonah-reed.png"
     ],
-    "observations": "All three imported with 78-bone rig and idle animation; front-facing rendered previews inspected, arms lowered. Runtime browser acceptance remains a separate check."
+    "observations": "NPCs and protagonist imported with 78-bone rigs and idle animation; protagonist also retains walk. Front-facing rendered previews inspected, arms lowered. Runtime browser acceptance remains a separate check."
   },
   "characters": [
+    {
+      "id": "protagonist",
+      "reference": {
+        "type": "existing-authored-Tripo-character",
+        "source": "Existing shipped protagonist; this pass only normalizes the scene root to game +Z forward."
+      },
+      "tasks": [],
+      "shipping": {
+        "file": "game/public/assets/characters/protagonist.glb",
+        "bytes": 3570184,
+        "sha256": "6595a3eaffa73c00ae7b0729ff58e027d65f143eb0a232d373d62b1797a93a08",
+        "meshCount": 1,
+        "triangles": 52378,
+        "skinCount": 1,
+        "bones": 78,
+        "animations": [
+          "idle",
+          "walk"
+        ],
+        "texture": {
+          "embedded": true,
+          "mimeType": "image/jpeg",
+          "resolution": [
+            2048,
+            2048
+          ]
+        },
+        "orientation": {
+          "slug": "protagonist",
+          "sourceForwardFromFootToToe": [
+            0.9999999999778577,
+            0,
+            -0.0000066546809839781945
+          ],
+          "yawDegrees": -90.0003812851344,
+          "normalizedForward": [
+            0,
+            0,
+            1.0000000000000002
+          ],
+          "bytes": 3570184,
+          "animations": [
+            "idle",
+            "walk"
+          ],
+          "skins": 1,
+          "binaryPayloadUnchanged": true
+        }
+      },
+      "localNormalization": {
+        "credits": 0,
+        "sourceBackup": "game/art/protagonist-before-forward-normalization.glb",
+        "sourceSha256": "6672425a6c85d56465a9933c2c1f1466e23b0670df494923e0e6df20643278cf",
+        "preserved": {
+          "binaryPayload": true,
+          "animations": true,
+          "skin": true,
+          "originalNodes": true,
+          "meshes": true,
+          "materials": true
+        },
+        "method": "Add one scene-root quaternion wrapper; no geometry, texture, skin, animation channel or original node edits."
+      }
+    },
     {
       "id": "eli-turner",
       "reference": {

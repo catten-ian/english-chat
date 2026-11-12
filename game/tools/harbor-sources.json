@@ -246,5 +246,13 @@
     "license": "CC0-1.0",
     "sha256": "f92bcaf897cd98bc3cf11e6409b3e42145e7d0f659eaaad8807dfb0c5d16afc6",
     "bytes": 408718
+  },
+  {
+    "asset": "qwantani_dusk_1_puresky",
+    "file": "game\\public\\assets\\environment\\bellweather-dusk.hdr",
+    "source": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/qwantani_dusk_1_puresky_1k.hdr",
+    "license": "CC0-1.0",
+    "sha256": "0eadb9f1293864bb48680ae8012dff8f22b55228ac30eafd7d63a32a374a61eb",
+    "bytes": 952192
   }
 ]
