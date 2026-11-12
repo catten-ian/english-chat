@@ -39,9 +39,9 @@ export function nearestNpc(state: GameState, npcs: readonly Npc[]) {
   }
   return found;
 }
-export function movePlayer(state: GameState, dx: number, dz: number, dt: number) {
+export function movePlayer(state: GameState, dx: number, dz: number, dt: number, onStep?: (point: { x: number; z: number }) => void) {
   const speed = 4.2;
   const length = Math.hypot(dx, dz) || 1;
   const next = { x: state.player.x + dx / length * speed * dt, z: state.player.z + dz / length * speed * dt };
-  state.player = moveSafely(state.player, next);
+  state.player = moveSafely(state.player, next, onStep);
 }

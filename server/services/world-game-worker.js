@@ -35,7 +35,7 @@ function messagesForJob(job) {
   ];
 }
 
-async function completeWithProxy(job, messages) {
+async function completeWithProxy(job, messages, { signal } = {}) {
   const payload = providerPayload(job, messages, job.kind === 'feedback' ? 'low' : 'medium');
   const body = Buffer.from(JSON.stringify(payload));
   const req = Readable.from([body]);
@@ -43,6 +43,7 @@ async function completeWithProxy(job, messages) {
   req.uid = job.user_id;
   req.username = '';
   req.id = 'world-feedback-' + job.id;
+  req.signal = signal;
   return new Promise((resolve, reject) => {
     const response = {
       statusCode: 200,
@@ -63,32 +64,47 @@ async function completeWithProxy(job, messages) {
   });
 }
 
-function createFeedbackWorker({ store, complete = completeWithProxy, onError = () => {} }) {
+function createFeedbackWorker({ store, complete = completeWithProxy, onError = () => {}, timeoutMs = 120000 }) {
   const owner = crypto.randomUUID();
   let timer;
   let busy = false;
   let stopped = false;
-  async function tick() {
-    if (busy || stopped) return false;
+  let activeController, inFlight;
+  // Keep the entire primary/fallback attempt shorter than the five-minute lease.
+  const deadlineMs = Math.max(1, Math.min(Number(timeoutMs) || 120000, 240000));
+  async function runTick() {
     busy = true;
     try {
       const job = store.claimJob(owner);
       if (!job) return false;
       if (job.waiting) return true;
+      const controller = new AbortController();
+      activeController = controller;
+      const deadline = setTimeout(() => controller.abort(new Error('Feedback request timed out.')), deadlineMs);
       try {
         const text = job.kind === 'summary' && !job.dependencies.length
           ? 'No spoken replies were recorded for this chapter.'
-          : await complete(job, messagesForJob(job));
+          : await complete(job, messagesForJob(job), { signal: controller.signal });
+        if (stopped) return false;
+        controller.signal.throwIfAborted();
         if (typeof text !== 'string' || !text.trim() || text.length > 24000) throw new Error('The feedback response was empty or too large.');
         store.completeJob(job.id, owner, text.trim());
       } catch (error) {
+        if (stopped) return false;
+        if (controller.signal.aborted) error = controller.signal.reason;
         const status = Number(error.status) || 0;
         const retryable = !status || status === 408 || status === 429 || status >= 500;
         store.failJob(job, owner, error.message || 'Feedback is unavailable.', retryable);
-      }
+      } finally { clearTimeout(deadline); if (activeController === controller) activeController = undefined; }
       return true;
     } catch (error) { onError(error); return false; }
     finally { busy = false; }
+  }
+  function tick() {
+    if (busy || stopped) return Promise.resolve(false);
+    const pending = runTick();
+    inFlight = pending;
+    return pending.finally(() => { if (inFlight === pending) inFlight = undefined; });
   }
   return {
     tick,
@@ -99,7 +115,11 @@ function createFeedbackWorker({ store, complete = completeWithProxy, onError = (
       timer.unref?.();
       void tick();
     },
-    stop() { stopped = true; clearInterval(timer); timer = undefined; },
+    stop() {
+      stopped = true; clearInterval(timer); timer = undefined;
+      activeController?.abort(new Error('Feedback worker stopped.'));
+      return inFlight || Promise.resolve();
+    },
     get busy() { return busy; }
   };
 }
@@ -111,6 +131,11 @@ function startDefaultWorker() {
   if (!worker) worker = createFeedbackWorker({ store: getDefaultStore(), onError: error => require('./logger').error('World-game feedback worker: ' + error.message) });
   worker.start();
 }
-function stopDefaultWorker() { stopDefaultProbes(); worker?.stop(); worker = undefined; }
+function stopDefaultWorker() {
+  const probesDrained = stopDefaultProbes();
+  const current = worker;
+  const drained = current?.stop() || Promise.resolve();
+  return Promise.all([drained, probesDrained]).finally(() => { if (worker === current) worker = undefined; });
+}
 
 module.exports = { createFeedbackWorker, messagesForJob, providerPayload, startDefaultWorker, stopDefaultWorker };

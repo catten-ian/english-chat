@@ -8,6 +8,7 @@ import { chapterError, createJourneyApi, GameApiError, providerError, type Chapt
 import { mergeArchivedFeedback, readArchivedFeedback } from './services/feedback';
 import { createNpcStreamReader } from './services/npc-stream';
 import { movementFromScreen } from './simulation/input';
+import { MovementTrail } from './services/movement-trail';
 
 const root = document.querySelector<HTMLElement>('#game-root')!;
 const accountId = localStorage.getItem('ai_en_user') || sessionStorage.getItem('ai_en_user') || 'guest';
@@ -21,7 +22,9 @@ const keys = new Set<string>();
 let last = performance.now(), syncElapsed = 0, saveElapsed = 0, frameId = 0;
 let disposed = false, loadingJourney = false, journeyReady = false;
 let moveRequest: Promise<boolean> | undefined;
-let lastSynced: { x: number; z: number; at: number } | undefined;
+const movementTrail = new MovementTrail(state.player);
+let movementEpoch = 0, movementRecovering = false;
+let moveController: AbortController | undefined;
 let conversationRequest: AbortController | undefined;
 let feedbackTimer: ReturnType<typeof setTimeout> | undefined;
 const feedbackRetries = new Set<string>();
@@ -52,7 +55,7 @@ const chapter = createChapterPanel(root, {
   refresh: () => { void refreshJourney(true); }
 });
 const feedbackIsOpen = () => !root.querySelector<HTMLElement>('#wg-feedback-panel')!.hidden;
-const paused = () => Boolean(root.querySelector('dialog[open]')) || feedbackIsOpen() || loadingJourney || Boolean(conversationRequest) || Boolean(token && !journeyReady);
+const paused = () => Boolean(root.querySelector('dialog[open]')) || feedbackIsOpen() || loadingJourney || movementRecovering || Boolean(token && !movementTrail.canWalk) || Boolean(conversationRequest) || Boolean(token && !journeyReady);
 
 function setMode(mode: typeof state.mode) {
   state.mode = mode; renderer.setMode(mode);
@@ -73,7 +76,7 @@ function applyJourney(next: Journey, reposition = false) {
   state.activeNpcIds = [...(next.stages.find(stage => stage.id === next.stageId)?.npcs || [])];
   state.clues = next.evidence.filter(item => item.stageId === next.stageId).map(item => `${item.text} — ${WORLD.npcs.find(npc => npc.id === item.source)?.name || item.source}`);
   if (reposition || changedStage) {
-    state.player = { ...next.position }; lastSynced = undefined; keys.clear();
+    state.player = { ...next.position }; movementTrail.reset(next.position); movementEpoch++; moveController?.abort(); keys.clear();
     state.activeNpc = undefined; state.nearbyNpc = undefined;
     hud.resetDialogue();
   }
@@ -86,7 +89,7 @@ async function refreshJourney(reposition = false) {
   if (!token) { chapter.error('Sign in from the English app, then return to load your saved journey.'); return; }
   if (loadingJourney || disposed) return;
   loadingJourney = true;
-  try { applyJourney(await api.load(), reposition); chapter.idle(); }
+  try { if (reposition && moveRequest) await moveRequest; applyJourney(await api.load(), reposition); movementRecovering = false; chapter.idle(); }
   catch (error) { chapter.error(chapterError(error)); }
   finally { loadingJourney = false; }
 }
@@ -231,23 +234,34 @@ root.querySelectorAll<HTMLButtonElement>('[data-move]').forEach(button => {
   for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(name, up);
 });
 function syncPosition(): Promise<boolean> {
-  if (!token || !journeyReady) return Promise.resolve(false);
+  if (!token || !journeyReady || disposed) return Promise.resolve(false);
   if (moveRequest) return moveRequest;
-  if (lastSynced && Date.now() - lastSynced.at < 1000 && Math.hypot(state.player.x - lastSynced.x, state.player.z - lastSynced.z) < .01) return Promise.resolve(true);
-  const sentPosition = { ...state.player }, sentStage = state.currentStage;
-  moveRequest = (async () => {
+  if (!movementRecovering && !movementTrail.pending) return Promise.resolve(true);
+  const sentStage = state.currentStage, epoch = movementEpoch;
+  const batch = movementTrail.take();
+  const controller = new AbortController(); moveController = controller;
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  const recover = async () => {
+    if (disposed || epoch !== movementEpoch) return;
+    movementRecovering = true; keys.clear(); movementTrail.reset(state.player);
+    try { const saved = await api.load(); if (!disposed && epoch === movementEpoch) { applyJourney(saved, true); movementRecovering = false; } }
+    catch { /* Pause walking; the next sync retries authoritative recovery. */ }
+  };
+  const request = (async () => {
     try {
-      const response = await fetch(`${apiBase}/api/world-game/move`, { method: 'POST', headers: headers(), signal: AbortSignal.timeout(10000), body: JSON.stringify({ stageId: sentStage, position: sentPosition }) });
-      if (response.status === 409) {
-        const result = await response.json();
-        if (state.currentStage === sentStage && Number.isFinite(result.position?.x) && Number.isFinite(result.position?.z)) state.player = result.position;
-        if (result.stageId && result.stageId !== state.currentStage) void refreshJourney(true);
-      }
-      if (response.ok) lastSynced = { ...sentPosition, at: Date.now() };
-      return response.ok;
-    } catch { return false; } finally { moveRequest = undefined; }
+      if (movementRecovering) { await recover(); return false; }
+      const response = await fetch(`${apiBase}/api/world-game/move`, { method: 'POST', headers: headers(), signal: controller.signal, body: JSON.stringify({ stageId: sentStage, ...batch }) });
+      if (disposed || epoch !== movementEpoch) return false;
+      if (!response.ok) { await recover(); return false; }
+      const result = await response.json();
+      if (result.position?.x !== batch.position.x || result.position?.z !== batch.position.z) { await recover(); return false; }
+      // New microsteps collected while fetch was in flight remain queued.
+      return true;
+    } catch { await recover(); return false; }
+    finally { clearTimeout(timeout); if (moveController === controller) moveController = undefined; moveRequest = undefined; }
   })();
-  return moveRequest;
+  moveRequest = request;
+  return request;
 }
 function frame(now: number) {
   if (disposed) return;
@@ -260,7 +274,7 @@ function frame(now: number) {
     if (keys.has('d') || keys.has('arrowright') || keys.has('right')) dx += 1;
   }
   const movement = movementFromScreen(state.mode, dx, dz);
-  movePlayer(state, movement.x, movement.z, dt); syncElapsed += dt; saveElapsed += dt;
+  movePlayer(state, movement.x, movement.z, dt, token && journeyReady ? point => movementTrail.append(point) : undefined); syncElapsed += dt; saveElapsed += dt;
   if (syncElapsed >= .5) { syncElapsed = 0; if (!loadingJourney) void syncPosition(); }
   updateNearby(); renderer.render(state, dt);
   if (saveElapsed >= .5) { saveElapsed = 0; saveState(state, accountId); }
@@ -272,6 +286,7 @@ frameId = requestAnimationFrame(frame);
 window.addEventListener('pagehide', event => {
   saveState(state, accountId); if (event.persisted) return;
   disposed = true; cancelAnimationFrame(frameId); conversationRequest?.abort(); api.dispose();
+  movementEpoch++; moveController?.abort(); movementTrail.reset(state.player);
   if (feedbackTimer !== undefined) clearTimeout(feedbackTimer);
   renderer.dispose();
 });

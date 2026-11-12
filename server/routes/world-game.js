@@ -81,8 +81,8 @@ function observeNpcStream(res) {
   };
 }
 
-async function readInput(req, res) {
-  const raw = await readBody(req, MAX_BODY);
+async function readInput(req, res, limit = MAX_BODY) {
+  const raw = await readBody(req, limit);
   if (!raw) { sendJson(res, 413, { error: 'body too large' }, req); return null; }
   try {
     const input = JSON.parse(raw.toString('utf8'));
@@ -159,13 +159,17 @@ async function state(req, res) {
 }
 
 async function move(req, res) {
-  const input = await readInput(req, res);
+  const input = await readInput(req, res, 12 * 1024);
   if (!input) return;
   const stage = getStage(input.stageId);
   if (!stage || !stageUnlocked(req.uid, stage.id)) return sendJson(res, 403, { error: 'stage is locked' }, req);
   if (!currentStage(req, res, stage.id)) return;
   const next = numberPair(input.position);
   if (!next || Math.abs(next.x) > 28 || next.z < -25 || next.z > 16) return sendJson(res, 400, { error: 'invalid position' }, req);
+  // A trail contains destinations, never a client-supplied starting position.
+  // Older clients can still send only position for a single straight segment.
+  const path = input.path === undefined ? [next] : input.path;
+  if (!Array.isArray(path) || !path.length || path.length > 128 || path.some(point => !point || typeof point.x !== 'number' || typeof point.z !== 'number' || !Number.isFinite(point.x) || !Number.isFinite(point.z) || Math.abs(point.x) > 28 || point.z < -25 || point.z > 16) || distance(path[path.length - 1], next) > 1e-6) return sendJson(res, 400, { error: 'invalid movement path' }, req);
   const previous = store().getPosition(req.uid, stage.id);
   if (!navigation.isWalkable(previous)) {
     const position = navigation.relocate(previous);
@@ -174,8 +178,14 @@ async function move(req, res) {
   }
   const elapsed = Math.min(2, Math.max(0, (Date.now() - previous.updated_at) / 1000));
   if (elapsed < .08) return sendJson(res, 429, { error: 'movement update too frequent' }, req);
-  if (distance(previous, next) > 4.2 * elapsed + 0.08) return sendJson(res, 409, { error: 'movement too fast', position: { x: previous.x, z: previous.z } }, req);
-  if (!navigation.segmentWalkable(previous, next)) return sendJson(res, 409, { error: 'path is blocked', position: { x: previous.x, z: previous.z } }, req);
+  let from = previous, travelled = 0;
+  for (const point of path) { travelled += distance(from, point); from = point; }
+  if (travelled > 4.2 * elapsed + 0.08) return sendJson(res, 409, { error: 'movement too fast', position: { x: previous.x, z: previous.z } }, req);
+  from = previous;
+  for (const point of path) {
+    if (!navigation.segmentWalkable(from, point)) return sendJson(res, 409, { error: 'path is blocked', position: { x: previous.x, z: previous.z } }, req);
+    from = point;
+  }
   store().move(req.uid, stage.id, next);
   return sendJson(res, 200, { position: next }, req);
 }

@@ -8,15 +8,20 @@ const { PROXY_TIMEOUT } = require('../config');
 
 /* 转发一个 POST 到上游，返回 { status, headers, data(Buffer) }。
    超时通过 AbortController 中止，避免挂死的上游请求泄漏。 */
-async function proxyRequest(url, bodyBuf, headers, timeoutMs, method = 'POST') {
+async function proxyRequest(url, bodyBuf, headers, timeoutMs, method = 'POST', signal) {
   const ctrl = new AbortController();
+  const abort = () => ctrl.abort(signal.reason);
+  if (signal?.aborted) abort();
+  else signal?.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(() => ctrl.abort(), timeoutMs || PROXY_TIMEOUT);
   try {
+    ctrl.signal.throwIfAborted();
     const res = await fetch(url, { method, headers, body: method === 'GET' ? undefined : bodyBuf, signal: ctrl.signal, redirect: 'error' });
     const data = Buffer.from(await res.arrayBuffer());
     return { status: res.status, headers: res.headers, data };
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
   }
 }
 

@@ -210,36 +210,42 @@ let shuttingDown = false;
 function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
-  worldGameRoutes.stopWorker();
+  const workersDrained = worldGameRoutes.stopWorker();
   logger.info(`收到 ${signal}，正在优雅关闭...`);
   clearInterval(sessionTimer);
   clearInterval(checkpointTimer);
   if (backupTimer) clearInterval(backupTimer);
   // 停止接收新连接，等在途请求结束
-  server.close(() => {
-    finalizeDb();
+  server.close(async () => {
+    await workersDrained;
+    await finalizeDb();
     logger.info('服务已关闭');
     process.exit(0);
   });
   // 兜底：10 秒内没结束（长连接/SSE 卡住）就强制退出，但仍先收尾数据库
-  const force = setTimeout(() => {
+  const force = setTimeout(async () => {
     logger.warn('仍有连接未结束，强制退出');
-    finalizeDb();
+    await finalizeDb();
     process.exit(0);
   }, 10000);
   if (force.unref) force.unref();
 }
 
 let dbClosed = false;
+let finalizingDb;
 function finalizeDb() {
-  if (dbClosed) return;
-  dbClosed = true;
-  worldGameRoutes.stopWorker();
-  try {
-    // WAL checkpoint：把 -wal 内容并回主库，避免只复制 app.db 时状态不完整
-    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
-  } catch (e) { logger.error('checkpoint 失败: ' + e.message, { err: e }); }
-  try { db.close(); } catch (e) { logger.error('数据库关闭失败: ' + e.message, { err: e }); }
+  if (finalizingDb) return finalizingDb;
+  finalizingDb = (async () => {
+    await worldGameRoutes.stopWorker();
+    if (dbClosed) return;
+    dbClosed = true;
+    try {
+      // WAL checkpoint：把 -wal 内容并回主库，避免只复制 app.db 时状态不完整
+      db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch (e) { logger.error('checkpoint 失败: ' + e.message, { err: e }); }
+    try { db.close(); } catch (e) { logger.error('数据库关闭失败: ' + e.message, { err: e }); }
+  })();
+  return finalizingDb;
 }
 
 process.on('SIGINT', () => shutdown('SIGINT'));
@@ -258,8 +264,7 @@ process.on('uncaughtException', (err) => {
   logger.error('uncaughtException: ' + (err && err.message ? err.message : String(err)) + (transient ? '（瞬时网络错误，继续运行）' : ''), { err });
   if (transient) return;
   // 状态已不可信：收尾数据库后退出，由启动器/用户重启
-  finalizeDb();
-  process.exit(1);
+  void finalizeDb().finally(() => process.exit(1));
 });
 
 /* 入口：由 server.js 调用。端口支持 argv[2] / PORT / 默认 8091 */

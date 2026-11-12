@@ -44,7 +44,7 @@ function segmentWalkable(from, to) {
   }
   return true;
 }
-function moveSafely(from, to) {
+function moveSafely(from, to, onStep) {
   if (!isWalkable(from)) return relocate(from);
   const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.z - from.z) / STEP));
   const dx = (to.x - from.x) / steps, dz = (to.z - from.z) / steps;
@@ -58,6 +58,7 @@ function moveSafely(from, to) {
       if (isWalkable(xOnly)) position = xOnly;
       else if (isWalkable(zOnly)) position = zOnly;
     }
+    onStep?.({ ...position });
   }
   return position;
 }

@@ -54,6 +54,7 @@ function prepareChatPayload(input, uid, stream) {
 // MiniMax chat（非流式）
 async function chat(req, res) {
   const body = await readBody(req);
+  req.signal?.throwIfAborted();
   // readBody 超限/客户端中断时返回 null。不拦下来会把 null 当请求体真的发给上游并计费。
   if (!body) { sendJson(res, 413, { error: 'body too large' }, req); return; }
   let payload = {};
@@ -66,9 +67,9 @@ async function chat(req, res) {
   if (!quota.allowed) { sendJson(res, quota.status, { error: quota.error, quota }, req); return; }
   let r;
   try {
-    r = await proxyRequest(upstream.base + '/v1/chat/completions', outbound, { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + upstream.key });
+    r = await proxyRequest(upstream.base + '/v1/chat/completions', outbound, { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + upstream.key }, undefined, 'POST', req.signal);
   } catch (e) {
-    r = { status: 502, data: Buffer.from(JSON.stringify({ error: 'proxy_failed' })) };
+    r = { status: req.signal?.aborted ? 499 : 502, data: Buffer.from(JSON.stringify({ error: req.signal?.aborted ? 'request_cancelled' : 'proxy_failed' })) };
   } finally { finishGiftCall(quota.reservationId, r?.status || 502); }
   // 用量记账（只记数字，不记内容）
   const u = parseChatUsage(r.data) || {};

@@ -143,6 +143,25 @@ button, textarea { font: inherit; }
   .wg-interact { right: max(16px, calc(min(300px, 31vw) + 16px)); bottom: 22px; }
 }
 
+@media (min-width: 901px) and (pointer: coarse) {
+  .wg-touch {
+    display: grid;
+    left: max(22px, env(safe-area-inset-left));
+    bottom: calc(max(22px, env(safe-area-inset-bottom)) + 80px);
+    width: 140px;
+    grid-template-columns: repeat(3, 44px);
+  }
+  .wg-touch button { min-width: 44px; min-height: 44px; }
+  .wg-controls {
+    max-width: calc(100% - max(22px, env(safe-area-inset-left)) - max(24px, env(safe-area-inset-right)) - 150px);
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .wg-controls button { min-height: 44px; flex-shrink: 0; white-space: nowrap; }
+  .wg-interact { bottom: max(22px, env(safe-area-inset-bottom)); }
+}
+
 @media (max-width: 640px) {
   .wg-back { top: auto; right: 12px; bottom: calc(37vh + 132px + env(safe-area-inset-bottom)); }
   .wg-objective { top: max(14px, env(safe-area-inset-top)); left: 14px; max-width: calc(100% - 28px); gap: 5px; }

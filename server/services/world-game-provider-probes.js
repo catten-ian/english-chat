@@ -105,7 +105,8 @@ function createProviderProbes({ db, resolve = resolveProvider,
     db.prepare('UPDATE world_game_probe_jobs SET status=?,result=?,error=?,next_at=?,lease_owner=NULL,lease_until=NULL,updated_at=? WHERE id=? AND lease_owner=? AND status=\'running\'')
       .run(status, result ? JSON.stringify(result) : null, error || null, nextAt || now(), now(), job.id, owner);
   }
-  async function tick() {
+  let inFlight;
+  async function runTick() {
     if (busy || stopped) return false;
     busy = true;
     try {
@@ -144,6 +145,12 @@ function createProviderProbes({ db, resolve = resolveProvider,
       return true;
     } finally { busy = false; }
   }
+  function tick() {
+    if (busy || stopped) return Promise.resolve(false);
+    const pending = runTick();
+    inFlight = pending;
+    return pending.finally(() => { if (inFlight === pending) inFlight = undefined; });
+  }
   function snapshot(uid) {
     return db.prepare('SELECT id,provider,created_at FROM world_game_probe_batches WHERE user_id=? ORDER BY created_at DESC LIMIT 10').all(uid).map(batch => ({
       id: batch.id, provider: batch.provider, createdAt: batch.created_at,
@@ -155,7 +162,7 @@ function createProviderProbes({ db, resolve = resolveProvider,
   }
   return { schedule, tick, snapshot,
     start() { if (!timer && !stopped) { timer = setInterval(() => { void tick().catch(() => {}); }, 1000); timer.unref?.(); } },
-    stop() { stopped = true; clearInterval(timer); timer = undefined; activeController?.abort(); },
+    stop() { stopped = true; clearInterval(timer); timer = undefined; activeController?.abort(); return inFlight || Promise.resolve(); },
     get busy() { return busy; }
   };
 }
@@ -230,7 +237,10 @@ function getDefaultProbes() {
   return defaultProbes;
 }
 function startDefaultProbes() { if (process.env.AI_EN_GAME_WORKER !== '0') getDefaultProbes().start(); }
-function stopDefaultProbes() { defaultProbes?.stop(); defaultProbes = undefined; }
+function stopDefaultProbes() {
+  const current = defaultProbes;
+  return (current?.stop() || Promise.resolve()).finally(() => { if (defaultProbes === current) defaultProbes = undefined; });
+}
 
 module.exports = { createProviderProbes, getDefaultProbes, startDefaultProbes, stopDefaultProbes,
   payloadFor, evaluate, sendProbe, isCustomBase, fingerprint, DAY, LEASE, ACTIVE };
