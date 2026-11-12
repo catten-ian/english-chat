@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { Readable } = require('node:stream');
 const { getDefaultStore } = require('./world-game-store');
+const { startDefaultProbes, stopDefaultProbes } = require('./world-game-provider-probes');
 
 function providerPayload(job, messages, effort) {
   const payload = { provider: job.provider, ...(job.model ? { model: job.model } : {}), messages,
@@ -106,9 +107,10 @@ function createFeedbackWorker({ store, complete = completeWithProxy, onError = (
 let worker;
 function startDefaultWorker() {
   if (process.env.AI_EN_GAME_WORKER === '0') return;
+  startDefaultProbes();
   if (!worker) worker = createFeedbackWorker({ store: getDefaultStore(), onError: error => require('./logger').error('World-game feedback worker: ' + error.message) });
   worker.start();
 }
-function stopDefaultWorker() { worker?.stop(); worker = undefined; }
+function stopDefaultWorker() { stopDefaultProbes(); worker?.stop(); worker = undefined; }
 
 module.exports = { createFeedbackWorker, messagesForJob, providerPayload, startDefaultWorker, stopDefaultWorker };

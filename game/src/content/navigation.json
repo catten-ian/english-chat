@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "coordinateSystem": "logical world XZ; rectangle [minX,minZ,maxX,maxZ]",
+  "sourceAsset": "bellweather-harbor-v6.glb",
+  "playerRadiusRecommendation": 0.3,
+  "walkableUnion": [
+    {
+      "id": "main-pier",
+      "rect": [
+        -19.224,
+        -10.64,
+        10.95,
+        -4.88
+      ],
+      "height": 0.07
+    },
+    {
+      "id": "keeper-landing",
+      "rect": [
+        0.2,
+        -12.3,
+        3.8,
+        -10.63
+      ],
+      "height": 0.07
+    },
+    {
+      "id": "boardwalk",
+      "rect": [
+        -3.01,
+        -4.84,
+        1.96,
+        10.72
+      ],
+      "height": 0.09
+    },
+    {
+      "id": "stone-quay",
+      "polygon": [
+        [
+          40,
+          50
+        ],
+        [
+          2,
+          50
+        ],
+        [
+          2,
+          14
+        ],
+        [
+          -3,
+          14
+        ],
+        [
+          -3,
+          -5
+        ],
+        [
+          40,
+          -5
+        ]
+      ],
+      "height": -0.075
+    },
+    {
+      "id": "keeper-causeway",
+      "rect": [
+        -17,
+        14,
+        -3,
+        17
+      ],
+      "height": -0.075
+    },
+    {
+      "id": "lighthouse-headland",
+      "polygon": [
+        [
+          -23.8,
+          19.0
+        ],
+        [
+          -23.3899,
+          16.6059
+        ],
+        [
+          -22.2091,
+          14.5005
+        ],
+        [
+          -20.4,
+          12.9378
+        ],
+        [
+          -18.1808,
+          12.1063
+        ],
+        [
+          -15.8192,
+          12.1063
+        ],
+        [
+          -13.6,
+          12.9378
+        ],
+        [
+          -11.7909,
+          14.5005
+        ],
+        [
+          -10.6101,
+          16.6059
+        ],
+        [
+          -10.2,
+          19.0
+        ],
+        [
+          -10.6101,
+          21.3941
+        ],
+        [
+          -11.7909,
+          23.4995
+        ],
+        [
+          -13.6,
+          25.0622
+        ],
+        [
+          -15.8192,
+          25.8937
+        ],
+        [
+          -18.1808,
+          25.8937
+        ],
+        [
+          -20.4,
+          25.0622
+        ],
+        [
+          -22.2091,
+          23.4995
+        ],
+        [
+          -23.3899,
+          21.3941
+        ]
+      ],
+      "height": 0.575
+    },
+    {
+      "id": "ferry-cross-pier",
+      "rect": [
+        10.5,
+        -8.5,
+        23.4,
+        -6.3
+      ],
+      "height": 0.07
+    },
+    {
+      "id": "ferry-approach",
+      "rect": [
+        20.6,
+        -17.5,
+        23.4,
+        -6.3
+      ],
+      "height": 0.07
+    },
+    {
+      "id": "ferry-landing",
+      "rect": [
+        19.5,
+        -18.4,
+        25,
+        -13.6
+      ],
+      "height": 0.07
+    }
+  ],
+  "buildingObstacles": [
+    {
+      "id": "Tripo Harbor rooms",
+      "rect": [
+        13.9771,
+        13.2218,
+        22.0229,
+        20.7782
+      ]
+    },
+    {
+      "id": "Tripo Lighthouse and Keeper Cottage",
+      "rect": [
+        -21.0907,
+        13.7731,
+        -12.9093,
+        22.2269
+      ]
+    },
+    {
+      "id": "Tripo Tide office",
+      "rect": [
+        4.1787,
+        -3.6758,
+        9.8213,
+        1.6758
+      ]
+    },
+    {
+      "id": "Tripo Turner chandlery",
+      "rect": [
+        5.9007,
+        4.2248,
+        14.0993,
+        11.7752
+      ]
+    }
+  ],
+  "notes": [
+    "Test the avatar footprint against the union of walkable surfaces; do not shrink each rectangle separately.",
+    "Building boxes include roof/eave overhang and are intentionally conservative.",
+    "Current WORLD maxZ16 clips the lighthouse headland; full exploration needs maxZ28.",
+    "All heights include renderer harbor y offset +.025."
+  ]
+}

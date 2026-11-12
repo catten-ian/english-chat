@@ -4,6 +4,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { GameState } from '../simulation/state';
 import { Npc, WORLD } from '../content/world';
+import { floorHeightAt } from '../../../shared/world-game-navigation.cjs';
 
 import type { Renderer } from './renderer';
 
@@ -133,7 +134,7 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   wetDeckMaterial.transparent=true;wetDeckMaterial.depthWrite=false;
   wetDeckMaterial.fragmentShader=wetDeckMaterial.fragmentShader.replace('color ), 1.0','color ), 0.24');
   scene.add(wetDeck);
-  void new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}assets/environment/bellweather-harbor-v5.glb`).then((gltf) => {
+  void new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}assets/environment/bellweather-harbor-v6.glb`).then((gltf) => {
     if (disposed) { releaseObject(gltf.scene); return; }
     gltf.scene.position.y = 0.025;
     gltf.scene.traverse((object) => {
@@ -172,7 +173,7 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   void loadCharacter(playerRig, CHARACTER_FILES.player, () => disposed);
   const npcMeshes = new Map<string, THREE.Group>();
   const addNpc = (npc: Npc) => {
-    const group = new THREE.Group(); group.position.set(-npc.position.x, 0, npc.position.z);
+    const group = new THREE.Group(); group.position.set(-npc.position.x, floorHeightAt(npc.position.x,npc.position.z), npc.position.z);
     scene.add(group);
     const rig = { root: group, fallback: addFallbackCharacter(group, npc.accent), actions: new Map<string, THREE.AnimationAction>() } satisfies CharacterRig;
     characters.set(npc.id, rig);
@@ -192,7 +193,7 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   const render = (state: GameState, dt: number) => {
     // The harbor asset reflects logical X once. Keep simulation/save coordinates
     // unchanged and apply the same presentation transform to every runtime actor.
-    player.position.set(-state.player.x, 0, state.player.z);
+    player.position.set(-state.player.x, floorHeightAt(state.player.x,state.player.z), state.player.z);
     const dx = state.player.x - lastPlayer.x, dz = state.player.z - lastPlayer.z;
     const moving = Math.hypot(dx, dz) > 0.002;
     if (moving) facing = Math.atan2(-dx, dz);

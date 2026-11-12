@@ -79,13 +79,20 @@ const playerPositions = new Map();
 async function approach(uid, npcId, stageId = 'low-tide') {
   const target = npcId === 'eli' ? { x: 2, z: -11 } : { x: 5, z: 4 };
   const key = JSON.stringify([uid, stageId]);
-  const previous = playerPositions.get(key) || { x: 1.2, z: -10.5 };
-  const steps = Math.max(1, Math.ceil(Math.hypot(target.x - previous.x, target.z - previous.z) / 6));
+  let previous = playerPositions.get(key) || { x: 1.2, z: -10.5 };
+  const route = npcId === 'mara' ? [{ x: 2, z: -7 }, { x: 2, z: 4 }, target] : [{ x: 2, z: 4 }, { x: 2, z: -7 }, target];
+  if (npcId === 'mara' && previous.z > -4) route.splice(0, 1);
+  // Cross the open quay beside the office instead of walking through its walls.
+  if (npcId === 'eli' && previous.z < -4) route.splice(0, 2);
+  for (const waypoint of route) {
+  const steps = Math.max(1, Math.ceil(Math.hypot(waypoint.x - previous.x, waypoint.z - previous.z) / 6));
   for (let index = 1; index <= steps; index++) {
     clock += 2100;
-    const position = { x: previous.x + (target.x - previous.x) * index / steps, z: previous.z + (target.z - previous.z) * index / steps };
+    const position = { x: previous.x + (waypoint.x - previous.x) * index / steps, z: previous.z + (waypoint.z - previous.z) * index / steps };
     const response = await call('move', uid, { stageId, position });
     assert.equal(response.statusCode, 200);
+  }
+  previous = waypoint;
   }
   playerPositions.set(key, target);
 }
@@ -212,6 +219,35 @@ test('concurrent turns for one NPC are rejected and the lock is released on comp
   assert.doesNotMatch(JSON.stringify(lastMessages()), /overlapping-question/);
 });
 
+test('accepted custom-provider turns queue synthetic probes, while duplicate turns do not touch diagnostic activity', async () => {
+  const previous = process.env.AI_EN_PROVIDER_HOSTS;
+  process.env.AI_EN_PROVIDER_HOSTS = 'world-probe.example.test';
+  try {
+    const uid = 'provider-probe-owner';
+    await approach(uid, 'eli');
+    require('../server/services/provider-credentials').saveProviderConfig(userId(uid), 'openai', {
+      key: 'mock-personal-provider-key', base: 'https://world-probe.example.test/v1', model: 'fixture-model'
+    });
+    const turnId = 'provider-probe-turn-1';
+    assert.equal((await speak(uid, 'eli', 'PLAYER_TEXT_STAYS_OUTSIDE_PROBES', { provider: 'openai', turnId })).statusCode, 200);
+    const before = db.prepare('SELECT * FROM world_game_probe_batches WHERE user_id=?').all(userId(uid));
+    assert.equal(before.length, 1);
+    clock += 1000;
+    assert.equal((await speak(uid, 'eli', 'DUPLICATE_TEXT', { provider: 'openai', turnId })).statusCode, 409);
+    assert.deepEqual(db.prepare('SELECT * FROM world_game_probe_batches WHERE user_id=?').all(userId(uid)), before);
+    const state = JSON.parse((await call('state', uid, { stageId: 'low-tide' })).body);
+    assert.equal(state.providerChecks.length, 1);
+    assert.ok(state.providerChecks[0].checks.length >= 2);
+    const checkRows = JSON.stringify(db.prepare('SELECT * FROM world_game_probe_jobs').all());
+    assert.doesNotMatch(checkRows, /PLAYER_TEXT|DUPLICATE_TEXT|mock-personal-provider-key|world-probe.example.test|lens|Bellweather/);
+    const other = JSON.parse((await call('state', 'provider-probe-other', { stageId: 'low-tide' })).body);
+    assert.deepEqual(other.providerChecks, []);
+  } finally {
+    if (previous === undefined) delete process.env.AI_EN_PROVIDER_HOSTS;
+    else process.env.AI_EN_PROVIDER_HOSTS = previous;
+  }
+});
+
 test('outer chat uses the current eligible resident, shares scoped history and feedback, and loses access after moving away', async () => {
   const uid = 'outer-continuation';
   await approach(uid, 'eli');
@@ -235,4 +271,30 @@ test('outer chat uses the current eligible resident, shares scoped history and f
   const other = JSON.parse((await call('state', 'outer-other-account', { stageId: 'low-tide' })).body);
   assert.deepEqual(other.continuation.history, []);
   assert.deepEqual(other.feedback.records, []);
+});
+
+test('server movement blocks water and houses, and repairs older invalid positions without changing valid saves', async () => {
+  const uid = 'navigation-api';
+  await approach(uid, 'eli');
+  clock += 2100;
+  let result = await call('move', uid, { stageId: 'low-tide', position: { x: 5, z: -13 } });
+  assert.equal(result.statusCode, 409);
+  assert.equal(JSON.parse(result.body).error, 'path is blocked');
+  await approach(uid, 'mara');
+  const databaseUser = userId(uid);
+  const store = require('../server/services/world-game-store').getDefaultStore();
+  store.move(databaseUser, 'low-tide', { x: 3.5, z: -1 });
+  clock += 2100;
+  result = await call('move', uid, { stageId: 'low-tide', position: { x: 10.5, z: -1 } });
+  assert.equal(result.statusCode, 409, 'a legal endpoint cannot tunnel across the tide office');
+  store.move(databaseUser, 'low-tide', { x: -10, z: -18 });
+  result = await call('state', uid, { stageId: 'low-tide' });
+  const repaired = JSON.parse(result.body);
+  const navigation = require('../shared/world-game-navigation.cjs');
+  assert.equal(repaired.positionAdjusted, true);
+  assert.equal(navigation.isWalkable(repaired.position), true);
+  assert.deepEqual(store.getPosition(databaseUser, 'low-tide').x, repaired.position.x);
+  const unchanged = JSON.parse((await call('state', uid, { stageId: 'low-tide' })).body);
+  assert.equal(unchanged.positionAdjusted, undefined, 'valid saves are never relocated on reload');
+  assert.deepEqual(unchanged.position, repaired.position);
 });

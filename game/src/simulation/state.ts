@@ -1,4 +1,5 @@
 import { Npc, NpcId, StageId, WORLD } from '../content/world';
+import { moveSafely } from '../../../shared/world-game-navigation.cjs';
 
 export type GameMode = '3d' | '2d';
 export type GameState = {
@@ -42,6 +43,5 @@ export function movePlayer(state: GameState, dx: number, dz: number, dt: number)
   const speed = 4.2;
   const length = Math.hypot(dx, dz) || 1;
   const next = { x: state.player.x + dx / length * speed * dt, z: state.player.z + dz / length * speed * dt };
-  state.player.x = Math.min(WORLD.bounds.maxX, Math.max(WORLD.bounds.minX, next.x));
-  state.player.z = Math.min(WORLD.bounds.maxZ, Math.max(WORLD.bounds.minZ, next.z));
+  state.player = moveSafely(state.player, next);
 }

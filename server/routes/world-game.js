@@ -6,9 +6,11 @@ const { StringDecoder } = require('node:string_decoder');
 const { readBody, sendJson } = require('../helpers');
 const proxyRoutes = require('./proxy');
 const WORLD = require('../services/world-game');
+const navigation = require('../../shared/world-game-navigation.cjs');
 
 const { getDefaultStore } = require('../services/world-game-store');
 const { startDefaultWorker, stopDefaultWorker } = require('../services/world-game-worker');
+const { getDefaultProbes } = require('../services/world-game-provider-probes');
 const MAX_BODY = 64 * 1024;
 const getStage = id => WORLD.stages.find(stage => stage.id === id);
 const NPC_POSITIONS = { eli: { x: 2, z: -11 }, mara: { x: 5, z: 4 }, jonah: { x: 22, z: -16 } };
@@ -147,6 +149,12 @@ async function state(req, res) {
   }
   startDefaultWorker();
   const snapshot = db.state(req.uid);
+  if (!navigation.isWalkable(snapshot.position)) {
+    snapshot.position = navigation.relocate(snapshot.position);
+    db.move(req.uid, snapshot.stageId, snapshot.position);
+    snapshot.positionAdjusted = true;
+  }
+  snapshot.providerChecks = getDefaultProbes().snapshot(req.uid);
   return sendJson(res, 200, { ...snapshot, continuation: continuation(req.uid, snapshot), npcPositions: NPC_POSITIONS }, req);
 }
 
@@ -159,9 +167,15 @@ async function move(req, res) {
   const next = numberPair(input.position);
   if (!next || Math.abs(next.x) > 28 || next.z < -25 || next.z > 16) return sendJson(res, 400, { error: 'invalid position' }, req);
   const previous = store().getPosition(req.uid, stage.id);
+  if (!navigation.isWalkable(previous)) {
+    const position = navigation.relocate(previous);
+    store().move(req.uid, stage.id, position);
+    return sendJson(res, 409, { error: 'position relocated to safe ground', position, positionAdjusted: true }, req);
+  }
   const elapsed = Math.min(2, Math.max(0, (Date.now() - previous.updated_at) / 1000));
   if (elapsed < .08) return sendJson(res, 429, { error: 'movement update too frequent' }, req);
   if (distance(previous, next) > 4.2 * elapsed + 0.08) return sendJson(res, 409, { error: 'movement too fast', position: { x: previous.x, z: previous.z } }, req);
+  if (!navigation.segmentWalkable(previous, next)) return sendJson(res, 409, { error: 'path is blocked', position: { x: previous.x, z: previous.z } }, req);
   store().move(req.uid, stage.id, next);
   return sendJson(res, 200, { position: next }, req);
 }
@@ -209,6 +223,8 @@ async function npc(req, res) {
   const turn = store().beginTurn(req.uid, stage.id, input.npcId, text, clientTurnId(input), input);
   if (turn.duplicate) return sendJson(res, 409, { error: 'turn already submitted', turnId: turn.id, status: turn.status }, req);
   if (turn.locked) return sendJson(res, 409, { error: 'npc reply is already in progress' }, req);
+  // Optional synthetic compatibility checks never receive this turn's content.
+  try { getDefaultProbes().schedule(req.uid, { provider: input.provider, model: input.model }); } catch (_) { /* Gameplay continues if diagnostics cannot be queued. */ }
   startDefaultWorker();
   const observed = observeNpcStream(res);
   let answer = '';

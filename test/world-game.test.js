@@ -29,6 +29,9 @@ describe('Bellweather world game boundaries', () => {
     const route = require('../server/routes/world-game');
     const proxy = require('../server/routes/proxy');
     const original = proxy.chatStream;
+    const actualNow = Date.now;
+    let movementClock = actualNow();
+    Date.now = () => movementClock;
     let captured;
     proxy.chatStream = async (req, res) => {
       let raw = '';
@@ -46,19 +49,25 @@ describe('Bellweather world game boundaries', () => {
       req.username = 'test';
       req.id = 'test-request';
       const result = { statusCode: 0, writeHead(status) { this.statusCode = status; }, end() {} };
-      const from = { x: 1.2, z: -10.5 }, to = { x: 5, z: 4 };
-      for (let index = 0; index <= 50; index++) {
-        const t = index / 50;
-        const position = [from.x + (to.x - from.x) * t, from.z + (to.z - from.z) * t];
-        if (index) await new Promise(resolve => setTimeout(resolve, 85));
+      let from = { x: 1.2, z: -10.5 };
+      // Follow the connected pier/quay corridor beside the tide office. A direct
+      // diagonal to Mara crosses the office AABB and must now be rejected.
+      for (const to of [{ x: 2, z: -7 }, { x: 2, z: 4 }, { x: 5, z: 4 }]) {
+      const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.z - from.z) / 6));
+      for (let index = 1; index <= steps; index++) {
+        movementClock += 2100;
+        const t = index / steps;
+        const position = { x: from.x + (to.x - from.x) * t, z: from.z + (to.z - from.z) * t };
         const moveReq = new PassThrough();
         moveReq.headers = { 'content-length': '0' };
         moveReq.uid = uid; moveReq.username = 'test'; moveReq.id = 'move-request-' + index;
         const moveResult = { statusCode: 0, writeHead(status) { this.statusCode = status; }, end() {} };
         const moved = route.move(moveReq, moveResult);
-        moveReq.end(JSON.stringify({ stageId: 'low-tide', position: { x: position[0], z: position[1] }, dt: 1 }));
+        moveReq.end(JSON.stringify({ stageId: 'low-tide', position }));
         await moved;
         assert.equal(moveResult.statusCode, 200);
+      }
+      from = to;
       }
       const finished = route.npc(req, result);
       req.end(JSON.stringify({ stageId: 'low-tide', npcId: 'mara', text: 'What happened?', provider: 'aihub8' }));
@@ -77,6 +86,7 @@ describe('Bellweather world game boundaries', () => {
       assert.deepEqual(route.providerPayload({ provider: 'minimax' }, [], true, 'low').thinking, { type: 'disabled' });
       assert.deepEqual(route.providerPayload({ provider: 'minimax' }, [], false, 'medium').thinking, { type: 'enabled' });
     } finally {
+      Date.now = actualNow;
       proxy.chatStream = original;
     }
   });
@@ -145,7 +155,7 @@ describe('Bellweather world game boundaries', () => {
       const resource = await request({ port: server.port, path: asset.replace(/^\/english-beta/, '') });
       assert.equal(resource.status, 200, asset);
     }
-    const harborAsset = await request({ port: server.port, path: '/world-game/assets/environment/bellweather-harbor-v5.glb' });
+    const harborAsset = await request({ port: server.port, path: '/world-game/assets/environment/bellweather-harbor-v6.glb' });
     assert.equal(harborAsset.status, 200);
     assert.equal(harborAsset.headers['content-type'], 'model/gltf-binary');
     const hdr = await request({ port: server.port, path: '/world-game/assets/environment/bellweather-dusk.hdr' });

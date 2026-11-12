@@ -6,7 +6,7 @@ const characterFiles = ['protagonist.glb', 'eli-turner.glb', 'mara-quinn.glb', '
   .filter(file => existsSync(resolve('public/assets/characters', file)));
 const shippingAssets = [
   ...characterFiles.map(file => `assets/characters/${file}`),
-  'assets/environment/bellweather-harbor-v5.glb',
+  'assets/environment/bellweather-harbor-v6.glb',
   'assets/environment/bellweather-dusk.hdr'
 ];
 
@@ -23,6 +23,7 @@ export default defineConfig(({ command }) => ({
     }
   } }],
   build: {
+    commonjsOptions: { include: [/node_modules/, /shared/] },
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,

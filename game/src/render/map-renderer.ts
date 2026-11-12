@@ -76,6 +76,12 @@ function paintHarbor() {
   pier(-3, -4.85, 4.95, 15.55, true);
   // Landing step for the keeper, beside the interaction location.
   pier(.5, -11.7, 3.3, 1.1);
+  // The ferry landing and approach share the v6 navigation rectangles.
+  pier(10.5,-8.5,12.9,2.2);
+  pier(20.6,-17.5,2.8,11.2,true);
+  pier(19.5,-18.4,5.5,4.8);
+  ink.font='.62px Georgia, serif';ink.textAlign='center';ink.fillStyle='#d9d7bc';
+  ink.fillText('FERRY LANDING',22.25,-19.4);
 
   function house(x: number, z: number, width: number, height: number, roof: string, label?: string) {
     ink.fillStyle = '#172e334c'; ink.fillRect(x + .55, z + .65, width, height);

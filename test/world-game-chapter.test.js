@@ -15,7 +15,7 @@ function modules(globals = {}) {
     const exports = {};
     const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
     cache.set(file, exports);
-    vm.runInNewContext(source, { exports, ...globals, require(id) { return globals.__moduleMocks?.[id] || (id.endsWith('.css') ? {} : load(path.relative(path.resolve(__dirname, '../game/src'), path.resolve(path.dirname(file), id + '.ts')))); } }, { filename: file });
+    vm.runInNewContext(source, { exports, ...globals, require(id) { return globals.__moduleMocks?.[id] || (id.endsWith('.cjs') ? require(path.resolve(path.dirname(file), id)) : id.endsWith('.css') ? {} : load(path.relative(path.resolve(__dirname, '../game/src'), path.resolve(path.dirname(file), id + '.ts')))); } }, { filename: file });
     return exports;
   }
   return load;
