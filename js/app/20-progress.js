@@ -63,11 +63,68 @@ function translationScores() {
   const list = getSetting('trHistory', []);
   return (Array.isArray(list) ? list : [])
     .map(r => {
-      const s = parseInt(String(r && r.score || '').match(/\d+/)?.[0] || '0', 10);
-      return { t: r.t || 0, score: s };
+      const s = Number(String(r && r.score || '').match(/\d+(?:\.\d+)?/)?.[0] || '0');
+      const rawTime = r && r.t;
+      const t = typeof rawTime === 'number' ? rawTime : Date.parse(rawTime || '');
+      return { t: Number.isFinite(t) ? t : 0, score: s };
     })
     .filter(p => p.score > 0)
     .sort((a, b) => a.t - b.t);
+}
+
+const TRANSLATION_TREND_RANGES = [
+  { id: '7d', label: '7 天', days: 7 },
+  { id: '30d', label: '30 天', days: 30 },
+  { id: '90d', label: '90 天', days: 90 },
+  { id: '365d', label: '1 年', days: 365 },
+  { id: 'all', label: '全部', days: null }
+];
+
+function translationScoreBuckets(points, rangeId, now) {
+  const range = TRANSLATION_TREND_RANGES.find(item => item.id === rangeId) || TRANSLATION_TREND_RANGES[1];
+  const end = Number(now) || Date.now();
+  const start = range.days === null ? -Infinity : end - range.days * 86400000;
+  const selected = (Array.isArray(points) ? points : []).filter(point => {
+    const time = Number(point && point.t);
+    return Number.isFinite(time) && time <= end && time >= start && Number(point.score) > 0;
+  });
+  if (!selected.length) return { range, points: selected, buckets: [] };
+
+  const first = selected[0].t;
+  const last = selected[selected.length - 1].t;
+  const spanDays = Math.max(1, (last - first) / 86400000);
+  const bucketDays = range.id === '7d' ? 1
+    : range.id === '30d' ? 3
+      : range.id === '90d' ? 7
+        : range.id === '365d' ? null : Math.max(1, Math.ceil(spanDays / 20));
+  const groups = new Map();
+  for (const point of selected) {
+    const date = new Date(point.t);
+    const key = bucketDays === null
+      ? date.getUTCFullYear() + '-' + date.getUTCMonth()
+      : String(Math.floor((point.t - (range.id === 'all' ? first : start)) / (bucketDays * 86400000)));
+    const bucket = groups.get(key) || { total: 0, count: 0, firstTime: point.t };
+    bucket.total += Number(point.score);
+    bucket.count++;
+    bucket.firstTime = Math.min(bucket.firstTime, point.t);
+    groups.set(key, bucket);
+  }
+  const buckets = [...groups.values()].map(bucket => {
+    const date = new Date(bucket.firstTime);
+    return {
+      score: bucket.total / bucket.count,
+      count: bucket.count,
+      label: (date.getUTCMonth() + 1) + '/' + date.getUTCDate(),
+      time: bucket.firstTime
+    };
+  });
+  return { range, points: selected, buckets };
+}
+
+function setTranslationTrendRange(rangeId) {
+  if (!TRANSLATION_TREND_RANGES.some(item => item.id === rangeId)) return;
+  setSetting('progressTrendRange', rangeId);
+  renderProgressDashboard();
 }
 
 /* 薄弱点分类统计 */
@@ -105,7 +162,8 @@ function renderProgressDashboard() {
   const analyses = [];
   for (const c of Object.values(convs)) collectChatAnalyses(c.messages, analyses);
   const dims = aggregateChatDims(analyses);
-  const trPts = translationScores();
+  const trRangeId = getSetting('progressTrendRange', '30d');
+  const trTrend = translationScoreBuckets(translationScores(), trRangeId, Date.now());
   const streak = parseInt(getSetting('ankiStreak', 0)) || 0;
 
   const statCards = [
@@ -139,20 +197,23 @@ function renderProgressDashboard() {
     dimHtml = '<div class="pg-card"><div class="pg-card-title">💬 Chat 四维均分</div><div class="pg-empty">还没有对话评分。去 Chat 模块聊几句，AI 会给你的回答打分。</div></div>';
   }
 
-  // 翻译趋势（最近 20 次，纯 CSS 柱状）
-  let trHtml = '<div class="pg-card"><div class="pg-card-title">🌐 翻译得分趋势 <span class="pg-card-note">（最近 ' + Math.min(trPts.length, 20) + ' 次）</span></div>';
-  if (trPts.length >= 2) {
-    const recent = trPts.slice(-20);
-    const max = 10;
-    trHtml += '<div class="pg-trend">' + recent.map(p => {
-      const h = Math.max(4, Math.round(p.score / max * 64));
-      const c = p.score >= 9 ? 'var(--green)' : p.score >= 7 ? 'var(--primary)' : p.score >= 5 ? 'var(--amber)' : 'var(--red)';
-      return `<div class="pg-trend-bar" title="${esc(String(p.score))}"><div style="height:${h}px;background:${c}"></div><span>${p.score}</span></div>`;
+  // 按时间窗汇总翻译得分，密集记录按日/周/月或动态区间取均值。
+  const trendRangeButtons = TRANSLATION_TREND_RANGES.map(range =>
+    `<button class="a-btn small${trTrend.range.id === range.id ? ' primary' : ''}" type="button" data-action="progress-trend-range" data-arg1="${range.id}" aria-pressed="${trTrend.range.id === range.id}">${range.label}</button>`
+  ).join('');
+  let trHtml = '<div class="pg-card"><div class="pg-trend-head"><div class="pg-card-title">🌐 翻译得分趋势 <span class="pg-card-note">（' + trTrend.range.label + ' · ' + trTrend.points.length + ' 次）</span></div><div class="pg-trend-ranges" role="group" aria-label="翻译趋势时间范围">' + trendRangeButtons + '</div></div>';
+  if (trTrend.buckets.length) {
+    trHtml += '<div class="pg-trend">' + trTrend.buckets.map(bucket => {
+      const h = Math.max(4, Math.round(bucket.score / 10 * 64));
+      const c = bucket.score >= 9 ? 'var(--green)' : bucket.score >= 7 ? 'var(--primary)' : bucket.score >= 5 ? 'var(--amber)' : 'var(--red)';
+      const score = bucket.score.toFixed(1);
+      const title = bucket.label + ' · 平均 ' + score + ' 分 · ' + bucket.count + ' 次';
+      return `<div class="pg-trend-bar" title="${esc(title)}" aria-label="${esc(title)}"><div style="height:${h}px;background:${c}"></div><span>${score}</span><small>${bucket.label}</small></div>`;
     }).join('') + '</div>';
-    const avg = recent.reduce((s, p) => s + p.score, 0) / recent.length;
-    trHtml += `<div class="pg-card-note">平均 ${avg.toFixed(1)} / 10</div>`;
+    const avg = trTrend.points.reduce((sum, point) => sum + point.score, 0) / trTrend.points.length;
+    trHtml += `<div class="pg-card-note">区间平均 ${avg.toFixed(1)} / 10</div>`;
   } else {
-    trHtml += '<div class="pg-empty">翻译记录不足 2 条。去 Translation 模块做几道题就有趋势了。</div>';
+    trHtml += '<div class="pg-empty">所选时间范围内暂无有效评分。</div>';
   }
   trHtml += '</div>';
 

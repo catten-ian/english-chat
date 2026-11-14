@@ -8,13 +8,14 @@ const vm = require('node:vm');
 const { ALLOWED, resolveProvider, normalizeProviderBase, sanitizeModel } = require('../server/services/providers');
 
 test('compatible provider registry resolves provider-specific model defaults', () => {
-  for (const id of ['minimax', 'openai', 'deepseek', 'qwen', 'siliconflow', 'openrouter', 'ollama', 'custom']) {
+  for (const id of ['aihub8', 'minimax', 'openai', 'deepseek', 'qwen', 'siliconflow', 'openrouter', 'ollama', 'custom']) {
     assert.ok(ALLOWED.has(id));
     const provider = resolveProvider(id);
     assert.equal(provider.id, id);
     assert.equal(sanitizeModel('', provider), provider.defaultModel || 'MiniMax-M3');
   }
   assert.equal(resolveProvider('untrusted-endpoint').id, 'minimax');
+  assert.deepEqual(resolveProvider('minimax').models, ['MiniMax-M3', 'MiniMax-M3.1']);
 });
 
 test('base normalization preserves provider path and avoids duplicate v1', () => {
@@ -32,8 +33,8 @@ function frontendPreferences(settings) {
   return sandbox.result;
 }
 
-test('text and vision provider preferences are independent with MiniMax M3 default', () => {
-  assert.equal(frontendPreferences({}).llmPreference().textModel, 'MiniMax-M3');
+test('text and vision provider preferences are independent with gpt-6.1-terra default', () => {
+  assert.equal(frontendPreferences({}).llmPreference().textModel, 'gpt-6.1-terra');
   const helpers = frontendPreferences({ llmProvider: 'deepseek', llmVisionProvider: 'qwen', llmVisionModel: 'qwen-vl-plus' });
   assert.equal(helpers.llmPreference().textModel, 'deepseek-chat');
   assert.equal(helpers.activeVisionProvider(), 'qwen');

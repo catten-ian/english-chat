@@ -15,6 +15,7 @@
 <link rel="apple-touch-icon" href="img/icons/favicon.jpg?v=20260829a">
 
     <link rel="stylesheet" href="css/style.css?v=20260926b">
+<link rel="stylesheet" href="css/world-game.css?v=20261108a">
 
 <link rel="stylesheet" href="vendor/katex/katex.min.css?v=20260828b">
 
@@ -514,6 +515,10 @@
 
         <select id="trCategorySelect" data-action="tr-category-changed" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg)"></select>
 
+        <label class="toggle-btn" style="font-size:12px;padding:4px 10px;cursor:pointer" title="只抽取尚未提交过的题目">
+          <input type="checkbox" id="trOnlyNew" data-action="toggle-tr-only-new" style="margin-right:4px">只做新题
+        </label>
+
         <label class="toggle-btn" style="font-size:12px;padding:4px 10px;cursor:pointer" title="导入自定义题库（JSON 文件）">
 
           <input type="file" id="trImportInput" accept="application/json,.json" style="display:none" data-action="import-tr-bank">
@@ -563,6 +568,7 @@
     <div class="module-area" id="gameArea" style="display:none;flex-direction:column;height:100%">
 
       <div class="game-tabs">
+
         <button class="game-tab" data-game="world" data-action="switch-game-tab">🗺 World</button>
 
         <button class="game-tab active" data-game="charade" data-action="switch-game-tab">🎭 Charade</button>
@@ -571,6 +577,20 @@
 
         <button class="game-tab" data-game="wordle" data-action="switch-game-tab">🟩 Wordle</button><button class="game-tab" data-game="reading" data-action="switch-game-tab">📚 阅读练习</button>
 
+      </div>
+
+      <div class="game-module" id="worldGameArea" style="display:none;flex:1;min-height:0">
+        <section class="world-game" id="worldGame">
+          <div class="world-scene" id="worldScene" aria-label="Harbor world">
+            <div class="world-quest"><span>CHAPTER 01 · LOW TIDE</span><strong id="worldQuestTitle">The Missing Lantern</strong><small id="worldObjective">Find why the harbor lanterns went dark.</small></div>
+            <div class="world-dialog"><div class="world-speaker"><span>ET</span><strong id="worldSpeakerName">Eli Turner</strong><small id="worldSpeakerRole">LIGHTHOUSE KEEPER</small></div><p id="worldNpcLine">Those lights... haven't worked since the storm.</p></div>
+            <div class="world-bottom"><div class="world-view-toggle"><button class="active" data-action="world-view" data-arg1="2d">2D</button><button data-action="world-view" data-arg1="3d">3D</button></div><button data-action="world-clues">▤ Clue Log <kbd>Tab</kbd></button></div>
+            <canvas class="world-three" id="worldThree" aria-label="Three dimensional harbor"></canvas>
+          </div>
+          <aside class="world-sidebar"><header><span>HARBOR JOURNAL</span><b id="worldStageLabel">CHAPTER 01 · LOW TIDE</b></header><div class="world-progress"><span>CLUES DISCOVERED</span><div><i id="worldProgress"></i></div><small id="worldProgressText">0 clues</small></div><div class="world-people"><span>NEARBY RESIDENTS</span><div id="worldChoices"></div></div><div id="worldChat" class="world-chat" aria-live="polite"></div><form id="worldSpeakForm"><label id="worldSpeakLabel" for="worldSpeak">SPEAK WITH ELI</label><textarea id="worldSpeak" rows="3" placeholder="What would you ask them?" maxlength="1200"></textarea><button id="worldSend" type="submit">Send message <span>↗</span></button></form><details class="world-feedback" id="worldSpeakFeedback"><summary>Speaking feedback <span id="worldFeedbackCount">0</span></summary><div id="worldFeedbackList"></div></details><div class="world-status" id="worldStatus">● Exploring · journal saved</div></aside>
+          <div class="world-quiz" id="worldQuiz" hidden></div>
+          <div class="world-clue-drawer" id="worldClueDrawer" hidden><button class="world-close" data-action="world-clues">×</button><h2>Clue log</h2><div id="worldClueList"></div><button data-action="world-continue">Return to harbor</button></div>
+        </section>
       </div>
 
 
@@ -688,7 +708,8 @@
         <div id="wordleKeyboard" style="width:100%;max-width:480px;margin-top:8px"></div>
 
       </div>
-      <div class="game-module" id="gameReadingArea" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:auto;padding:16px"><div class="reading-toolbar"><strong>📚 高考阅读练习</strong><label>来源<select id="grSource" data-action="reading-setting"><option value="current">时文精选</option><option value="rss">RSS 时文</option><option value="ai">AI生成</option></select></label><label>题型<select id="grTypes" multiple size="1" data-action="reading-setting"><option value="cloze" selected>完形</option><option value="grammar" selected>语法填空</option><option value="seven" selected>七选五</option><option value="reading" selected>阅读选择</option></select></label><label>题数<input id="grReadingCount" type="number" min="1" max="10" value="5" data-action="reading-setting"></label><button class="send-btn" data-action="reading-practice-new">生成题组</button><button class="dict-btn" data-action="reading-practice-export">打印/PDF</button><button class="dict-btn" data-action="reading-practice-export-word">Word</button><button class="dict-btn" data-action="reading-practice-export-image">长图</button></div><article id="gameReadingArticle" class="reading-article"></article><div id="gameReadingQuestions" class="reading-questions"></div><div id="gameReadingResult"></div></div>
+      <div class="game-module" id="gameReadingArea" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:auto;padding:16px"><div class="reading-toolbar"><strong>📚 高考阅读练习</strong><label>来源<select id="grSource" data-action="reading-setting"><option value="current">时文精选</option><option value="rss">RSS 时文</option><option value="ai">AI生成</option></select></label><label>题型<select id="grTypes" multiple size="1" data-action="reading-setting"><option value="cloze" selected>完形</option><option value="grammar" selected>语法填空</option><option value="seven" selected>七选五</option><option value="reading" selected>阅读选择</option></select></label><label>题数<input id="grReadingCount" type="number" min="1" max="60" value="40" data-action="reading-setting"></label><button class="send-btn" data-action="reading-practice-new">生成题组</button><button class="dict-btn" data-action="reading-practice-export">打印/PDF</button><button class="dict-btn" data-action="reading-practice-export-word">Word</button><button class="dict-btn" data-action="reading-practice-export-image">长图</button></div><article id="gameReadingArticle" class="reading-article"></article><div id="gameReadingQuestions" class="reading-questions"></div><div id="gameReadingResult"></div></div>
+
 
     </div>
 
@@ -771,6 +792,8 @@
 
         <textarea id="dictInput" rows="3" placeholder="输入中文或英文单词/句子，或直接提问（如：如何用英语表达'我很期待'？）..."></textarea>
 
+        <div class="slash-menu dict-slash-menu" id="dictSlashMenu" aria-label="词典命令" style="display:none"></div>
+
         <button class="dict-btn" id="dictBtn" data-action="query-dict">查询</button>
 
       </div>
@@ -802,6 +825,24 @@
           <option value="unanswered">未答</option>
 
           <option value="answered">已答</option>
+
+          <option value="best-9">历史最高分 9+</option>
+
+          <option value="best-7">历史最高分 7+</option>
+
+          <option value="best-5">历史最高分 5+</option>
+
+          <option value="best-under-5">历史最高分低于 5</option>
+
+        </select>
+
+        <select id="bankScoreSort" data-action="bank-render" title="按历史最高分排序" style="font-size:12px;padding:4px 4px;border-radius:6px;border:1px solid var(--border);background:#fff">
+
+          <option value="none">默认排序</option>
+
+          <option value="best-desc">最高分从高到低</option>
+
+          <option value="best-asc">最高分从低到高</option>
 
         </select>
 
@@ -857,7 +898,7 @@
 
 <script src="vendor/katex/katex.min.js?v=20260828b"></script>
 
-<script src="js/config.js?v=20260828b"></script>
+<script src="js/config.js?v=20261031model"></script>
 
 <script src="js/tavern-card.js?v=20261002a"></script>
 
@@ -868,12 +909,12 @@
 <!-- app.js 已按领域拆分到 js/app/。
      顺序不可调整：存在顶层 IIFE、事件绑定与 const 声明的执行顺序依赖。
      校验见 test/app-split.test.js（文件齐全 / 无重复顶层声明 / 拼接可解析）。 -->
-<script src="js/app/01-core.js?v=20260921a"></script>
+<script src="js/app/01-core.js?v=20261031model"></script>
 <script src="js/app/02-agents.js?v=20260828f"></script>
 <script src="js/app/03-parse.js?v=20260828f"></script>
 <script src="js/app/04-chat-tree.js?v=20260828f"></script>
 <script src="js/app/05-chat-view.js?v=20260905a"></script>
-<script src="js/app/06-anki.js?v=20260921a"></script>
+<script src="js/app/06-anki.js?v=20261031anki"></script>
 <script src="js/app/07-chat-actions.js?v=20260906a"></script>
 <script src="js/app/08-selection.js?v=20260921a"></script>
 <script src="js/app/09-gaokao.js?v=20260828f"></script>
@@ -881,12 +922,13 @@
 <script src="js/app/11-ui-panels.js?v=20261001b"></script>
 <script src="js/app/12-settings.js?v=20260913b"></script>
 <script src="js/app/13-banks.js?v=20260828f"></script>
+<script src="js/shanghai_exam_bank.js?v=20261109a"></script>
 <script src="js/app/14-music.js?v=20260830b"></script>
 <script src="js/app/15-modes.js?v=20260926a"></script>
 <script src="js/app/16-reading.js?v=20260828f"></script>
-<script src="js/app/17-practice.js?v=20260830d"></script>
+<script src="js/app/17-practice.js?v=20261031model"></script>
 <script src="js/app/18-games.js?v=20260828f"></script>
-<script src="js/app/19-init.js?v=20260927a"></script>
+<script src="js/app/19-init.js?v=20261031model"></script>
 <script src="js/app/20-progress.js?v=20260830a"></script>
 <script src="js/app/21-anki-tasks.js?v=20260830c"></script>
 <script src="js/app/22-web-review.js?v=20261002a"></script>
@@ -898,8 +940,14 @@
 <script src="js/app/28-reading-exports.js?v=20261001a"></script>
 <script src="js/app/29-provider-settings.js?v=20261002a"></script>
 <script src="js/app/30-admin.js?v=20261002a"></script>
-<script src="js/app/31-chat-modes.js?v=20261002a"></script>
+<script src="js/app/31-chat-modes.js?v=20261031model"></script>
 <script src="js/app/32-settings-import.js?v=20261002a"></script>
+<script src="js/app/33-translation-stats.js?v=20261106a"></script>
+<script src="js/app/34-review-fsrs.js?v=20261106a"></script>
+<script src="js/app/35-vocab-actions.js?v=20261107a"></script>
+<script src="js/app/36-anki-quality.js?v=20261108a"></script>
+<script src="js/app/37-translation-grading.js?v=20261108a"></script>
+<script src="js/world-game.js?v=20261108a"></script>
 
 
 
@@ -983,7 +1031,9 @@
   <button class="mode-btn bn-tab" data-mode="game" data-action="switch-mode" type="button"><span class="bn-ico">🎮</span><span class="bn-label">Game</span></button>
 </nav>
 
-<script src="js/world-game.js?v=20261112beta"></script>
 </body>
 
 </html>
+
+
+

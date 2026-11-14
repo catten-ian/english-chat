@@ -22,7 +22,7 @@ function evaluate(file, dependencies, globals = {}, append = '') {
   return module.exports;
 }
 function config(env = {}) {
-  return evaluate('server/config.js', { 'node:fs': { mkdirSync() {}, readFileSync() { return ''; } } }, { __dirname: '/mock/server', process: { env } });
+  return evaluate('server/config.js', { 'node:fs': { mkdirSync() {}, readFileSync() { return ''; }, existsSync() { return false; } } }, { __dirname: '/mock/server', process: { env } });
 }
 function providers(configuration, personal = null) {
   return evaluate('server/services/providers.js', { '../config': configuration, './provider-credentials': { readProviderConfig: () => personal } });

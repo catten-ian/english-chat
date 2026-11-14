@@ -147,10 +147,46 @@ function consumeSSE(payload) {
   if (!payload || payload === '[DONE]') return '';
   try {
     const obj = JSON.parse(payload);
-    const delta = (obj.choices && obj.choices[0] && obj.choices[0].delta && obj.choices[0].delta.content) || '';
-    return delta || '';
+    if (typeof obj === 'string') return obj;
+    const choice = obj.choices && obj.choices[0];
+    const delta = choice && (choice.delta || choice.message);
+    const value = (delta && (delta.content ?? delta.text)) ?? (choice && choice.text) ?? obj.output_text;
+    if (Array.isArray(value)) {
+      return value.map(part => typeof part === 'string' ? part : (part && (part.text || part.content || ''))).join('');
+    }
+    if (typeof value === 'string') return value;
+    for (const key of ['text', 'content', 'result', 'response', 'output', 'data']) {
+      if (typeof obj[key] === 'string') return obj[key];
+      if (Array.isArray(obj[key])) {
+        const text = obj[key].map(part => typeof part === 'string' ? part : (part && (part.text || part.content || ''))).join('');
+        if (text) return text;
+      }
+      if (obj[key] && typeof obj[key] === 'object') {
+        const nested = consumeSSE(JSON.stringify(obj[key]));
+        if (nested) return nested;
+      }
+    }
+    // Some gateways ignore stream=true and return the grading object as JSON.
+    if (obj.score !== undefined || obj.better_translation !== undefined || obj.zh !== undefined || obj.translation !== undefined) return JSON.stringify(obj);
+    return '';
   } catch (e) {
     return ''; // partial frame — 不足一帧时不消费
+  }
+}
+
+// 流式请求只对“首字”和“字间空闲”设置超时；模型生成一条长回复不受总时长限制。
+// 这样慢模型不会在已经持续输出时被固定总时长误杀。
+async function readStreamChunk(reader, firstChunk, signal) {
+  const timeoutMs = firstChunk ? 240000 : 180000;
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error(firstChunk ? 'stream first-byte timeout' : 'stream idle timeout'), { code: 'STREAM_TIMEOUT' })), timeoutMs);
+  });
+  try {
+    if (signal && signal.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+    return await Promise.race([reader.read(), timeout]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -169,6 +205,7 @@ async function streamChat(messages, onDelta, signal, options) {
   const decoder = new TextDecoder();
   let buffer = '';
   let full = '';
+  let receivedChunk = false;
   const handleLine = (line, flush) => {
     const t = line.trim();
     if (!t.startsWith('data:')) return;
@@ -177,8 +214,9 @@ async function streamChat(messages, onDelta, signal, options) {
     if (delta) { full += delta; onDelta(delta); }
   };
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readStreamChunk(reader, !receivedChunk, signal);
     if (done) break;
+    receivedChunk = true;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
     buffer = lines.pop();
@@ -240,45 +278,68 @@ function renderDictField(key, value, dictType) {
 
 /* ---------- 流式词典/翻译（与 streamChat 类似，但接受自定义 options） ---------- */
 async function streamDict(messages, options, onDelta, signal) {
+  options = options || {};
   const body = { provider: activeProvider(), model: activeTextModel(), messages: messages, temperature: options.temperature ?? 0.3, max_tokens: options.maxTokens ?? 3000, stream: true };
+  if (options.maxTokens === null) delete body.max_tokens;
   if (options.thinking !== undefined) body.thinking = options.thinking;
+  if (options.reasoningEffort !== undefined) body.reasoning_effort = options.reasoningEffort;
   const res = await fetch((BACKEND_URL || '') + '/api/proxy/chat/stream', {
     method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, signal, body: JSON.stringify(body)
   });
-  if (!res.ok || !res.body) throw new Error('stream HTTP ' + res.status);
+  if (!res.ok || !res.body) {
+    throw Object.assign(new Error('stream HTTP ' + res.status), { status: res.status });
+  }
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let full = '';
+  let receivedChunk = false;
   let lastReasoningUpdate = 0;
+  let finishReason = '';
+  let jsonBody = false;
   const handleLine = (line) => {
     const t = line.trim();
     if (!t.startsWith('data:')) return;
     const payload = t.slice(5).trim();
     if (!payload || payload === '[DONE]') return;
-    try {
-      const obj = JSON.parse(payload);
-      const delta = (obj.choices && obj.choices[0] && obj.choices[0].delta && obj.choices[0].delta.content) || '';
-      const reasoning = (obj.choices && obj.choices[0] && obj.choices[0].delta && (obj.choices[0].delta.reasoning_content || obj.choices[0].delta.thinking)) || '';
-      if (reasoning && !full && Date.now() - lastReasoningUpdate > 2000) {
-        // 模型还在思考中，显示提示防止用户以为卡住了
-        lastReasoningUpdate = Date.now();
-        onDelta('⏳ 思考中...');
-      }
-      if (delta) { full += delta; onDelta(delta); }
-    } catch (e) { /* partial frame — wait for more data */ }
+    let obj;
+    try { obj = JSON.parse(payload); } catch (_) { return; }
+    if (obj.error) throw Object.assign(new Error('模型流式响应报错，请重试'), { code: 'STREAM_UPSTREAM_ERROR' });
+    const choice = obj.choices && obj.choices[0];
+    const delta = consumeSSE(payload);
+    if (choice && choice.finish_reason) finishReason = choice.finish_reason;
+    const reasoning = (choice && choice.delta && (choice.delta.reasoning_content || choice.delta.thinking)) || '';
+    if (reasoning && !full && Date.now() - lastReasoningUpdate > 2000) {
+      lastReasoningUpdate = Date.now();
+      if (typeof options.onStatus === 'function') options.onStatus('⏳ 模型正在思考…');
+    }
+    if (delta) {
+      full += delta;
+      if (typeof options.onStatus === 'function') options.onStatus('');
+      onDelta(delta);
+    }
   };
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-    for (const line of lines) handleLine(line);
+  try {
+    while (true) {
+      const { done, value } = await readStreamChunk(reader, !receivedChunk, signal);
+      if (done) break;
+      receivedChunk = true;
+      buffer += decoder.decode(value, { stream: true });
+      // A few OpenAI-compatible gateways return a JSON completion even for stream:true.
+      // The proxy keeps SSE headers, so detect the body instead of trusting Content-Type.
+      if (jsonBody || /^\s*\{/.test(buffer)) { jsonBody = true; continue; }
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) handleLine(line);
+    }
+    buffer += decoder.decode();
+    if (jsonBody) handleLine('data: ' + buffer);
+    else for (const line of buffer.split('\n')) { if (line.trim()) handleLine(line); }
+  } finally {
+    try { await reader.cancel(); } catch (_) {}
+    reader.releaseLock();
   }
-  // EOF：flush 尾部多字节序列 + 处理没有换行结尾的最后一行，避免丢失最后一个 token/字段
-  buffer += decoder.decode();
-  for (const line of buffer.split('\n')) { if (line.trim()) handleLine(line); }
+  if (typeof options.onFinish === 'function') options.onFinish(finishReason);
   llmLog('streamDict', body, full, '');
   return full;
 }

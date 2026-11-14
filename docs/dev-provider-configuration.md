@@ -7,8 +7,9 @@ application, not expose the whole checkout with `file_server`.
 
 The public beta entry is `/english?version=beta`. Beta assets use the isolated
 `/english-beta/*` mount and API requests use `/api-beta/*`; beta runs on port
-8096 with its own `AI_EN_DATA_DIR` and SQLite database. Do not reuse the stable
-or dev database. Build its entry with `node scripts/build-beta-index.js <staging-index-path>`.
+8096. Stable, dev, and beta share the same `AI_EN_DATA_DIR` and SQLite database
+so accounts, sessions, and user data are available in every version. Build its
+entry with `node scripts/build-beta-index.js <staging-index-path>`.
 
 Generate the deployment HTML with:
 

@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { buildDevIndex } = require('../scripts/build-dev-index');
+const { buildBetaIndex } = require('../scripts/build-beta-index');
 const root = path.join(__dirname, '..');
 
 test('dev entry mounts every resource and fingerprints its actual content', () => {
@@ -15,6 +16,17 @@ test('dev entry mounts every resource and fingerprints its actual content', () =
     assert.equal(revision, crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex').slice(0, 16));
     assert.equal(new URL(file, 'https://www.catten.cyou/english-dev/').pathname, '/english-dev/' + file);
   }
+});
+
+test('beta entry isolates every resource under the beta mount and fingerprints content', () => {
+  const html = buildBetaIndex(fs.readFileSync(path.join(root, 'index.html'), 'utf8'));
+  assert.ok(html.includes('<base href="/english-beta/">'));
+  for (const [, file, revision] of html.matchAll(/(?:src|href)="([^"?]+)\?v=([^"\s]+)/g)) {
+    assert.equal(revision, crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex').slice(0, 16));
+    assert.equal(new URL(file, 'https://www.catten.cyou/english-beta/').pathname, '/english-beta/' + file);
+  }
+  const storage = fs.readFileSync(path.join(root, 'js/storage.js'), 'utf8');
+  assert.match(storage, /_queryVersion === 'beta'.*\? '\/api-beta'/s);
 });
 
 test('homepage overflowing a short viewport remains reachable from its top', () => {

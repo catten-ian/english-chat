@@ -161,3 +161,20 @@ describe('修改密码', () => {
     assert.strictEqual(newLogin.status, 200);
   });
 });
+
+describe('关闭演示账户的部署模式', () => {
+  let srv;
+
+  before(async () => { srv = await startServer({ tag: 'no-demo-users', env: { AI_EN_DISABLE_DEMO_USERS: '1' } }); });
+  after(async () => { if (srv) { await srv.stop(); srv.cleanup(); } });
+
+  test('全新数据库不播种可猜测的 test/catten 账户', async () => {
+    const db = openDb(path.join(srv.dataDir, 'app.db'));
+    try { assert.equal(db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 0); }
+    finally { db.close(); }
+    for (const username of ['test', 'catten']) {
+      const result = await request({ port: srv.port, method: 'POST', path: '/api/auth/login', json: { username, password: username } });
+      assert.equal(result.status, 401);
+    }
+  });
+});

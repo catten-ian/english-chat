@@ -113,6 +113,8 @@ export function createChapterPanel(root: HTMLElement, actions: Actions) {
     if (!quiz) return;
     const stage = journey?.stages.find(item => item.id === quiz!.stageId);
     content.append(element('small', stage?.title || 'YOUR CONCLUSION', 'wg-chapter-kicker'), element('h3', 'Make your case'));
+    const source = quiz.source === 'ai_assembled' ? 'AI assembled from reviewed questions' : quiz.source === 'authored_fallback' ? 'Reviewed questions - authored fallback' : undefined;
+    if (source) content.append(element('p', source, 'wg-chapter-muted'));
     content.append(element('p', 'Choose the conclusion best supported by what you learned. Your English feedback stays in the English drawer.'));
     const current = nextQuestion(quiz);
     quiz.questions.forEach((question, index) => {
@@ -178,6 +180,7 @@ export function createChapterPanel(root: HTMLElement, actions: Actions) {
       if (dialog.open) render();
     },
     showQuiz(next: ChapterQuiz) { quiz = next; settlement = undefined; busy = false; error = ''; render(); },
+    clearQuiz() { quiz = undefined; if (journey) journey = { ...journey, quiz: undefined }; settlement = undefined; busy = false; error = ''; render(); },
     showSettlement(next: ChapterSettlement) { settlement = next; quiz = undefined; busy = false; error = ''; render(); },
     busy(text: string) { busy = true; error = ''; operation = text; render(); },
     idle() { busy = false; operation = ''; render(); },

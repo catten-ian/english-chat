@@ -106,6 +106,29 @@ registerAction('open-recite', function () { openReciteInMain(); });
 registerAction('reset-reading-picker', function () { resetReadingPicker(); });
 registerAction('start-reading-paste', function () { startReadingFromPaste(); });
 registerAction('start-web-review', function () { startWebReview(); });
+registerAction('enable-native-scheduler', async function () {
+  const status = document.getElementById('nativeSchedulerStatus');
+  try {
+    await enableNativeSchedulerMode();
+    if (status) status.textContent = '已启用（本地 FSRS）';
+    if (typeof renderAnkiSidebar === 'function') renderAnkiSidebar();
+    if (typeof renderPracticeAnkiDeck === 'function') renderPracticeAnkiDeck();
+    toastMsg('✅ 已切换到本地网页调度器');
+  } catch (e) {
+    if (status) status.textContent = '不可用';
+    toastMsg('本地调度器不可用：' + (e.message || e));
+  }
+});
+registerAction('disable-native-scheduler', function () {
+  if (typeof disableNativeSchedulerMode === 'function') disableNativeSchedulerMode();
+  else clearNativeSchedulerAdapter();
+  const status = document.getElementById('nativeSchedulerStatus');
+  if (status) status.textContent = '未启用';
+  if (typeof renderAnkiSidebar === 'function') renderAnkiSidebar();
+  if (typeof renderPracticeAnkiDeck === 'function') renderPracticeAnkiDeck();
+  toastMsg('已恢复 AnkiConnect 模式');
+});
+
 registerAction('push-all-anki', function () { pushAllToAnki(); });
 registerAction('start-writing', function () { startWriting(); });
 registerAction('clear-writing', function () { clearWriting(); });
@@ -113,6 +136,12 @@ registerAction('clear-topic-image', function () { clearTopicImage(); });
 registerAction('submit-writing', function () { submitWriting(); });
 registerAction('translate-source', function () { translateSource(this.getAttribute('data-arg1')); });
 registerAction('tr-category-changed', function () { trCategoryChanged(); });
+registerAction('toggle-tr-only-new', function () {
+  trOnlyNew = !!this.checked;
+  setSetting('trOnlyNew', trOnlyNew);
+  currentTranslation = null;
+  nextTranslate();
+});
 registerAction('export-tr-bank', function () { exportTrBank(); });
 registerAction('next-translate', function () { nextTranslate(); });
 registerAction('submit-translate', function () { submitTranslate(); });
@@ -168,25 +197,9 @@ registerAction('switch-variant', function () { switchVariant(this.getAttribute('
 registerAction('retry-analysis', function () { retryAnalysis(this.getAttribute('data-arg1')); });
 registerAction('show-vocab-detail', function () { showVocabDetail(+this.getAttribute('data-arg1')); });
 registerAction('remove-word', function () { removeWord(+this.getAttribute('data-arg1')); });
-registerAction('add-vocab-manual', function () { addVocabManual(); });
-registerAction('import-vocab', function () { importVocab(); });
-registerAction('save-vocab-import', function () { saveVocabImport(); });
-registerAction('edit-vocab', function () { addVocabManual(+this.getAttribute('data-arg1')); });
-registerAction('save-vocab-editor', function () { saveVocabEditor(+this.getAttribute('data-arg1')); });
-registerAction('clear-all-vocab', function () { clearAllVocab(); });
-registerAction('open-feedback', function () { openFeedbackForm(); });
-registerAction('submit-feedback', function () { submitFeedback(); });
-registerAction('reading-practice-new', function () { readingPracticeNew(); });
-registerAction('reading-practice-submit', function () { readingPracticeSubmit(); });
-registerAction('reading-practice-export', function () { readingPracticePrint(); });
-registerAction('reading-practice-export-word', function () { readingPracticeExportWord(); });
-registerAction('reading-practice-export-image', function () { readingPracticeExportImage(); });
-registerAction('reading-setting', function () { readingPracticeSaveSettings(readingPracticeSettings()); });
-registerAction('reading-add-word', function () { readingPracticeAddWord(this.getAttribute('data-arg1')); });
-registerAction('cluster-weak-points', function () { clusterWeakPoints(); });
 registerAction('delete-weak-point', function () { deleteWeakPoint(this.getAttribute('data-arg1')); });
 // Anki（06-anki.js）
-registerAction('anki-sync', function () { syncAnkiReviewData({ force: true }); renderAnkiSidebar(); });
+registerAction('anki-sync', function () { syncAnkiReviewData(); renderAnkiSidebar(); });
 registerAction('web-review-show-answer', function () { webReviewShowAnswer(); });
 registerAction('close-web-review', function () { closeWebReview(); });
 registerAction('web-review-answer', function () { webReviewAnswer(+this.getAttribute('data-arg1')); });
@@ -199,6 +212,7 @@ registerAction('anki-task-retry', function () { retryAnkiTask(this.getAttribute(
 registerAction('anki-task-delete', function () { deleteAnkiTask(this.getAttribute('data-arg1')); });
 // 成本与隐私中心（23-cost.js）
 registerAction('cost-range', function () { setCostRange(this.getAttribute('data-arg1')); });
+registerAction('progress-trend-range', function () { setTranslationTrendRange(this.getAttribute('data-arg1')); });
 registerAction('cost-set-price', function () { setCostPrice(this.getAttribute('data-arg1'), this.value); });
 registerAction('cost-clear-usage', function () { clearUsageRecords(); });
 // 服务与密钥（12-settings.js）
@@ -229,8 +243,6 @@ registerAction('delete-strategist-instruction', function () { deleteStrategistIn
 registerAction('click-avatar-file', function () { const f = document.getElementById('avatarFile'); if (f) f.click(); });
 registerAction('change-password', function () { changePassword(); });
 registerAction('prompt-new-character', function () { promptNewCharacter(); });
-registerAction('choose-tavern-card', function () { chooseTavernCardFile(); });
-registerAction('import-tavern-card', function (e) { importTavernCard(this); });
 registerAction('music-prev', function () { musicPrev(); });
 registerAction('settings-music-toggle', function () { settingsMusicToggle(); });
 registerAction('music-next', function () { musicNext(); });
@@ -241,12 +253,9 @@ registerAction('check-anki-connect', function () { checkAnkiConnect(); });
 registerAction('reconnect-anki-connect', function () { reconnectAnkiConnect(); });
 registerAction('backup-now', function () { backupNow(); });
 registerAction('logout-user', function () { logoutUser(); });
-registerAction('delete-account', function () { deleteAccount(); });
-registerAction('finish-help-guide', function () { finishHelpGuide(); });
-registerAction('open-help-guide', function () { showHelpGuide(true); });
 registerAction('save-settings', function () { saveSettings(); });
 registerAction('save-new-character', function () { saveNewCharacter(); });
-registerAction('choose-slash-command', function () { chooseSlashCommand(this.getAttribute('data-arg1')); });
+registerAction('choose-slash-command', function () { chooseSlashCommand(this.getAttribute('data-arg1'), this.getAttribute('data-target-input') || 'userInput'); });
 registerAction('upload-avatar', function () { uploadAvatar(this); });
 registerAction('settings-music-select', function () { settingsMusicSelect(this.value); });
 registerAction('set-music-vol', function () { setMusicVol(this.value); });
@@ -266,6 +275,10 @@ registerAction('ann-back-edit', function () { annBackToEdit(this.getAttribute('d
 registerAction('tr-select-question', function () { trSelectQuestion(this.getAttribute('data-arg1'), +this.getAttribute('data-arg2')); });
 registerAction('clear-tr-history', function () { clearTranslateHistory(); });
 registerAction('expand-tr-record', function () { expandTrRecord(+this.getAttribute('data-arg1')); });
+// Translation feedback pager and retry controls are delegated from 17-practice.js.
+registerAction('tr-feedback-prev', function () { navigateTranslationFeedback(-1); });
+registerAction('tr-feedback-next', function () { navigateTranslationFeedback(1); });
+registerAction('retry-tr-grade', function () { retryTranslationGrade(this.getAttribute('data-arg1')); });
 // 游戏（18-games.js）
 registerAction('charade-improve', function () { charadeImprove(); });
 registerAction('charade-skip', function () { charadeSkip(); });
@@ -520,6 +533,16 @@ document.addEventListener('DOMContentLoaded', function() {
     writingArea.addEventListener('drop', function (e) { e.preventDefault(); handleTopicImageDrop(e); });
   }
   musicInit();
+  // Restore only after the auth UI exists; the adapter health request uses the
+  // current bearer token and must not run during script evaluation.
+  if (typeof restoreNativeSchedulerMode === 'function') restoreNativeSchedulerMode().then(function (enabled) {
+    const status = document.getElementById('nativeSchedulerStatus');
+    if (enabled) {
+      if (status) status.textContent = '已启用（本地 FSRS）';
+      if (typeof renderAnkiSidebar === 'function') renderAnkiSidebar().catch(() => {});
+      if (typeof renderPracticeAnkiDeck === 'function') renderPracticeAnkiDeck().catch(() => {});
+    }
+  });
 
   // Init resize handles
 initResize('sidebarResize', 'sidebar', 'sidebarW', 180, 500, true);
@@ -549,14 +572,7 @@ initResize('panelResize', 'sidePanel', 'panelW', 280, 720, true);
     if (enabled) {
       registerProof.style.display = '';
       registerProof.textContent = '正在获取人机校验…';
-      apiRegisterChallenge().then(function(c) { registerChallenge = c; registerProof.textContent = '人机校验已准备'; }).catch(function(e) {
-        registerChallenge = null;
-        registerProof.textContent = '人机校验获取失败，正在重试…';
-        window.setTimeout(function() {
-          if (!registerMode) return;
-          apiRegisterChallenge().then(function(c) { registerChallenge = c; registerProof.textContent = '人机校验已准备'; }).catch(function(err) { registerProof.textContent = err.message || '请点击注册重试'; });
-        }, 600);
-      });
+      apiRegisterChallenge().then(function(c) { registerChallenge = c; registerProof.textContent = '人机校验已准备'; }).catch(function(e) { registerProof.textContent = e.message || '人机校验获取失败'; });
     } else { registerChallenge = null; registerProof.style.display = 'none'; }
   }
 
@@ -583,15 +599,18 @@ initResize('panelResize', 'sidePanel', 'panelW', 280, 720, true);
       await apiLogin(u, p);
       // 换账户时先清掉上一个账户的本地缓存，避免串号（loadUserData 内部也会再确认一次）
       ensureCacheOwner(currentUser());
+      if (typeof restoreNativeSchedulerMode === 'function') restoreNativeSchedulerMode().then(function (enabled) {
+        if (enabled) {
+          if (typeof renderAnkiSidebar === 'function') renderAnkiSidebar().catch(() => {});
+          if (typeof renderPracticeAnkiDeck === 'function') renderPracticeAnkiDeck().catch(() => {});
+        }
+      });
       loginMsg.textContent = '';
       if (userBadge) userBadge.textContent = currentUser();
       loginOverlay.style.display = 'none';
       bootApp();
     } catch (e) {
       loginMsg.textContent = e.message || '登录失败';
-      if (typeof LOCAL_FILE_MODE !== 'undefined' && LOCAL_FILE_MODE) {
-        loginMsg.textContent += '；本地打开 index.html 不会自动启动后端';
-      }
     } finally {
       loginBtn.disabled = false;
     }
@@ -611,11 +630,7 @@ initResize('panelResize', 'sidePanel', 'panelW', 280, 720, true);
       if (userBadge) userBadge.textContent = currentUser();
       loginOverlay.style.display = 'none';
       bootApp();
-    } catch (e) {
-      loginMsg.textContent = e.message || '注册失败';
-      registerChallenge = null;
-      if (registerMode) setRegisterMode(true);
-    }
+    } catch (e) { loginMsg.textContent = e.message || '注册失败'; registerChallenge = null; }
     finally { registerBtn.disabled = false; }
   }
   if (loginBtn) loginBtn.addEventListener('click', doLogin);
@@ -650,45 +665,28 @@ initResize('panelResize', 'sidePanel', 'panelW', 280, 720, true);
            if (isMobile() && document.getElementById('sidePanel')?.classList.contains('open')) setFeedbackPanelMode('collapsed');
          }
          if (!e.target.closest('#sidebar, #sidebarToggle, #mobileSidebarToggle')) {
-           if (isMobile() && sidebarOpen) { sidebarOpen = false; document.getElementById('sidebar')?.classList.remove('open'); syncDrawerBackdrop(); }
+           if (isMobile() && sidebarOpen) { sidebarOpen = false; document.getElementById('sidebar')?.classList.remove('open'); }
          }
        });
+      bindSlashMenuInput('userInput');
 input.addEventListener('keydown', function(e) {
+        if (e.defaultPrevented || e.isComposing) return;
         if (e.key === 'Enter' && !e.shiftKey) {
-          if (document.getElementById('slashMenu')?.style.display === 'block') {
-            e.preventDefault();
-            const first = document.querySelector('.slash-item');
-            if (first) first.click();
-            return;
-          }
           e.preventDefault(); sendMessage();
         }
       });
       input.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-        const value = this.value;
-        if (/^\/[^\s]*$/.test(value)) renderSlashMenu(value.slice(1));
-        else hideSlashMenu();
-      });
-      input.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') hideSlashMenu();
-        if (e.key === 'Tab' && document.getElementById('slashMenu')?.style.display === 'block') {
-          e.preventDefault();
-          const first = document.querySelector('.slash-item');
-          if (first) { first.click(); }
-        }
-        if (e.key === 'ArrowDown' && document.getElementById('slashMenu')?.style.display === 'block') {
-          e.preventDefault();
-          document.querySelector('.slash-item')?.focus();
-        }
       });
 
       // Dict input: Enter to send on desktop, newline on mobile
       const dictInput = document.getElementById('dictInput');
       if (dictInput) {
         const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+        bindSlashMenuInput('dictInput');
         dictInput.addEventListener('keydown', function(e) {
+          if (e.defaultPrevented || e.isComposing) return;
           if (e.key === 'Enter') {
             if (!isMobile && !e.shiftKey) { e.preventDefault(); queryDict(); }
           }
@@ -699,6 +697,7 @@ input.addEventListener('keydown', function(e) {
       const trInput = document.getElementById('trInput');
       if (trInput) {
         trInput.addEventListener('keydown', function(e) {
+          if (e.defaultPrevented || e.isComposing || e.repeat) return;
           if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             submitTranslate();
@@ -731,12 +730,6 @@ input.addEventListener('keydown', function(e) {
 
       renderVocab();
       renderWeak();
-      // Restore per-account translation preferences before the first module
-      // render so switching away and back does not silently reset the source.
-      if (typeof getSetting === 'function') {
-        const savedTrSource = getSetting('trSource', 'bank');
-        if (savedTrSource === 'bank' || savedTrSource === 'ai') trSource = savedTrSource;
-      }
       // Anki 任务中心：登录后先渲染一次，并尝试补发上次遗留的排队任务
       if (typeof renderAnkiTaskCenter === 'function') renderAnkiTaskCenter();
       if (typeof processAnkiQueue === 'function' && authToken) processAnkiQueue().catch(() => {});
@@ -747,11 +740,6 @@ input.addEventListener('keydown', function(e) {
       const convs = getAllConversations();
       if (currentId && convs[currentId]) {
         resumeConversation(currentId);
-        // A partially-created conversation can be left behind when the first
-        // provider request fails. Start it again so Chat never opens blank.
-        if (currentMode === 'chat' && !conversation.some(m => m && m.role === 'assistant')) {
-          setTimeout(function () { startNewConversation(currentTopic || 'free'); }, 0);
-        }
       } else {
         const ids = Object.keys(convs);
         if (ids.length) {
@@ -763,7 +751,6 @@ input.addEventListener('keydown', function(e) {
           // 否则 saveConversation() 会因 convs[id] 不存在而静默丢弃，且 getActivePath() 会对对象报错。
           conversation = [];
           createConversation('新对话', 'free');
-          setTimeout(function () { startNewConversation('free'); }, 0);
         }
       }
       renderSidebar();
@@ -789,7 +776,7 @@ input.addEventListener('keydown', function(e) {
         }
       });
       const savedGameTab = localStorage.getItem('ai_en_game_tab');
-      if (savedGameTab && ['charade', 'cloze', 'wordle', 'reading'].includes(savedGameTab)) currentGameTab = savedGameTab;
+      if (savedGameTab && ['charade', 'cloze', 'wordle'].includes(savedGameTab)) currentGameTab = savedGameTab;
       const savedPracticeTab = localStorage.getItem('ai_en_practice_tab');
       if (savedPracticeTab && ['overview', 'review', 'cost'].includes(savedPracticeTab)) currentPracticeTab = savedPracticeTab;
       const savedMode = localStorage.getItem('ai_en_mode');
@@ -798,7 +785,6 @@ input.addEventListener('keydown', function(e) {
         switchMode(savedMode, true);
       } else {
         showHome();
-      if (!getSetting('helpGuideSeen', false)) setTimeout(function () { showHelpGuide(false); }, 400);
       }
     });
   }
@@ -810,9 +796,15 @@ input.addEventListener('keydown', function(e) {
         if (me && me.username) {
           if (userBadge) userBadge.textContent = me.username;
           // token 恢复时服务端用户名是权威值：若与本地缓存归属不一致，先清缓存
-          ensureCacheOwner(me.username);
-          loginOverlay.style.display = 'none';
-          bootApp();
+           ensureCacheOwner(me.username);
+           loginOverlay.style.display = 'none';
+           bootApp();
+           if (typeof restoreNativeSchedulerMode === 'function') restoreNativeSchedulerMode().then(function (enabled) {
+             if (enabled) {
+               if (typeof renderAnkiSidebar === 'function') renderAnkiSidebar().catch(() => {});
+               if (typeof renderPracticeAnkiDeck === 'function') renderPracticeAnkiDeck().catch(() => {});
+             }
+           });
         } else {
           logoutLocal();
           loginOverlay.style.display = 'flex';
@@ -840,3 +832,147 @@ function startAutoBackup() {
     try { fetch((BACKEND_URL || '') + '/api/backup', { method: 'POST', headers: { ...authHeaders() } }).catch(() => {}); } catch(e) {}
   }, 120000);
 }
+
+
+let nativeSchedulerMode = false;
+let nativeSchedulerAdapter = null;
+const NATIVE_SCHEDULER_MODE_KEY = 'ai_en_native_scheduler_mode';
+function setNativeSchedulerAdapter(adapter) {
+  if (!adapter || typeof adapter.dueCards !== 'function' || typeof adapter.answer !== 'function') {
+    nativeSchedulerAdapter = null;
+    nativeSchedulerMode = false;
+    return false;
+  }
+  nativeSchedulerAdapter = adapter;
+  nativeSchedulerMode = true;
+  return true;
+}
+function clearNativeSchedulerAdapter() {
+  nativeSchedulerAdapter = null;
+  nativeSchedulerMode = false;
+  try { localStorage.removeItem(NATIVE_SCHEDULER_MODE_KEY); } catch (_) {}
+}
+function disableNativeSchedulerMode() {
+  clearNativeSchedulerAdapter();
+  try { localStorage.setItem(NATIVE_SCHEDULER_MODE_KEY, '0'); } catch (_) {}
+}
+function isNativeSchedulerMode() {
+  return nativeSchedulerMode && !!nativeSchedulerAdapter;
+}
+function nativeSchedulerApiPath(path) {
+  const prefix = typeof BACKEND_URL === 'string' ? BACKEND_URL : '';
+  return prefix + path;
+}
+function createAuthenticatedNativeSchedulerAdapter() {
+  const request = async (path, payload, method) => {
+    const response = await fetch(nativeSchedulerApiPath(path), {
+      method: method || 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: payload === undefined ? undefined : JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.message || data.error || ('HTTP ' + response.status));
+      error.status = response.status;
+      error.code = data.error || 'native_scheduler_error';
+      throw error;
+    }
+    return data;
+  };
+  return {
+    createNote: payload => request('/api/native-anki/notes', payload || {}),
+    dueCards: payload => request('/api/native-anki/cards/due', payload || {}),
+    allCards: payload => request('/api/native-anki/cards/all', payload || {}),
+    preview: payload => request('/api/native-anki/cards/preview', payload || {}),
+    answer: (cardId, payload) => request('/api/native-anki/cards/' + encodeURIComponent(cardId) + '/answer', payload || {})
+  };
+}
+function nativeSchedulerNotePayload(note) {
+  const fields = note && note.fields && typeof note.fields === 'object' ? note.fields : {};
+  return {
+    deck: note && (note.deckName || note.deck) || '',
+    model: note && (note.modelName || note.model) || 'Basic',
+    fields,
+    tags: Array.isArray(note && note.tags) ? note.tags : []
+  };
+}
+function nativeSchedulerCardForWeakPoint(card) {
+  const tags = Array.isArray(card && card.tags) ? card.tags : [];
+  const prefix = 'wp_' + (typeof currentUser === 'function' ? (currentUser() || 'default') : 'default') + '_';
+  return { card, weakPointIds: tags.filter(tag => String(tag).startsWith(prefix)).map(tag => String(tag).slice(prefix.length)) };
+}
+async function syncNativeSchedulerReviewData() {
+  if (!isNativeSchedulerMode()) return;
+  const response = typeof nativeSchedulerAdapter.allCards === 'function'
+    ? await nativeSchedulerAdapter.allCards({ limit: 200 })
+    : await nativeSchedulerDueCards({ limit: 200 });
+  const cards = Array.isArray(response && response.data) ? response.data : [];
+  const weak = typeof getWeak === 'function' ? getWeak() : {};
+  let changed = false;
+  for (const item of cards.map(nativeSchedulerCardForWeakPoint)) {
+    for (const id of item.weakPointIds) {
+      const point = weak[id];
+      if (!point) continue;
+      const card = item.card;
+      point.interval = Math.max(1, Number(card.scheduled_days) || point.interval || 1);
+      point.last_quizzed = new Date().toISOString();
+      changed = true;
+    }
+  }
+  if (changed && typeof saveWeak === 'function') saveWeak(weak);
+}
+async function nativeSchedulerCreateNotes(notes) {
+  if (!isNativeSchedulerMode()) throw new Error('native scheduler mode is disabled');
+  const created = [], skipped = [], order = new Array(Array.isArray(notes) ? notes.length : 0).fill(null);
+  for (const [index, note] of (Array.isArray(notes) ? notes : []).entries()) {
+    try {
+      const result = await nativeSchedulerAdapter.createNote(nativeSchedulerNotePayload(note));
+      const card = result && result.data;
+      if (card && card.id) { created.push(card.id); order[index] = card.id; } else skipped.push(note);
+    } catch (_) { skipped.push(note); }
+  }
+  return { added: created.length, skipped: skipped.length, noteIds: created, order };
+}
+async function nativeSchedulerCreateQuizNotes(notes) {
+  return nativeSchedulerCreateNotes(notes);
+}
+async function enableNativeSchedulerMode() {
+  const adapter = createAuthenticatedNativeSchedulerAdapter();
+  await fetch(nativeSchedulerApiPath('/api/native-anki/health'), { headers: authHeaders() }).then(async response => {
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || data.reason || data.error || '本地调度服务不可用');
+    return data;
+  });
+  const enabled = setNativeSchedulerAdapter(adapter);
+  if (enabled) {
+    try { localStorage.setItem(NATIVE_SCHEDULER_MODE_KEY, '1'); } catch (_) {}
+  }
+  return enabled;
+}
+async function restoreNativeSchedulerMode() {
+  if (!prefersNativeSchedulerMode()) return false;
+  try {
+    return await enableNativeSchedulerMode();
+  } catch (_) {
+    nativeSchedulerAdapter = null;
+    nativeSchedulerMode = false;
+    return false;
+  }
+}
+async function nativeSchedulerDueCards(payload) {
+  if (!isNativeSchedulerMode()) throw new Error('native scheduler mode is disabled');
+  return nativeSchedulerAdapter.dueCards(payload || {});
+}
+async function nativeSchedulerAllCards(payload) {
+  if (!isNativeSchedulerMode() || typeof nativeSchedulerAdapter.allCards !== 'function') throw new Error('native scheduler mode is disabled');
+  return nativeSchedulerAdapter.allCards(payload || {});
+}
+async function nativeSchedulerPreview(payload) {
+  if (!isNativeSchedulerMode() || typeof nativeSchedulerAdapter.preview !== 'function') throw new Error('native scheduler mode is disabled');
+  return nativeSchedulerAdapter.preview(payload || {});
+}
+async function nativeSchedulerAnswer(cardId, payload) {
+  if (!isNativeSchedulerMode()) throw new Error('native scheduler mode is disabled');
+  return nativeSchedulerAdapter.answer(cardId, payload || {});
+}
+

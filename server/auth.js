@@ -13,7 +13,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 // 惰性引用：运行时才访问 db，避免与 db.js 的加载顺序产生耦合
 const dbMod = require('./db');
-const { SESSION_TTL_DAYS, DATA_DIR } = require('./config');
+const { SESSION_TTL_DAYS, DATA_DIR, DISABLE_DEMO_USERS } = require('./config');
 const logger = require('./services/logger');
 
 function hashPassword(pwd, salt) {
@@ -51,6 +51,7 @@ function auth(req) {
 /* 首次启动播种默认账户；若旧 JSON 数据存在则迁移到 catten 账户。
    只应该在启动时调用一次（app.js 在 db 就绪后调用）。 */
 function seedUsers(db) {
+  if (DISABLE_DEMO_USERS) return;
   const userCount = db.prepare('SELECT COUNT(*) c FROM users').get().c;
   if (userCount !== 0) {
     try { db.prepare("UPDATE users SET role='admin', daily_call_limit=0, rpm_limit=1000, provider_mode='custom' WHERE username='catten'").run(); } catch (_) {}

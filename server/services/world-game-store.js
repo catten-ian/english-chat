@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const WORLD = require('./world-game');
+const quizBlueprint = require('./world-game-quiz');
 
 const SPAWN = Object.freeze({ x: 1.2, z: -10.5 });
 const RETRY_DELAYS = [1000, 2000, 4000, 8000, 16000];
@@ -61,6 +62,14 @@ function createWorldGameStore(db) {
     CREATE INDEX IF NOT EXISTS idx_world_game_job_queue ON world_game_jobs(status,next_at,lease_until);
     CREATE INDEX IF NOT EXISTS idx_world_game_job_user ON world_game_jobs(user_id,stage_id,kind,created_at);
   `);
+  const quizColumns = new Set(db.prepare('PRAGMA table_info(world_game_quizzes)').all().map(row => row.name));
+  if (!quizColumns.has('metadata')) db.exec("ALTER TABLE world_game_quizzes ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'");
+  if (!quizColumns.has('invalidated')) db.exec('ALTER TABLE world_game_quizzes ADD COLUMN invalidated INTEGER NOT NULL DEFAULT 0');
+  db.exec(`CREATE TABLE IF NOT EXISTS world_game_quiz_leases (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    stage_id TEXT NOT NULL, owner TEXT NOT NULL, expires_at INTEGER NOT NULL,
+    PRIMARY KEY(user_id,stage_id)
+  )`);
 
   const transaction = fn => {
     db.exec('BEGIN IMMEDIATE');
@@ -81,13 +90,18 @@ function createWorldGameStore(db) {
   };
   const getQuiz = (uid, id) => {
     const row = db.prepare('SELECT * FROM world_game_quizzes WHERE user_id=? AND id=?').get(uid, id);
-    return row ? { ...row, items: parse(row.items, []), answers: parse(row.answers, []) } : null;
+    return row ? { ...row, items: parse(row.items, []), answers: parse(row.answers, []), metadata: parse(row.metadata, {}) } : null;
   };
   const currentQuiz = (uid, stageId) => {
-    const row = db.prepare('SELECT id FROM world_game_quizzes WHERE user_id=? AND stage_id=? AND settled=0 ORDER BY created_at DESC,rowid DESC LIMIT 1').get(uid, stageId);
-    return row ? getQuiz(uid, row.id) : null;
+    const rows = db.prepare('SELECT id FROM world_game_quizzes WHERE user_id=? AND stage_id=? AND settled=0 AND invalidated=0 ORDER BY created_at DESC,rowid DESC').all(uid, stageId);
+    for (const row of rows) {
+      const quiz = getQuiz(uid, row.id);
+      if (quizBlueprint.valid(quiz)) return quiz;
+      db.prepare('UPDATE world_game_quizzes SET invalidated=1,updated_at=? WHERE user_id=? AND id=? AND settled=0').run(Date.now(), uid, row.id);
+    }
+    return null;
   };
-  const publicQuiz = row => row ? { quizId: row.id, stageId: row.stage_id, questions: row.items.map(({ q, options }) => ({ q, options })), answers: row.answers } : undefined;
+  const publicQuiz = row => row ? { quizId: row.id, stageId: row.stage_id, source: row.metadata.source, revision: row.metadata.revision, questions: row.items.map(({ q, options }) => ({ q, options })), answers: row.answers } : undefined;
   const visited = (uid, stageId) => db.prepare("SELECT DISTINCT npc_id FROM world_game_turns WHERE user_id=? AND stage_id=? AND status='complete'").all(uid, stageId).map(row => row.npc_id);
   const putJob = (uid, stageId, kind, sourceId, input, settings, npcId = null) => {
     const now = Date.now();
@@ -184,12 +198,21 @@ function createWorldGameStore(db) {
         db.prepare('DELETE FROM world_game_locks WHERE user_id=? AND stage_id=? AND npc_id=? AND owner=?').run(uid, row.stage_id, row.npc_id, id);
       });
     },
-    createQuiz(uid, stageId, items) {
+    claimQuiz(uid, stageId, owner) {
+      return transaction(() => db.prepare(`INSERT INTO world_game_quiz_leases(user_id,stage_id,owner,expires_at) VALUES(?,?,?,?)
+        ON CONFLICT(user_id,stage_id) DO UPDATE SET owner=excluded.owner,expires_at=excluded.expires_at WHERE world_game_quiz_leases.expires_at<=?`)
+        .run(uid, stageId, owner, Date.now() + 60000, Date.now()).changes > 0);
+    },
+    releaseQuiz(uid, stageId, owner) { db.prepare('DELETE FROM world_game_quiz_leases WHERE user_id=? AND stage_id=? AND owner=?').run(uid, stageId, owner); },
+    invalidateQuiz(uid, id) { db.prepare('UPDATE world_game_quizzes SET invalidated=1,updated_at=? WHERE user_id=? AND id=? AND settled=0').run(Date.now(), uid, id); },
+    createQuiz(uid, stageId, items, metadata = {}, owner) {
       return transaction(() => {
+        if (ensureJourney(uid).stage_id !== stageId) return null;
+        if (owner && !db.prepare('SELECT 1 FROM world_game_quiz_leases WHERE user_id=? AND stage_id=? AND owner=? AND expires_at>?').get(uid, stageId, owner, Date.now())) return null;
         const existing = currentQuiz(uid, stageId);
         if (existing) return existing;
         const id = crypto.randomBytes(24).toString('base64url'), now = Date.now();
-        db.prepare('INSERT INTO world_game_quizzes(id,user_id,stage_id,items,created_at,updated_at) VALUES(?,?,?,?,?,?)').run(id, uid, stageId, JSON.stringify(items), now, now);
+        db.prepare('INSERT INTO world_game_quizzes(id,user_id,stage_id,items,metadata,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id, uid, stageId, JSON.stringify(items), JSON.stringify(metadata), now, now);
         return getQuiz(uid, id);
       });
     },

@@ -10,9 +10,8 @@
 // 这里保留指向仍便于本地调试时看到明确的 CORS 报错而不是同源静默失败。
 const _queryVersion = (typeof location !== 'undefined' && typeof location.search === 'string')
   ? (location.search.match(/[?&]version=([^&]+)/) || [])[1] : '';
-// The reverse proxy exposes dev under /api-dev, but a local/static preview may
-// not have that mount. Keep the decision explicit and avoid emitting a bare
-// relative URL which browsers resolve against an unexpected subpath.
+// Versioned reverse-proxy mounts are isolated from the stable API. Keep the
+// decision explicit so a page under a nested mount never resolves a relative URL.
 const BACKEND_URL = (typeof location !== 'undefined' && location.protocol === 'file:') ? 'http://localhost:8091'
   : ((typeof location !== 'undefined' && /^(www\.)?catten\.cyou$/.test(location.hostname)
       && (_queryVersion === 'beta' || location.pathname.startsWith('/english-beta/'))) ? '/api-beta'
@@ -417,6 +416,8 @@ const SYNCED_SETTING_KEYS = [
   'trCustomBank',     // 用户导入的自定义翻译题库
   'trSource',         // 翻译题目来源
   'trCategory',       // 翻译题库分类
+  'trOnlyNew',         // 翻译只做未答题
+  'progressTrendRange', // 翻译得分趋势时间范围
   'dictHistory',      // 查词历史（上限 12 条）
   'ankiVocabPhase',   // 生词卡两阶段进度
   'ankiStreak',       // 连续学习天数
@@ -426,18 +427,50 @@ const SYNCED_SETTING_KEYS = [
   'chatLlmProvider', 'chatLlmTextModel', 'chatWorldbook'
 ];
 let _suppressSettingSync = false;
+const _settingSyncDirty = new Set();
+let _settingSyncScheduled = false;
+let _settingSyncOwner = null;
+
+function flushSettingSync() {
+  _settingSyncScheduled = false;
+  if (!_settingSyncDirty.size) return;
+  if (typeof currentUser === 'function' && currentUser() !== _settingSyncOwner) {
+    _settingSyncDirty.clear();
+    _settingSyncOwner = null;
+    return;
+  }
+  const keys = Array.from(_settingSyncDirty);
+  _settingSyncDirty.clear();
+  try {
+    const snap = getSettingsBackup();
+    for (const key of keys) {
+      const raw = localStorage.getItem('ai_en_setting_' + key);
+      if (raw === null) delete snap[key];
+      else snap[key] = JSON.parse(raw);
+    }
+    saveSettingsBackup(snap);
+    apiSave('settings', snap);
+  } catch (e) {
+    if (typeof dbg === 'function') dbg('SETTING_SYNC', e.message || e);
+  }
+  if (_settingSyncDirty.size) scheduleSettingSync();
+  else _settingSyncOwner = null;
+}
+
+function scheduleSettingSync() {
+  if (_settingSyncScheduled) return;
+  _settingSyncScheduled = true;
+  const defer = () => setTimeout(flushSettingSync, 0);
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(defer);
+  else defer();
+}
 
 function syncSettingToServer(key) {
   if (_suppressSettingSync) return;
   if (SYNCED_SETTING_KEYS.indexOf(key) === -1) return;
-  try {
-    const snap = getSettingsBackup();
-    snap[key] = JSON.parse(localStorage.getItem('ai_en_setting_' + key));
-    saveSettingsBackup(snap);
-    apiSave('settings', snap);
-  } catch (e) {
-    if (typeof dbg === 'function') dbg('SETTING_SYNC', key + ': ' + (e.message || e));
-  }
+  if (!_settingSyncDirty.size) _settingSyncOwner = typeof currentUser === 'function' ? currentUser() : null;
+  _settingSyncDirty.add(key);
+  scheduleSettingSync();
 }
 
 /* ---------- Vocabulary ---------- */
@@ -454,7 +487,27 @@ function normalizeVocabEntry(raw) {
   x.word = String(x.word || x.term || '').trim();
   x.translation = String(x.translation ?? x.meaning ?? '').trim();
   if (/^（?(阅读中添加|待补充|暂无释义|未填写释义)）?$/.test(x.translation)) x.translation = '';
-  x.meanings = Array.isArray(x.meanings) ? x.meanings.map(v => String(v || '').trim()).filter(Boolean) : [];
+  const sourceMeanings = Array.isArray(x.meanings) && x.meanings.length
+    ? x.meanings
+    : (x.translation ? x.translation.split(/\s*\/\s*/).map(value => value.trim()).filter(Boolean) : []);
+  const hadStructuredSenses = Array.isArray(x.senses) && x.senses.length > 0;
+  x.senses = Array.isArray(x.senses) ? x.senses.map((sense, index) => {
+    const item = typeof sense === 'string' ? { text: sense } : Object.assign({}, sense);
+    item.text = String(item.text || item.meaning || '').trim();
+    item.pos = String(item.pos || '').trim();
+    item.example = String(item.example || '').trim();
+    item.focus = item.focus === true;
+    item.unknown = item.unknown === true;
+    item.direction = item.direction === 'en2zh' || item.direction === 'zh2en' ? item.direction : (x.direction === 'word-to-meaning' ? 'en2zh' : 'zh2en');
+    item.id = String(item.id || ('sense-' + index));
+    return item;
+  }).filter(item => item.text) : [];
+  if (!x.senses.length) x.senses = sourceMeanings.map((sense, index) => ({
+    id: 'sense-' + index, text: String(sense || '').trim(), pos: '', example: '', focus: false, unknown: false,
+    direction: x.direction === 'word-to-meaning' ? 'en2zh' : 'zh2en'
+  })).filter(item => item.text);
+  if (sourceMeanings.length && !hadStructuredSenses && !x.meaningFormatVersion) x.needsMeaningStandardization = true;
+  x.meanings = x.senses.length ? x.senses.map(sense => sense.text) : sourceMeanings.map(v => String(v || '').trim()).filter(Boolean);
   if (!x.meanings.length && x.translation) x.meanings = x.translation.split(/\s*\/\s*/).map(v => v.trim()).filter(Boolean);
   x.translation = x.meanings.join(' / ');
   x.direction = x.direction === 'word-to-meaning' ? 'word-to-meaning' : 'meaning-to-word';

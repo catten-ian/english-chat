@@ -44,6 +44,50 @@ async function renderPracticeStats() {
 async function renderPracticeAnkiDeck() {
   const box = document.getElementById('pmAnkiDeck');
   if (!box) return;
+
+  // dev 版优先使用服务器网页 FSRS。初始化时可能尚未完成登录恢复，
+  // 因此这里再尝试一次恢复；失败才继续走 AnkiConnect 兼容模式。
+  if (typeof isNativeSchedulerMode === 'function' && !isNativeSchedulerMode() && typeof restoreNativeSchedulerMode === 'function') {
+    try { await restoreNativeSchedulerMode(); } catch (_) {}
+  }
+  if (typeof isNativeSchedulerMode === 'function' && isNativeSchedulerMode()) {
+    try {
+      const response = await nativeSchedulerAllCards({ limit: 2000 });
+      const cards = Array.isArray(response && response.data) ? response.data : [];
+      const total = Number(response && (response.total ?? response.total_cards ?? response.count));
+      const cardCount = Number.isFinite(total) && total >= 0 ? total : cards.length;
+      const dueResponse = await nativeSchedulerDueCards({ limit: 2000 });
+      const dueCards = Array.isArray(dueResponse && dueResponse.data) ? dueResponse.data : [];
+      let schedulerLabel = '本地调度器';
+      try {
+        const healthResponse = await fetch(nativeSchedulerApiPath('/api/native-anki/health'), { headers: authHeaders() });
+        if (healthResponse.ok) schedulerLabel = nativeSchedulerStorageLabel(await healthResponse.json());
+      } catch (_) {}
+      const today = cards.filter(card => {
+        const value = card && (card.last_review || card.last_reviewed_at || card.last_review_at);
+        if (!value) return false;
+        const date = new Date(value);
+        const now = new Date();
+        return date.toDateString() === now.toDateString();
+      }).length;
+      const queueCounts = webReviewQueueCounts(dueCards);
+      const newCount = queueCounts.new;
+      const learnCount = queueCounts.learn;
+      const reviewCount = queueCounts.review;
+      box.innerHTML = `<div class="pm-deck-head">
+        <span class="pm-deck-title">🗂️ 网页 FSRS</span>
+        <span class="pm-deck-meta">共 ${cardCount} 张 · ${esc(schedulerLabel)}</span>
+      </div>
+      <div class="pm-chips">
+        <span class="pm-chip due">📝 待复习 ${reviewCount}</span>
+        <span class="pm-chip new">🆕 新卡 ${newCount}</span>
+        <span class="pm-chip learn">📖 学习中 ${learnCount}</span>
+      </div>`;
+      return;
+    } catch (e) {
+      // 调度器暂时不可用时保留原有 AnkiConnect 兼容路径。
+    }
+  }
   let ver = null;
   try {
     ver = await ankiPostCall({ action: 'version', version: 6 }).then(d => d.result && d.result.result).catch(() => null);
@@ -273,7 +317,7 @@ function applyAnswerFontSettings() {
 }
 
 // ---- 统一右侧边栏反馈 ----
-function showModuleFeedback(mode, title, html) {
+function showModuleFeedback(mode, title, html, silent) {
   const section = document.getElementById('analysisSection');
   const content = document.getElementById('analysisContent');
   if (!content) return;
@@ -295,7 +339,7 @@ function showModuleFeedback(mode, title, html) {
   if (typeof sidePanel !== 'undefined' && sidePanel) {
     if (sidePanel.classList.contains('panel-collapsed')) setFeedbackPanelMode('expanded');
   }
-  toastMsg('✅ ' + (titles[mode] || '反馈') + ' 已生成，查看右侧');
+  if (!silent) toastMsg('✅ ' + (titles[mode] || '反馈') + ' 已生成，查看右侧');
 }
 
 async function submitWriting() {
@@ -316,7 +360,7 @@ async function submitWriting() {
     const raw = await callAPI([
       { role: 'system', content: prompt + '\n\nNo markdown, no thinking, only valid JSON.' },
       { role: 'user', content: userContent }
-    ], { temperature: 0.4, maxTokens: 4000, vision: !!currentTopicImageDataUrl });
+    ], { temperature: 0.4, maxTokens: 4000, vision: !!currentTopicImageDataUrl, reasoningEffort: 'max' });
     const obj = smartParseJSON(raw);
     if (obj) {
       let html = pfHero(obj.score, '综合评分');
@@ -364,6 +408,7 @@ function translateSource(src) {
 
 function trPopulateCategories() {
   mergeShGaokaoBank();
+  trReconcileStatsFromHistory();
   const sel = document.getElementById('trCategorySelect');
   if (!sel) return;
   // 用户自定义分类（已导入的）放在最前面
@@ -373,17 +418,23 @@ function trPopulateCategories() {
     html += '<option value="custom">📥 我的自定义题库 (' + custom.length + ')</option>';
   }
   for (const k of Object.keys(TRANSLATION_BANK)) {
-    html += '<option value="' + esc(k) + '">' + esc(TRANSLATION_BANK[k].label) + ' (' + TRANSLATION_BANK[k].items.length + ')</option>';
+    const count = trTranslationCategoryEntries(k).length;
+    html += '<option value="' + esc(k) + '">' + esc(trTranslationCategoryLabel(k)) + ' (' + count + ')</option>';
   }
   sel.innerHTML = html;
-  if (!sel.dataset.value) sel.dataset.value = getSetting('trCategory', 'all');
-  sel.value = sel.dataset.value;
+  const savedCategory = sel.dataset.value || getSetting('trCategory', 'all');
+  sel.dataset.value = savedCategory;
+  sel.value = [...sel.options].some(o => o.value === savedCategory) ? savedCategory : 'all';
+  const onlyNewEl = document.getElementById('trOnlyNew');
+  if (onlyNewEl) onlyNewEl.checked = !!getSetting('trOnlyNew', false);
+  trOnlyNew = !!getSetting('trOnlyNew', false);
   // 同步刷新右侧题库面板的分类下拉
   populateBankCategorySelect();
 }
 
 // 填充右侧题库面板的分类下拉（与翻译模块的题库同源）
 function populateBankCategorySelect() {
+  trReconcileStatsFromHistory();
   const sel = document.getElementById('bankCatSel');
   if (!sel) return;
   const mode = document.getElementById('bankModeSel');
@@ -395,18 +446,26 @@ function populateBankCategorySelect() {
   sel.disabled = false;
   let html = '';
   for (const k of Object.keys(TRANSLATION_BANK)) {
-    const cnt = TRANSLATION_BANK[k].items.length;
-    const answered = Object.keys(getSetting('trQuestionStats', {})).filter(x => x.startsWith(k + ':')).length;
-    html += '<option value="' + esc(k) + '">' + esc(TRANSLATION_BANK[k].label) + ' (' + answered + '/' + cnt + ')</option>';
+    const entries = trTranslationCategoryEntries(k);
+    const cnt = entries.length;
+    const answered = entries.filter(({ catKey, catIdx }) => !!trGetStat(catKey, catIdx)?.answered).length;
+    html += '<option value="' + esc(k) + '">' + esc(trTranslationCategoryLabel(k)) + ' (' + answered + '/' + cnt + ')</option>';
   }
-  sel.innerHTML = html;
-  if (!sel.dataset.value) sel.dataset.value = 'all';
-  if (![...sel.options].some(o => o.value === sel.value)) sel.value = 'all';
+  const previous = sel.value || sel.dataset.value || 'all';
+  sel.innerHTML = '<option value="all">🎲 全部混合</option>' + html;
+  sel.dataset.value = [...sel.options].some(o => o.value === previous) ? previous : 'all';
+  sel.value = sel.dataset.value;
+}
+
+function bankModeChanged() {
+  const mode = document.getElementById('bankModeSel')?.value || 'translate';
+  if (mode === 'translate') renderTrBankPanel(); else { populateBankCategorySelect(); renderGaokaoList(); }
 }
 
 // 右侧题库面板：列出所有题目，标记作答痕迹
 function renderTrBankPanel() {
   mergeShGaokaoBank();
+  trReconcileStatsFromHistory();
   populateBankCategorySelect();
   const modeEl = document.getElementById('bankModeSel');
   if (modeEl && modeEl.value !== 'translate') {
@@ -416,6 +475,7 @@ function renderTrBankPanel() {
   }
   const catSel = document.getElementById('bankCatSel');
   const statusSel = document.getElementById('bankStatusSel');
+  const scoreSort = document.getElementById('bankScoreSort')?.value || 'none';
   const search = (document.getElementById('bankSearch')?.value || '').toLowerCase().trim();
   const listEl = document.getElementById('gaokaoList');
   const detailEl = document.getElementById('gaokaoDetail');
@@ -434,28 +494,44 @@ function renderTrBankPanel() {
     const bank = TRANSLATION_BANK[cat];
     if (bank) bank.items.forEach((it, i) => items.push({ catKey: cat, catIdx: i, item: it }));
   }
+  const uniqueItems = trUniqueTranslationEntries(items);
 
   const stats = getSetting('trQuestionStats', {});
   const statusFilter = (statusSel && statusSel.value) || 'all';
 
   // 过滤
-  const filtered = items.filter(({ catKey, catIdx, item }) => {
+  const filtered = uniqueItems.filter(({ catKey, catIdx, item }) => {
     if (search) {
       const inZh = (item.zh || '').toLowerCase().includes(search);
       const inRef = (item.ref || '').toLowerCase().includes(search);
       if (!inZh && !inRef) return false;
     }
     if (statusFilter !== 'all') {
-      const s = stats[trStatKey(catKey, catIdx)];
+      const s = trGetStat(catKey, catIdx);
       const answered = !!(s && s.answered);
       if (statusFilter === 'answered' && !answered) return false;
       if (statusFilter === 'unanswered' && answered) return false;
+      const best = Number(s?.bestScore) || 0;
+      if (statusFilter === 'best-9' && best < 9) return false;
+      if (statusFilter === 'best-7' && best < 7) return false;
+      if (statusFilter === 'best-5' && best < 5) return false;
+      if (statusFilter === 'best-under-5' && (!answered || best >= 5)) return false;
     }
     return true;
   });
 
-  const total = items.length;
-  const answeredCount = items.filter(({ catKey, catIdx }) => stats[trStatKey(catKey, catIdx)]).length;
+  if (scoreSort !== 'none') {
+    filtered.sort((a, b) => {
+      const aScore = Number(trGetStat(a.catKey, a.catIdx)?.bestScore) || 0;
+      const bScore = Number(trGetStat(b.catKey, b.catIdx)?.bestScore) || 0;
+      if (!aScore && bScore) return 1;
+      if (aScore && !bScore) return -1;
+      return scoreSort === 'best-asc' ? aScore - bScore : bScore - aScore;
+    });
+  }
+
+  const total = uniqueItems.length;
+  const answeredCount = uniqueItems.filter(({ catKey, catIdx }) => (Number(trGetStat(catKey, catIdx)?.answered) || 0) > 0).length;
 
   let html = '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px;font-size:11px;color:var(--text2)">' +
     '<span>共 ' + total + ' 题 · 已答 ' + answeredCount + '</span>' +
@@ -470,9 +546,9 @@ function renderTrBankPanel() {
 
   html += '<div>';
   for (const { catKey, catIdx, item } of filtered) {
-    const s = stats[trStatKey(catKey, catIdx)];
-    const answered = !!(s && s.answered);
-    const best = s ? s.bestScore : 0;
+    const s = trGetStat(catKey, catIdx);
+    const answered = !!(s && Number(s.answered) > 0);
+    const best = s ? (Number(s.bestScore) || 0) : 0;
     const last = s ? s.lastScore : 0;
     const lastTime = s && s.lastTime ? trTimeAgo(s.lastTime) : '';
     const scoreColor = last >= 8 ? 'var(--green)' : last >= 5 ? 'var(--amber)' : last > 0 ? 'var(--red)' : 'var(--text3)';
@@ -572,32 +648,51 @@ function trCategoryChanged() {
 function trPickBankItem() {
   const sel = document.getElementById('trCategorySelect');
   const cat = (sel && sel.value) || 'all';
-  let pool, poolKey;
+  const candidates = [];
   if (cat === 'custom') {
-    pool = getSetting('trCustomBank', []);
-    poolKey = 'custom';
+    const pool = getSetting('trCustomBank', []);
     if (!pool || !pool.length) { toastMsg('自定义题库为空，请先导入'); return null; }
+    pool.forEach((item, idx) => candidates.push({ item, catKey: 'custom', catIdx: idx }));
   } else if (cat === 'all') {
-    pool = flattenTrBank();
-    poolKey = 'all';
+    for (const k of Object.keys(TRANSLATION_BANK)) {
+      (TRANSLATION_BANK[k].items || []).forEach((item, idx) => candidates.push({ item, catKey: k, catIdx: idx }));
+    }
   } else {
-    pool = (TRANSLATION_BANK[cat] && TRANSLATION_BANK[cat].items) || [];
-    poolKey = cat;
+    const pool = (TRANSLATION_BANK[cat] && TRANSLATION_BANK[cat].items) || [];
+    pool.forEach((item, idx) => candidates.push({ item, catKey: cat, catIdx: idx }));
   }
-  if (!pool.length) { toastMsg('所选题库为空'); return null; }
-  const idx = Math.floor(Math.random() * pool.length);
-  return { item: pool[idx], catKey: poolKey, catIdx: idx, pool: pool };
+  let pool = trUniqueTranslationEntries(candidates);
+  if (trOnlyNew) pool = pool.filter(x => !trGetStat(x.catKey, x.catIdx)?.answered);
+  if (!pool.length) { toastMsg(trOnlyNew ? '当前题库没有未答题，请关闭「只做新题」' : '所选题库为空'); return null; }
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// 题目统计缓存：{ "<catKey>:<idx>": { answered, bestScore, lastScore, lastAnswer, lastTime, lastFeedback } }
-function trStatKey(catKey, idx) { return catKey + ':' + idx; }
+let translationBankRefreshScheduled = false;
+function scheduleTranslationBankRefresh() {
+  const tab = document.getElementById('tab-gaokao');
+  if (!tab || tab.style.display === 'none' || translationBankRefreshScheduled) return;
+  translationBankRefreshScheduled = true;
+  const schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : callback => setTimeout(callback, 0);
+  schedule(() => {
+    translationBankRefreshScheduled = false;
+    const currentTab = document.getElementById('tab-gaokao');
+    if (currentTab && currentTab.style.display !== 'none') renderTrBankPanel();
+  });
+}
+
 function trUpdateQuestionStat(catKey, idx, rec) {
   if (!catKey || idx === undefined || idx === null) return;
   const stats = getSetting('trQuestionStats', {});
   const k = trStatKey(catKey, idx);
   if (!stats[k]) stats[k] = { answered: 0, bestScore: 0, lastScore: 0, lastAnswer: '', lastTime: 0, lastFeedback: '', lastZh: '' };
   const s = stats[k];
-  s.answered = (s.answered || 0) + 1;
+  const isSameSubmission = rec.submissionId && s.lastSubmissionId === rec.submissionId;
+  if (rec.pending) { s.answered = Math.max(1, s.answered || 0); s._pending = true; }
+  else {
+    if (!s._pending && !isSameSubmission) s.answered = (s.answered || 0) + 1;
+    s._pending = false;
+    if (rec.submissionId) s.lastSubmissionId = rec.submissionId;
+  }
   const sc = parseInt(String(rec.score || '').match(/\d+/)?.[0] || '0') || 0;
   if (sc > (s.bestScore || 0)) s.bestScore = sc;
   s.lastScore = sc;
@@ -606,12 +701,8 @@ function trUpdateQuestionStat(catKey, idx, rec) {
   s.lastFeedback = rec.feedback || '';
   s.lastZh = rec.question || '';
   setSetting('trQuestionStats', stats);
-  // 触发题库面板刷新
-  if (typeof renderTrBankPanel === 'function') renderTrBankPanel();
-}
-function trGetStat(catKey, idx) {
-  const stats = getSetting('trQuestionStats', {});
-  return stats[trStatKey(catKey, idx)] || null;
+  // Keep the hidden question bank off the submit hot path and coalesce updates.
+  if (typeof renderTrBankPanel === 'function') scheduleTranslationBankRefresh();
 }
 
 function importTrBank(event) {
@@ -740,11 +831,13 @@ async function nextTranslate() {
         '\n\nIMPORTANT: include a "词" field with 1-2 required English words the user must use in the translation.\n' +
         'These words must be single content words (n./v./adj./adv.); avoid articles/prepositions/auxiliaries. Capitalize the first letter only if the user must use it at the start of the English sentence.\n\n' +
         'Return ONLY valid JSON (no markdown, no thinking):\n{\n  "zh": "the Chinese sentence",\n  "ref": "an exemplary English translation that uses all required words and obeys the sentence-count rule",\n  "words": ["word1", "word2"]\n}';
-      const raw = await callAPI([
+      const result = await streamAndParseJSON([
         { role: 'system', content: aiPrompt },
         { role: 'user', content: 'Generate a Chinese sentence + required words.' }
-      ], { temperature: 0.7, maxTokens: 400, thinking: { type: 'disabled' } });
-      const obj = smartParseJSON(stripThinking(raw)) || {};
+      ], { temperature: 0.7, maxTokens: null, thinking: { type: 'disabled' } }, obj =>
+        typeof obj.zh === 'string' && !!obj.zh.trim()
+      );
+      const obj = result.obj;
       const sentence = (obj.zh || '').trim() || '请输入中文翻译。';
       const words = Array.isArray(obj.words) ? obj.words.map(s => String(s).trim()).filter(Boolean) : [];
       currentTranslation = { zh: sentence, ref: obj.ref || '', words: words };
@@ -756,103 +849,63 @@ async function nextTranslate() {
   }
 }
 
-/* 渲染必用词 chips；userAnswer 可选（用于高亮已使用/未使用的词）
-   匹配逻辑复用 13-banks.js 的 requiredWordUsed / capitalRequirementMet，
-   与提交后的评分保持一致（此前 chips 自己做简单小写全等匹配，
-   defers / stopped / in case 这类会被误标为「尚未使用」）。 */
-function renderTrQuestionWords(words, usedText) {
-  const el = document.getElementById('trQuestionWords');
-  if (!el) return;
-  if (!words || !words.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
-  el.style.display = 'flex';
-  el.innerHTML = '<span style="font-size:11px;color:var(--text2)">🔑 必用词</span>' +
-    words.map(w => {
-      const isUsed = !!usedText && requiredWordUsed(usedText, w);
-      // 词性标注（'gaze v.'）不参与句首大写判断
-      const capitalizeHint = /^[A-Z]/.test(stripPosTag(w));
-      const capitalBad = isUsed && capitalizeHint && !capitalRequirementMet(usedText, w);
-      const label = (capitalizeHint ? 'ⓘ ' : '') + esc(w);
-      let bg = '#fef3c7', bd = '#fde68a', fg = '#92400e';
-      let title = capitalizeHint ? '首字母大写：建议在开头使用' : '尚未使用';
-      if (capitalBad) {
-        bg = '#fee2e2'; bd = '#fecaca'; fg = '#991b1b';
-        title = '已使用，但应放在句首';
-      } else if (isUsed) {
-        bg = '#dcfce7'; bd = '#86efac'; fg = '#065f46';
-        title = '已使用';
-      }
-      return '<span title="' + title + '" style="padding:2px 8px;border-radius:10px;background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';font-weight:600">' + label + '</span>';
-    }).join('');
+function buildTranslationFeedbackHtml(submission, obj, errorText) {
+  let html = '';
+  if (errorText) return '<span style="color:var(--red)">评分失败: ' + esc(errorText) + '</span><div style="margin-top:10px"><button class="dict-btn" data-action="retry-tr-grade" data-arg1="' + esc(submission.id) + '">↻ 重试评分</button></div>';
+  html += pfHero(obj && obj.score, '翻译评分');
+  if (obj && obj.errors) html += pfSection('🔧 改进建议', pfList(obj.errors, 'amber'));
+  if (obj && obj.better_translation) html += pfSection('🤖 AI译文', pfHighlight(obj.better_translation));
+  if (submission.ref) html += pfSection('📚 参考答案', pfHighlight(submission.ref));
+  const used = checkRequiredWordsUsed(submission.userAnswer, submission.words || []);
+  if (used.missing.length) html += pfSection('🔑 必用词（未使用）', pfList(used.missing.map(w => '缺少：' + w + '（或未变式）'), 'red'));
+  if (used.capitalViolations.length) html += pfSection('🔠 大写位置错误', pfList(used.capitalViolations.map(w => w + ' 应在句首'), 'red'));
+  if (!obj) html += '<div class="pf-item red" style="margin-top:10px">⚠️ 解析失败，请重试</div><div style="margin-top:10px"><button class="dict-btn" data-action="retry-tr-grade" data-arg1="' + esc(submission.id) + '">↻ 重试评分</button></div>';
+  return html;
 }
 
-async function submitTranslate() {
-  const input = document.getElementById('trInput').value.trim();
-if (!input) { toastMsg('请先输入翻译'); return; }
+function renderTranslationFeedbackPager() {
+  if (!trFeedbackItems.length) return;
+  trFeedbackPage = Math.max(0, Math.min(trFeedbackPage, trFeedbackItems.length - 1));
+  const item = trFeedbackItems[trFeedbackPage];
+  const nav = '<div class="tr-feedback-nav" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">' +
+    '<button class="dict-btn" data-action="tr-feedback-prev" ' + (trFeedbackPage === 0 ? 'disabled' : '') + '>← 上一题</button>' +
+    '<span style="font-size:11px;color:var(--text2)">第 ' + (trFeedbackPage + 1) + ' / ' + trFeedbackItems.length + ' 题 · ' + (item.status === 'pending' ? '评分中' : item.status === 'error' ? '失败' : '已完成') + '</span>' +
+    '<button class="dict-btn" data-action="tr-feedback-next" ' + (trFeedbackPage === trFeedbackItems.length - 1 ? 'disabled' : '') + '>下一题 →</button></div>';
+    const body = item.status === 'pending' ? '<div class="loading">' + esc(item.progress || '⏳ AI 正在评分，你可以继续做下一题…') + '</div>' + (item.html || '') : (item.html || '<div class="empty">暂无反馈</div>');
+  showModuleFeedback('translation', item.title, nav + '<div class="pf-section"><div class="pf-title">📝 题目</div><div class="pf-highlight md-content">' + renderMD(item.question) + '</div><div class="pf-title" style="margin-top:8px">✍️ 你的答案</div><div class="pf-highlight md-content">' + renderMD(item.userAnswer) + '</div></div>' + body, true);
+}
+
+
+const trSubmittedAnswers = new WeakMap();
+
+function claimTranslationSubmission(question, answer) {
+  if (!question || typeof question !== 'object') return true;
+  const fingerprint = String(answer || '').trim();
+  if (trSubmittedAnswers.get(question) === fingerprint) return false;
+  trSubmittedAnswers.set(question, fingerprint);
+  return true;
+}
+
+
+function submitTranslate() {
+  const inputEl = document.getElementById('trInput');
+  const input = inputEl && inputEl.value.trim();
+  if (!input) { toastMsg('请先输入翻译'); return; }
   if (!currentTranslation) { toastMsg('请先点击「下一题」'); return; }
-  const title = currentTranslation.zh.substring(0, 20) + '...';
-  const question = currentTranslation.zh;
-  const ref = currentTranslation.ref;
-  showModuleFeedback('translation', title, '<div class="loading">⏳ 评分中...</div>');
-
-  try {
-    const prompt = buildTranslationEvalPrompt({ zh: question, ref, user: input, words: currentTranslation.words || currentTranslation.q_words || [], ruleVersion: getTranslationRuleVersion() });
-    const raw = await callAPI([
-      { role: 'system', content: prompt + '\n\nNo markdown, no thinking, only valid JSON.' },
-      { role: 'user', content: 'Chinese: ' + question + '\nUser\'s translation: ' + input + (ref ? '\nReference: ' + ref : '') + ((currentTranslation.words || []).length ? '\nRequired words (must appear): ' + currentTranslation.words.join(', ') : '') }
-    ], { temperature: 0.3, maxTokens: 2000 });
-    const obj = smartParseJSON(raw);
-    let html = pfHero(obj && obj.score, '翻译评分');
-    if (obj && obj.errors) html += pfSection('🔧 改进建议', pfList(obj.errors, 'amber'));
-    if (obj && obj.better_translation) html += pfSection('🤖 AI译文', pfHighlight(obj.better_translation));
-    if (ref) html += pfSection('📚 参考答案', pfHighlight(ref));
-    // 必用词达成度
-    const used = checkRequiredWordsUsed(input, currentTranslation.words || currentTranslation.q_words || []);
-    if (used.missing && used.missing.length) {
-      html += pfSection('🔑 必用词（未使用）', pfList(used.missing.map(w => '缺少：' + w + '（或未变式）'), 'red'));
-    }
-    if (used.capitalViolations && used.capitalViolations.length) {
-      html += pfSection('🔠 大写位置错误', pfList(used.capitalViolations.map(w => w + ' 应在句首'), 'red'));
-    }
-    if (!obj) html += '<div class="pf-item red" style="margin-top:10px">⚠️ 解析失败，请重试</div>';
-    showModuleFeedback('translation', title, html);
-    // 作答内联标注
-    if (obj && obj.segments && obj.segments.length) renderSegments(obj.segments, 'tr');
-
-    // 保存作答记录
-    saveTranslationRecord({
-      question, ref,
-      userAnswer: input,
-      score: (obj && obj.score) || '未评分',
-      feedback: (obj && obj.errors && obj.errors.length) ? obj.errors.join(' · ') : (obj && obj.better_translation ? obj.better_translation : ''),
-      action: 'submit',
-      t: Date.now(),
-      catKey: currentTranslation._catKey || null,
-      catIdx: (currentTranslation._catIdx !== undefined ? currentTranslation._catIdx : null)
-    });
-    trUpdateQuestionStat(currentTranslation._catKey, currentTranslation._catIdx, {
-      question, userAnswer: input, score: (obj && obj.score) || '未评分', feedback: (obj && obj.errors && obj.errors.length) ? obj.errors.join(' · ') : '', t: Date.now()
-    });
-    updateTrQuestionProgress();
-    renderTranslateHistory();
-  } catch (e) {
-    showModuleFeedback('translation', title, '<span style="color:var(--red)">评分失败: ' + esc(e.message || '') + '</span>');
-    // 即使失败也记录
-    saveTranslationRecord({
-      question, ref,
-      userAnswer: input,
-      score: '错误',
-      feedback: e.message || '',
-      action: 'submit',
-      t: Date.now(),
-      catKey: currentTranslation._catKey || null,
-      catIdx: (currentTranslation._catIdx !== undefined ? currentTranslation._catIdx : null)
-    });
-    trUpdateQuestionStat(currentTranslation._catKey, currentTranslation._catIdx, {
-      question, userAnswer: input, score: '0', feedback: e.message || '', t: Date.now()
-    });
-    updateTrQuestionProgress();
-    renderTranslateHistory();
-  }
+  const q = currentTranslation;
+  if (!claimTranslationSubmission(q, input)) { toastMsg('这份答案已提交，评分正在进行中'); return; }
+  const submission = { id: 'tr-submit-' + (++trSubmissionSeq), question: q.zh, ref: q.ref || '', userAnswer: input, words: [...(q.words || q.q_words || [])], catKey: q._catKey || null, catIdx: q._catIdx ?? null, ruleVersion: getTranslationRuleVersion(), title: q.zh.substring(0, 20) + '...', status: 'pending', submittedAt: Date.now(), html: '' };
+  trFeedbackItems.push(submission); trFeedbackPage = trFeedbackItems.length - 1;
+  renderTranslationFeedbackPager();
+  // Let the pending feedback paint before local persistence and history serialization.
+  const afterPaint = () => {
+    trUpdateQuestionStat(submission.catKey, submission.catIdx, { submissionId: submission.id, question: submission.question, userAnswer: input, score: 'pending', feedback: '', t: submission.submittedAt, pending: true });
+    // Start grading before generating an AI question so the two requests do not compete for first byte.
+    gradeTranslationSubmission(submission).catch(() => {});
+    setTimeout(() => nextTranslate(), 0);
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(afterPaint);
+  else setTimeout(afterPaint, 0);
 }
 
 function showTranslateAnswer() {
@@ -872,64 +925,4 @@ function showTranslateAnswer() {
   showModuleFeedback('translation', title, '<div class="pf-section"><div class="pf-title">📚 参考答案</div><div class="pf-highlight md-content">' + renderMD(currentTranslation.ref || '(AI 出题无参考答案)') + '</div></div>');
 }
 
-// ---- 翻译历史记录 ----
-function saveTranslationRecord(rec) {
-  if (!rec || !rec.question) return;
-  let list = getSetting('trHistory', []);
-  list.unshift(rec);
-  if (list.length > 100) list = list.slice(0, 100);
-  setSetting('trHistory', list);
-}
-
-function renderTranslateHistory() {
-  const list = getSetting('trHistory', []);
-  const countEl = document.getElementById('trHistCount');
-  if (countEl) countEl.textContent = '(' + list.length + ')';
-  const wrap = document.getElementById('trHistoryList');
-  if (!wrap) return;
-  wrap.style.display = trHistoryExpanded ? 'block' : 'none';
-  if (!list.length) {
-    wrap.innerHTML = '<div style="font-size:12px;color:var(--text2);text-align:center;padding:12px">暂无作答记录</div>';
-    return;
-  }
-  wrap.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:11px;color:var(--text2)">' +
-    '<span>📋 最近 ' + list.length + ' 条</span>' +
-    '<span data-action="clear-tr-history" style="cursor:pointer;color:var(--text3)" title="清空所有记录">🗑️ 清空</span></div>' +
-    list.map((r, i) => {
-    const tm = new Date(r.t || Date.now());
-    const dateStr = (tm.getMonth() + 1) + '-' + tm.getDate() + ' ' + String(tm.getHours()).padStart(2, '0') + ':' + String(tm.getMinutes()).padStart(2, '0');
-    const scoreColor = (r.score || '').startsWith('9') || (r.score || '').startsWith('10') ? 'var(--green)'
-      : (r.score || '').startsWith('7') || (r.score || '').startsWith('8') ? 'var(--primary)'
-      : (r.score || '').startsWith('5') || (r.score || '').startsWith('6') ? 'var(--amber)'
-      : 'var(--red)';
-    return '<div data-action="expand-tr-record" data-arg1="' + i + '" style="padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:12px;line-height:1.6">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
-      '<span style="color:var(--text2);font-size:11px">📝 ' + esc(dateStr) + ' · ' + (r.action === 'show_answer' ? '查看答案' : '作答') + '</span>' +
-      '<span style="font-weight:700;color:' + scoreColor + '">' + esc(r.score || '-') + '</span>' +
-      '</div>' +
-      '<div style="color:var(--text)">📌 ' + esc(r.question.length > 50 ? r.question.substring(0, 50) + '…' : r.question) + '</div>' +
-      '<div id="trRecExp_' + i + '" style="display:none;margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">' +
-        '<div><b>你的翻译：</b><span style="color:var(--text2)">' + esc(r.userAnswer || '(空)') + '</span></div>' +
-        (r.ref ? '<div style="margin-top:4px"><b>参考答案：</b><span style="color:var(--green)">' + esc(r.ref) + '</span></div>' : '') +
-        (r.feedback ? '<div style="margin-top:4px"><b>反馈：</b><span style="color:var(--text2)">' + esc(r.feedback) + '</span></div>' : '') +
-      '</div>' +
-      '</div>';
-  }).join('');
-}
-
-function expandTrRecord(i) {
-  const exp = document.getElementById('trRecExp_' + i);
-  if (exp) exp.style.display = exp.style.display === 'none' ? 'block' : 'none';
-}
-
-function toggleTranslateHistory() {
-  trHistoryExpanded = !trHistoryExpanded;
-  renderTranslateHistory();
-}
-
-function clearTranslateHistory() {
-  if (!confirm('确定清空翻译记录？')) return;
-  setSetting('trHistory', []);
-  renderTranslateHistory();
-}
 

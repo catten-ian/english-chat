@@ -2,7 +2,7 @@ import type { NpcId, PublicStage, StageId, WorldPoint } from '../content/world';
 import type { FeedbackRecord } from './feedback';
 
 export type QuizAnswer = { correct: boolean; explanation: string; selected: number };
-export type ChapterQuiz = { quizId: string; stageId: StageId; questions: { q: string; options: string[] }[]; answers: (QuizAnswer | null)[] };
+export type ChapterQuiz = { quizId: string; stageId: StageId; source?: 'ai_assembled' | 'authored_fallback'; revision?: string; questions: { q: string; options: string[] }[]; answers: (QuizAnswer | null)[] };
 export type StageFeedback = { id?: string; stageId: string; status: 'pending' | 'retry' | 'ready' | 'failed' | 'unavailable'; text?: string; error?: string; pendingCount?: number };
 export type ChapterSettlement = { stageId: StageId; complete: boolean; summary: string; score: number; total: number; nextStageId?: StageId; feedbackSummary?: StageFeedback; completedAt?: number | string };
 export type Journey = {
@@ -74,6 +74,7 @@ export function chapterError(error: unknown) {
     const serviceError = providerError(error.status, error.detail);
     if (serviceError) return serviceError;
     if (error.status === 401) return 'Sign in from the English app, then return to continue your journey.';
+    if (error.status === 409 && error.detail.error === 'quiz_refreshed') return 'Your earlier conclusions were refreshed. Your interviews and completed chapters are safe. Continue with the updated questions, or choose Make your case to prepare them.';
     if (Array.isArray(error.detail.missingNpcIds)) return 'There are still residents to interview. Return to the harbor and compare their accounts.';
     if (error.status === 403) return 'This chapter is not yet unlocked. Finish the current investigation first.';
     if (error.status === 429) return 'The harbor line is busy. Wait a moment, then try again.';

@@ -418,26 +418,66 @@ const SLASH_COMMANDS = [
 ];
 
 function hideSlashMenu() {
-  const menu = document.getElementById('slashMenu');
-  if (menu) menu.style.display = 'none';
+  for (const id of ['slashMenu', 'dictSlashMenu']) {
+    const menu = document.getElementById(id);
+    if (menu) menu.style.display = 'none';
+  }
 }
 
-function renderSlashMenu(query) {
-  const menu = document.getElementById('slashMenu');
+function renderSlashMenu(query, inputId) {
+  inputId = inputId || 'userInput';
+  const menu = document.getElementById(inputId === 'dictInput' ? 'dictSlashMenu' : 'slashMenu');
   if (!menu) return;
+  hideSlashMenu();
   const q = String(query || '').toLowerCase();
-  const items = SLASH_COMMANDS.filter(c => c.name.includes(q) || c.description.includes(q));
-  if (!items.length) { hideSlashMenu(); return; }
-  menu.innerHTML = items.map((c, i) => `<button class="slash-item" data-command="${esc(c.name)}" data-action="choose-slash-command" data-arg1="${esc(c.name)}"><strong>${esc(c.name)}</strong>${c.alias ? `<small>${esc(c.alias)}</small>` : ''}<span>${esc(c.description)}</span></button>`).join('');
+  const commands = inputId === 'dictInput' ? SLASH_COMMANDS.filter(c => ['/ask', '/translate'].includes(c.name)) : SLASH_COMMANDS;
+  const items = commands.filter(c => c.name.includes(q) || c.description.includes(q) || (c.alias && c.alias.includes(q)));
+  if (!items.length) { menu.style.display = 'none'; return; }
+  menu.innerHTML = items.map(c => `<button type="button" class="slash-item" data-command="${esc(c.name)}" data-action="choose-slash-command" data-arg1="${esc(c.name)}" data-target-input="${esc(inputId)}"><strong>${esc(c.name)}</strong>${c.alias ? `<small>${esc(c.alias)}</small>` : ''}<span>${esc(c.description)}</span></button>`).join('');
   menu.style.display = 'block';
 }
 
-function chooseSlashCommand(command) {
-  const input = document.getElementById('userInput');
+function chooseSlashCommand(command, inputId) {
+  inputId = inputId || 'userInput';
+  const input = document.getElementById(inputId);
   if (!input) return;
   input.value = command + ' ';
   input.focus();
-  hideSlashMenu();
+  const menu = document.getElementById(inputId === 'dictInput' ? 'dictSlashMenu' : 'slashMenu');
+  if (menu) menu.style.display = 'none';
+}
+
+function bindSlashMenuInput(inputId) {
+  const input = document.getElementById(inputId);
+  const menu = document.getElementById(inputId === 'dictInput' ? 'dictSlashMenu' : 'slashMenu');
+  if (!input || !menu || input.dataset.slashBound) return;
+  input.dataset.slashBound = '1';
+  const update = () => {
+    if (/^\/[a-zA-Z-]*$/.test(input.value)) renderSlashMenu(input.value.slice(1), inputId);
+    else menu.style.display = 'none';
+  };
+  input.addEventListener('input', update);
+  input.addEventListener('focus', update);
+  const keydown = event => {
+    if (menu.style.display !== 'block' || event.isComposing) return;
+    const buttons = Array.from(menu.querySelectorAll('.slash-item'));
+    if (event.key === 'Escape') {
+      event.preventDefault(); input.focus(); menu.style.display = 'none';
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const index = buttons.indexOf(document.activeElement);
+      const next = index < 0 ? (event.key === 'ArrowDown' ? 0 : buttons.length - 1) : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
+      buttons[next]?.focus();
+    } else if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) {
+      event.preventDefault();
+      (buttons.includes(document.activeElement) ? document.activeElement : buttons[0])?.click();
+    }
+  };
+  input.addEventListener('keydown', keydown);
+  menu.addEventListener('keydown', keydown);
+  document.addEventListener('click', event => {
+    if (event.target !== input && !menu.contains(event.target)) menu.style.display = 'none';
+  });
 }
 
 function handleSlashCommand(text) {

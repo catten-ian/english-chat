@@ -60,6 +60,14 @@ test('site-funded canonical request prepends learning scope and strips client ac
   assert.equal((await chat(uid)).status, 429);
 });
 
+test('site-funded MiniMax M3.1 requests are accepted and canonicalized', async () => {
+  const uid = user(1); let sent;
+  proxyImpl = async (url, body) => { sent = JSON.parse(body); return { status: 200, data: Buffer.from('{}') }; };
+  const res = await chat(uid, { model: 'MiniMax-M3.1' });
+  assert.equal(res.status, 200);
+  assert.equal(sent.model, 'MiniMax-M3.1');
+});
+
 test('parallel upstream requests cannot exceed reserved daily allowance', async () => {
   const uid = user(2); let release;
   const gate = new Promise(resolve => { release = resolve; });

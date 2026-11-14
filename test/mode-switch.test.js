@@ -9,6 +9,9 @@ const assert = require('node:assert');
 const { APP_DIR } = require('./helpers');
 
 const SRC = fs.readFileSync(path.join(APP_DIR, 'js', 'app', '15-modes.js'), 'utf8');
+const REVIEW_SRC = ['22-web-review.js', '34-review-fsrs.js']
+  .map(file => fs.readFileSync(path.join(APP_DIR, 'js', 'app', file), 'utf8'))
+  .join('\n');
 
 test('首页点击当前模式 Chat 仍会进入聊天区', () => {
   const elements = {
@@ -65,7 +68,7 @@ test('填空输入框 Enter 提交后不会冒泡为下一题', () => {
   };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  const source = fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8');
+  const source = REVIEW_SRC;
   vm.runInContext(source, sandbox, { filename: '22-web-review.js' });
   vm.runInContext("webReviewState = { quiz: { type: 'fill' }, locked: false };", sandbox);
 
@@ -93,7 +96,7 @@ test('网页复习拒绝接管其他账户的 Anki 牌组', () => {
   };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  const source = `function ankiBaseDeck() { return ANKI_DECK_PREFIX + '::' + currentUser(); }\n` + fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8');
+  const source = `function ankiBaseDeck() { return ANKI_DECK_PREFIX + '::' + currentUser(); }\n` + REVIEW_SRC;
   vm.runInContext(source, sandbox, { filename: '22-web-review.js' });
 
   assert.strictEqual(sandbox.webReviewDeckMatches({ deckName: '英语学习::test::薄弱点' }), true);
@@ -106,7 +109,9 @@ test('AI 不应把合法句子生成成自相矛盾的纠错题', () => {
   const sandbox = {};
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  const source = fs.readFileSync(path.join(APP_DIR, 'js', 'app', '06-anki.js'), 'utf8');
+  const source = ['06-anki.js', '36-anki-quality.js']
+    .map(file => fs.readFileSync(path.join(APP_DIR, 'js', 'app', file), 'utf8'))
+    .join('\n');
   vm.runInContext(source, sandbox, { filename: '06-anki.js' });
 
   assert.strictEqual(sandbox.isQuizQuestionUsable({
@@ -120,14 +125,49 @@ test('AI 不应把合法句子生成成自相矛盾的纠错题', () => {
     question: 'She have enough experience to handle it.',
     answer: 'She has enough experience to handle it.',
     explanation: '第三人称单数主语后使用 has。'
+  }), false);
+  assert.strictEqual(sandbox.isQuizQuestionUsable({
+    type: 'error_correction',
+    question: 'Correct the error in this sentence:\nShe have enough experience to handle it.',
+    answer: 'She has enough experience to handle it.',
+    explanation: '第三人称单数主语后使用 has。'
   }), true);
+  assert.strictEqual(sandbox.isQuizQuestionUsable({
+    type: 'multiple_choice', question: 'Choose the correct form.', answer: 'A',
+    options: ['A. goes', 'B. Goes!', 'C. go', 'D. going'], explanation: 'Choose the third-person singular form.'
+  }), false, 'duplicate choices with different punctuation are rejected');
+  assert.strictEqual(sandbox.isQuizQuestionUsable({
+    type: 'multiple_choice', question: 'Choose the correct form.', answer: 'A',
+    options: ['A. goes', 'B. go', 'C. went', 'D. going'], explanation: 'The subject is third-person singular.'
+  }), true);
+  assert.strictEqual(sandbox.isQuizQuestionUsable({
+    type: 'multiple_choice', question: 'Which sentence best expresses shared adaptation?', answer: 'A',
+    options: [
+      'A. Residents identify needs while institutions use that knowledge to plan support.',
+      'B. Institutions plan alone because local knowledge is unreliable.',
+      'C. Residents refuse support and manage every difficulty independently.',
+      'D. Adaptation succeeds only when one group assumes all responsibility.'
+    ], explanation: 'Shared adaptation combines local knowledge and institutional planning.'
+  }), false, 'several extreme distractors must not give away the answer');
+  assert.strictEqual(sandbox.isQuizQuestionUsable({
+    type: 'multiple_choice', question: 'Which sentence best expresses shared adaptation?', answer: 'A',
+    options: [
+      'A. Residents identify needs while institutions use that knowledge to plan support.',
+      'B. Residents contribute local knowledge, but institutions set priorities without consultation.',
+      'C. Institutions coordinate resources while residents help adapt them to local needs.',
+      'D. Residents and institutions share planning, though neither group controls every decision.'
+    ], explanation: 'Shared adaptation combines local knowledge and institutional planning.'
+  }), true, 'plausible parallel distractors remain acceptable');
+  assert.strictEqual(sandbox.isQuizQuestionUsable({
+    type: 'fill_blank', question: 'They ___ (complete) the work by Friday.', answer: 'will complete'
+  }), false, 'a new quiz must include an explanation');
 });
 
 test('网页复习头部显示三类队列并标记当前类别', () => {
   const sandbox = { esc: s => String(s) };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  const source = fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8');
+  const source = REVIEW_SRC;
   vm.runInContext(source, sandbox, { filename: '22-web-review.js' });
   vm.runInContext("webReviewState = { queueStats: { new: 4, learn: 2, review: 7 }, currentQueue: 'learn', correct: 1, current: 3 };", sandbox);
   const html = sandbox.webReviewQueueHeader('生词 · 看英文想中文');
@@ -152,7 +192,7 @@ test('网页复习队列统计按用户牌组请求并汇总三色数量', async
   };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8'), sandbox, { filename: '22-web-review.js' });
+  vm.runInContext(REVIEW_SRC, sandbox, { filename: 'web-review.js' });
   vm.runInContext("webReviewState = { currentQueue: null };", sandbox);
   await sandbox.webReviewRefreshQueueStats(card);
   assert.strictEqual(requests.find(r => r.action === 'getDeckStats').params.decks.join('|'), '英语学习::test');
@@ -167,7 +207,7 @@ test('生词释义解析多词性、变形和多条释义', () => {
   const sandbox = {};
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  const source = fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8');
+  const source = REVIEW_SRC;
   vm.runInContext(source, sandbox, { filename: '22-web-review.js' });
   const raw = 'adrift/əˈdrɪft/adj./adv.变形: more adrift · most adrift•（人）漂泊的；漫无目的的•（船）漂浮着，漂流着';
   const parsed = sandbox.webReviewParseVocabMeaning(raw, 'adrift');
@@ -225,6 +265,39 @@ test('网页复习解析题目时隐藏内部测试点标识', () => {
   assert.strictEqual(quiz.type, 'mc');
   assert.strictEqual(quiz.explanation, '这里应选 two');
   assert.doesNotMatch(quiz.explanation, /wp_example|测试点/);
+});
+
+test('网页 FSRS 兼容 FAME 返回的 snake_case 牌组字段并正确识别生词卡', () => {
+  const sandbox = {
+    getSetting: () => null,
+    document: {
+      createElement: () => ({
+        set innerHTML(value) { this.textContent = value; },
+        get innerHTML() { return this.textContent || ''; },
+        querySelectorAll: () => [],
+        textContent: ''
+      })
+    }
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '22-web-review.js'), 'utf8'), sandbox, { filename: '22-web-review.js' });
+  vm.runInContext(fs.readFileSync(path.join(APP_DIR, 'js', 'app', '34-review-fsrs.js'), 'utf8'), sandbox, { filename: '34-review-fsrs.js' });
+
+  const card = sandbox.webReviewNativeCardData({
+    id: 'fame-card-1',
+    model: 'Basic',
+    deck_name: '英语学习::test::词汇',
+    fields: { Front: '遭遇困难', Back: 'encounter difficulties' },
+    state_name: 'new',
+    version: 1
+  });
+  const quiz = sandbox.webReviewQuizType(card);
+
+  assert.strictEqual(card.deckName, '英语学习::test::词汇');
+  assert.strictEqual(quiz.type, 'recall');
+  assert.strictEqual(quiz.word, 'encounter difficulties');
+  assert.strictEqual(quiz.meaning, '遭遇困难');
 });
 
 test('网页复习语法填空保留括号根词提示', () => {

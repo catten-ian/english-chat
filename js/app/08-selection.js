@@ -137,9 +137,8 @@ async function translateSelection(text, isSentence, isPhrase, contextBlock) {
     let accText = '';
     let obj = null;
     const seenFields = new Set();   // 已渲染的字段名
-    // 手动超时控制器（60s）
+    // streamDict 负责首字/空闲超时；不要用固定总时长中止长回复。
     const timeoutController = new AbortController();
-    const timeoutId = setTimeout(() => timeoutController.abort(), 60000);
     try {
       const full = await streamDict(messages, { temperature: 0.3, maxTokens: maxTokens, thinking: { type: 'disabled' } }, (d) => {
         accText += d;
@@ -164,10 +163,8 @@ async function translateSelection(text, isSentence, isPhrase, contextBlock) {
         }
         repositionTip();
       }, timeoutController.signal);
-      clearTimeout(timeoutId);
       obj = smartParseJSON(full);
     } catch (e) {
-      clearTimeout(timeoutId);
       if (e && (e.name === 'AbortError' || e.code === 20)) throw e;
       dbg('TIPS_STREAM_ERR', e.message);
     }
@@ -709,4 +706,6 @@ function switchRightTab(tab) {
 function switchFeedbackTab(tab) {
   document.querySelectorAll('#feedbackTabs .right-tab').forEach(b => b.classList.toggle('active', b.dataset.ftab === tab));
   document.querySelectorAll('[data-ftab-pane]').forEach(p => p.style.display = (p.dataset.ftabPane === tab ? '' : 'none'));
+  if (tab === 'vocab' && typeof renderVocab === 'function') renderVocab();
+  if (tab === 'weak' && typeof renderWeak === 'function') renderWeak();
 }

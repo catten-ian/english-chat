@@ -15,7 +15,9 @@ const BASE = path.join(__dirname, '..');
 // DATA_DIR / DB_PATH 可用环境变量覆盖，便于测试使用临时目录（绝不碰真实 data/app.db）
 const DATA_DIR = process.env.AI_EN_DATA_DIR ? path.resolve(process.env.AI_EN_DATA_DIR) : path.join(BASE, 'data');
 const MUSIC_DIR = path.join(BASE, 'music');
-const GAME_DIR = path.join(BASE, 'game', 'dist');
+const GAME_DIST_DIR = path.join(BASE, 'game', 'dist');
+const GAME_PUBLIC_DIR = path.join(BASE, 'game', 'public');
+const GAME_DIR = fs.existsSync(path.join(GAME_DIST_DIR, 'index.html')) ? GAME_DIST_DIR : GAME_PUBLIC_DIR;
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const DB_PATH = process.env.AI_EN_DB_PATH ? path.resolve(process.env.AI_EN_DB_PATH) : path.join(DATA_DIR, 'app.db');
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -58,10 +60,11 @@ const BACKUP_EXTRA_DIR = (() => {
 const MAX_BODY = 24 * 1024 * 1024;
 const MAX_USER_DATA = 8 * 1024 * 1024;   // 单个 user_data key 上限
 const MAX_ANKI_BODY = 12 * 1024 * 1024;  // Anki 代理请求上限（含 base64 音频）
-const PROXY_TIMEOUT = 120000;             // 非流式请求整体上限（出题批量 JSON 生成常需 30-60s）
-const STREAM_IDLE_TIMEOUT = 90000;        // SSE 空闲上限
-const STREAM_TOTAL_TIMEOUT = 10 * 60000;  // SSE 总时长上限
+const PROXY_TIMEOUT = 240000;             // 首次连接/非流式请求上限；流式生成本身没有总时长限制
+const STREAM_FIRST_BYTE_TIMEOUT = 240000;  // 收到流式响应头后等待首个数据块
+const STREAM_IDLE_TIMEOUT = 180000;       // SSE 空闲上限
 const SESSION_TTL_DAYS = 30;
+const DISABLE_DEMO_USERS = process.env.AI_EN_DISABLE_DEMO_USERS === '1';
 
 /* user_data 允许的 key → 顶层类型约定（服务端强校验，防止损坏值覆盖有效数据） */
 const USER_DATA_KEYS = {
@@ -107,14 +110,14 @@ function pickKey(envName, fileValue) {
 let _MINIMAX_KEY = pickKey('MINIMAX_API_KEY', env.MINIMAX_API_KEY);
 let _ELEVEN_KEY = pickKey('ELEVEN_API_KEY', env.ELEVEN_API_KEY);
 let _MINIMAX_BASE = pickKey('MINIMAX_BASE', env.MINIMAX_BASE) || 'https://api.minimaxi.com';
-// Existing English-app provider choices also apply to the standalone game.
+// Global upstream fallback; credentials are injected through the service environment.
 const AIHUB8_BASE = () => pickKey('AIHUB8_BASE', env.AIHUB8_BASE) || 'https://api.aihub8.top';
 const AIHUB8_KEY = () => pickKey('AIHUB8_API_KEY', env.AIHUB8_API_KEY);
 const AIHUB8_MODEL = () => pickKey('AIHUB8_MODEL', env.AIHUB8_MODEL) || 'gpt-6.1-terra';
 // OpenAI-compatible provider registry.  Secrets stay server-side; the browser
 // only selects an allow-listed provider id and model name.
 const PROVIDER_DEFS = Object.freeze({
-  aihub8: { label: 'AIHub8', base: AIHUB8_BASE(), key: AIHUB8_KEY, defaultModel: AIHUB8_MODEL(), models: ['gpt-6.1-terra'] },
+  aihub8: { label: 'AIHub8', base: AIHUB8_BASE(), key: () => AIHUB8_KEY(), defaultModel: AIHUB8_MODEL(), models: ['gpt-6.1-terra'] },
   minimax: { label: 'MiniMax', base: _MINIMAX_BASE, key: () => _MINIMAX_KEY, defaultModel: 'MiniMax-M3.1', models: ['MiniMax-M3', 'MiniMax-M3.1'] },
   openai: { label: 'OpenAI-compatible', base: pickKey('OPENAI_BASE', env.OPENAI_BASE) || 'https://api.openai.com', key: () => pickKey('OPENAI_API_KEY', env.OPENAI_API_KEY), defaultModel: pickKey('OPENAI_MODEL', env.OPENAI_MODEL) || 'gpt-4o-mini' },
   deepseek: { label: 'DeepSeek', base: pickKey('DEEPSEEK_BASE', env.DEEPSEEK_BASE) || 'https://api.deepseek.com', key: () => pickKey('DEEPSEEK_API_KEY', env.DEEPSEEK_API_KEY), defaultModel: pickKey('DEEPSEEK_MODEL', env.DEEPSEEK_MODEL) || 'deepseek-chat' },
@@ -185,15 +188,15 @@ const ANKI_GUARDED_ACTIONS = new Set([
    - 任何 '..' / 反斜杠 / NUL / 绝对路径一律拒绝
    - 扩展名必须在白名单内（不再用 octet-stream 兜底，避免 .env/.db 被下载）
 */
-const STATIC_MIME = { '.hdr': 'image/vnd.radiance', '.glb': 'model/gltf-binary', '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.wav': 'audio/wav', '.webm': 'audio/webm', '.flac': 'audio/flac', '.opus': 'audio/ogg', '.aac': 'audio/aac' };
+const STATIC_MIME = { '.hdr': 'image/vnd.radiance', '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.wav': 'audio/wav', '.webm': 'audio/webm', '.flac': 'audio/flac', '.opus': 'audio/ogg', '.aac': 'audio/aac' };
 // URL 前缀 → 物理根目录（只有这些目录对外可见）
 const STATIC_DIRS = {
-  '/world-game/': GAME_DIR,
   '/css/': path.join(BASE, 'css'),
   '/js/': path.join(BASE, 'js'),
   '/vendor/': path.join(BASE, 'vendor'),
   '/music/': MUSIC_DIR,
-  '/img/': path.join(BASE, 'img')
+    '/img/': path.join(BASE, 'img'),
+    '/world-game/': GAME_DIR
 };
 const INDEX_FILE = path.join(BASE, 'index.html');
 
@@ -201,7 +204,8 @@ module.exports = {
   BASE, DATA_DIR, MUSIC_DIR, BACKUP_DIR, DB_PATH,
   BACKUP_RETENTION_MS, BACKUP_INTERVAL_MIN, BACKUP_EXTRA_DIR,
   MAX_BODY, MAX_USER_DATA, MAX_ANKI_BODY,
-  PROXY_TIMEOUT, STREAM_IDLE_TIMEOUT, STREAM_TOTAL_TIMEOUT, SESSION_TTL_DAYS,
+  PROXY_TIMEOUT, STREAM_FIRST_BYTE_TIMEOUT, STREAM_IDLE_TIMEOUT, SESSION_TTL_DAYS,
+  DISABLE_DEMO_USERS,
   USER_DATA_KEYS,
   CONVERSATION_SYNC_SECRET, CONVERSATION_SYNC_PEER,
   MINIMAX_KEY, ELEVEN_KEY, MINIMAX_BASE, AIHUB8_BASE, AIHUB8_KEY, AIHUB8_MODEL, ALLOWED_ORIGINS,
@@ -210,5 +214,5 @@ module.exports = {
   ENV_FILE: process.env.AI_EN_ENV_FILE ? path.resolve(process.env.AI_EN_ENV_FILE) : path.join(BASE, '.env'),
   ANKI_DECK_PREFIX, ANKI_ALLOWED_MODELS, ANKI_TEMPLATE_MODELS, ANKI_MAX_NOTES, ANKI_MAX_CARDS, ANKI_MAX_MEDIA_B64,
   ANKI_READONLY_ACTIONS, ANKI_GUI_ACTIONS, ANKI_GUARDED_ACTIONS,
-  STATIC_MIME, STATIC_DIRS, INDEX_FILE, GAME_DIR
+    STATIC_MIME, STATIC_DIRS, INDEX_FILE, GAME_DIR, GAME_DIST_DIR, GAME_PUBLIC_DIR
 };

@@ -12,7 +12,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const { APP_DIR, startServer, request, login } = require('./helpers');
+const { APP_DIR, readAppSource, startServer, request, login } = require('./helpers');
 const { ankiQueryScoped, ankiGuard } = require('../server/validation');
 const { createRateLimiter } = require('../server/rate-limit');
 
@@ -169,6 +169,17 @@ describe('前端源码回归', () => {
     assert.match(src, /if \(!isAuthed\(\)\) return;/, '未登录时不应 POST /api/backup');
   });
 
+  test('翻译反馈分页与评分重试按钮都注册了全局动作', () => {
+    const init = read('js/app/19-init.js');
+    const practice = read('js/app/17-practice.js');
+    assert.match(practice, /data-action="tr-feedback-prev"/);
+    assert.match(practice, /data-action="tr-feedback-next"/);
+    assert.match(practice, /data-action="retry-tr-grade"/);
+    assert.match(init, /registerAction\('tr-feedback-prev', function \(\) \{ navigateTranslationFeedback\(-1\); \}\);/);
+    assert.match(init, /registerAction\('tr-feedback-next', function \(\) \{ navigateTranslationFeedback\(1\); \}\);/);
+    assert.match(init, /registerAction\('retry-tr-grade', function \(\) \{ retryTranslationGrade\(this\.getAttribute\('data-arg1'\)\); \}\);/);
+  });
+
   test('网页复习选择题只接受答案字段开头的选项字母', () => {
     const src = read('js/app/22-web-review.js');
     assert.match(src, /function webReviewAnswerLetter\(/);
@@ -200,7 +211,7 @@ describe('前端源码回归', () => {
   });
 
   test('网页复习词汇卡严格区分 Front 题面与 Back 答案', () => {
-    const src = read('js/app/22-web-review.js');
+    const src = read('js/app/22-web-review.js') + read('js/app/34-review-fsrs.js');
     assert.match(src, /function webReviewVocabAnswer\(/);
     assert.match(src, /function webReviewVocabMeaningText\(/);
     assert.match(src, /webReviewVocabAnswer\(backRaw, frontRaw\)/);
@@ -217,6 +228,26 @@ describe('前端源码回归', () => {
     const src = read('js/app/22-web-review.js');
     assert.match(src, /answers\.length === givenArr\.length/);
     assert.match(src, /单个答案中可能包含逗号\/分号/);
+  });
+
+  test('网页 FSRS 复习走调度器评分 API，保留上一题回看且不重复评分', () => {
+    const src = readAppSource();
+    assert.match(src, /session\.native = true/);
+    assert.match(src, /nativeSchedulerDueCards\(\{ limit: 2000 \}\)/);
+    assert.match(src, /async function webReviewCommitNative\(rating\)/);
+    assert.match(src, /payload\.expected_version = version/);
+    assert.match(src, /nativeReviewed\[st\.cardId\]/);
+    assert.match(src, /st\.nativeIndex--/);
+    assert.match(src, /上一题仅供回看，不会重复提交评分/);
+    assert.match(src, /if \(st\.native\) return webReviewCommitNative\(ease\)/);
+  });
+
+  test('网页 FSRS 队列计数区分新学、学习中與复习卡', () => {
+    const review = readAppSource();
+    const anki = review;
+    assert.match(review, /function webReviewQueueCounts\(cards\)/);
+    assert.match(anki, /待新学 .*待重来 .*待复习 /);
+    assert.match(anki, /nativeSchedulerDueCards\(\{ limit: 2000 \}\)/);
   });
 });
 
@@ -243,7 +274,7 @@ describe('登出清缓存覆盖全部用户态键', () => {
     const storage = fs.readFileSync(path.join(APP_DIR, 'js/storage.js'), 'utf8');
     const block = storage.match(/const SYNCED_SETTING_KEYS = \[[\s\S]*?\];/);
     assert.ok(block, '未找到 SYNCED_SETTING_KEYS');
-    for (const k of ['trHistory', 'trQuestionStats', 'trCustomBank', 'dictHistory', 'ankiVocabPhase', 'ankiStreak']) {
+    for (const k of ['trHistory', 'trQuestionStats', 'trCustomBank', 'dictHistory', 'ankiVocabPhase', 'ankiStreak', 'progressTrendRange']) {
       assert.ok(block[0].includes("'" + k + "'"), k + ' 未纳入同步，登出即丢');
     }
     // setSetting 必须真的调用同步钩子，否则白名单是死的

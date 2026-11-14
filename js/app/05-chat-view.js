@@ -106,7 +106,7 @@ async function translateAiMessage(msgId, btn) {
     await streamDict(messages, { temperature: 0.3, maxTokens: 4000, thinking: { type: 'disabled' } }, (d) => {
       acc += d;
       container.innerHTML = '<div class="ai-translate-label" style="font-size:11px;color:var(--text2);margin-bottom:4px">🌐 中文翻译</div><div style="white-space:pre-wrap">' + esc(acc) + '</div>';
-    }, AbortSignal.timeout(60000));
+    });
     container.innerHTML = '<div class="ai-translate-label" style="font-size:11px;color:var(--text2);margin-bottom:4px">🌐 中文翻译</div><div style="white-space:pre-wrap">' + esc(acc || '(空)') + '</div>';
   } catch (e) {
     container.innerHTML = '<span style="color:var(--red)">翻译失败: ' + esc(e.message || '') + '</span>';
@@ -305,6 +305,7 @@ function renderFeedbackForMsg(userMsgId) {
 
 /* ---------- Vocab/Weak Render ---------- */
 function renderVocab() {
+  standardizeLegacyVocabAsync();
   const v = getVocab();
   const countEl = document.getElementById('wordCount');
   if (countEl) countEl.textContent = v.length;
@@ -337,8 +338,8 @@ function addVocabManual(idx) {
     <div class="modal-header"><h3>${old ? '编辑生词' : '加入生词本'}</h3><button class="modal-close" data-action="close-overlay">×</button></div>
     <div class="modal-body" style="display:grid;gap:10px">
       <label>英文单词或词组<input id="vocabEditWord" value="${esc(old?.word || '')}" placeholder="例如: take responsibility" style="width:100%;box-sizing:border-box;padding:9px;margin-top:4px"></label>
-      <label>中文释义（每行一个，可只保留你要复习的释义）<textarea id="vocabEditMeanings" rows="5" placeholder="留空将立即保存，后台自动生成释义" style="width:100%;box-sizing:border-box;padding:9px;margin-top:4px">${esc((old?.meanings?.length ? old.meanings : String(old?.translation || '').split(/\s*\/\s*/).filter(Boolean)).join('\n'))}</textarea><small style="color:var(--text2)">不填写也可以，保存后会在后台自动补全。</small></label>
-      <label>复习方向<select id="vocabEditDirection" style="width:100%;padding:9px;margin-top:4px"><option value="meaning-to-word" ${(old?.direction || 'meaning-to-word') === 'meaning-to-word' ? 'selected' : ''}>看中文写英文</option><option value="word-to-meaning" ${old?.direction === 'word-to-meaning' ? 'selected' : ''}>看英文想中文</option></select></label>
+      <div><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><strong>释义</strong><button class="a-btn" type="button" data-action="vocab-add-sense">＋ 添加释义</button></div><div id="vocabSenseRows" style="display:grid;gap:8px;margin-top:8px">${(old?.senses || (old?.meanings || []).map(text => ({ text }))).map((sense, i) => vocabSenseEditorRow(sense, i)).join('')}</div><small style="color:var(--text2)">没有释义时可留空，保存后会在后台自动生成并整理格式。</small></div>
+      <label>默认复习方向<select id="vocabEditDirection" style="width:100%;padding:9px;margin-top:4px"><option value="meaning-to-word" ${(old?.direction || 'meaning-to-word') === 'meaning-to-word' ? 'selected' : ''}>看中文写英文</option><option value="word-to-meaning" ${old?.direction === 'word-to-meaning' ? 'selected' : ''}>看英文想中文</option></select></label>
       <label>语境（可选）<textarea id="vocabEditContext" rows="2" placeholder="记录这个词出现在哪里" style="width:100%;box-sizing:border-box;padding:9px;margin-top:4px">${esc(old?.context || '')}</textarea></label>
     </div>
     <div class="modal-footer"><button class="a-btn" data-action="close-overlay">取消</button><button class="a-btn primary" data-action="save-vocab-editor" data-arg1="${Number.isInteger(idx) ? idx : -1}">保存</button></div>
@@ -347,14 +348,40 @@ function addVocabManual(idx) {
   overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
 }
 
+function vocabSenseEditorRow(sense, index) {
+  const item = typeof sense === 'string' ? { text: sense } : (sense || {});
+  return `<div class="vocab-sense-editor" data-sense-row style="border:1px solid var(--border);border-radius:6px;padding:9px;display:grid;gap:7px">
+    <div style="display:grid;grid-template-columns:1fr 80px auto;gap:6px"><input data-sense-field="text" value="${esc(item.text || '')}" placeholder="中文释义" aria-label="中文释义 ${index + 1}" style="min-width:0;padding:7px"><input data-sense-field="pos" value="${esc(item.pos || '')}" placeholder="词性" aria-label="词性 ${index + 1}" style="min-width:0;padding:7px"><button type="button" class="del" data-action="vocab-remove-sense" title="删除此释义">×</button></div>
+    <input data-sense-field="example" value="${esc(item.example || '')}" placeholder="英文例句（可选）" aria-label="例句 ${index + 1}" style="padding:7px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px"><label><input data-sense-field="focus" type="checkbox" ${item.focus ? 'checked' : ''}> 重点关注</label><label><input data-sense-field="unknown" type="checkbox" ${item.unknown ? 'checked' : ''}> 这个意思不会</label><select data-sense-field="direction" aria-label="此释义的复习方向" style="margin-left:auto;padding:5px"><option value="zh2en" ${item.direction === 'zh2en' || (!item.direction && item.direction !== 'en2zh') ? 'selected' : ''}>看中文回忆英文 (zh2en)</option><option value="en2zh" ${item.direction === 'en2zh' ? 'selected' : ''}>看英文回忆中文 (en2zh)</option></select></div>
+  </div>`;
+}
+
+function vocabAddSenseRow() {
+  const root = document.getElementById('vocabSenseRows');
+  if (!root) return;
+  root.insertAdjacentHTML('beforeend', vocabSenseEditorRow({ direction: 'zh2en' }, root.querySelectorAll('[data-sense-row]').length));
+}
+
+function vocabRemoveSenseRow(button) {
+  button?.closest('[data-sense-row]')?.remove();
+}
+
 function saveVocabEditor(idx) {
   const word = document.getElementById('vocabEditWord')?.value.trim();
   if (!word) return toastMsg('请填写英文单词或词组');
-  const meanings = String(document.getElementById('vocabEditMeanings')?.value || '').split(/\n+/).map(x => x.trim()).filter(Boolean);
   const direction = document.getElementById('vocabEditDirection')?.value === 'word-to-meaning' ? 'word-to-meaning' : 'meaning-to-word';
   const context = document.getElementById('vocabEditContext')?.value.trim() || '';
+  const senseRows = document.querySelectorAll?.('#vocabSenseRows [data-sense-row]') || [];
+  const senses = [...senseRows].map(row => {
+    const read = name => row.querySelector(`[data-sense-field="${name}"]`);
+    return { text: read('text')?.value.trim() || '', pos: read('pos')?.value.trim() || '', example: read('example')?.value.trim() || '', focus: !!read('focus')?.checked, unknown: !!read('unknown')?.checked, direction: read('direction')?.value === 'en2zh' ? 'en2zh' : 'zh2en' };
+  }).filter(sense => sense.text);
+  if (!senseRows.length) senses.push(...String(document.getElementById('vocabEditMeanings')?.value || '').split(/\n+/).map(text => ({ text: text.trim(), pos: '', example: '', focus: false, unknown: false, direction: direction === 'word-to-meaning' ? 'en2zh' : 'zh2en' })).filter(sense => sense.text));
+  const meanings = senses.map(sense => sense.text);
   const v = getVocab();
-  const item = { word, meanings, translation: meanings.join(' / '), direction, context, part: '', example: '', added: new Date().toISOString().slice(0, 10), meaningStatus: meanings.length ? 'ready' : 'pending' };
+  const old = idx >= 0 ? v[idx] : null;
+  const item = { word, senses, meanings, translation: meanings.join(' / '), direction, context, part: senses[0]?.pos || old?.part || '', example: senses[0]?.example || old?.example || '', added: old?.added || new Date().toISOString().slice(0, 10), meaningStatus: meanings.length ? 'ready' : 'pending', meaningFormatVersion: meanings.length ? 1 : 0, needsMeaningStandardization: false };
   if (idx >= 0 && v[idx]) v[idx] = { ...v[idx], ...item };
   else v.push(item);
   saveVocab(v); renderVocab(); document.querySelector('.modal-overlay')?.remove();
@@ -440,14 +467,65 @@ function saveVocabImport() {
 function generateVocabMeaningAsync(word, context, index) {
   if (typeof callAPI !== 'function') return;
   Promise.resolve().then(async () => {
-    const raw = await callAPI([{ role: 'system', content: 'You are an English dictionary. Return ONLY JSON: {"meanings":["简洁中文本义"],"part":"词性","example":"short English example"}. Give 1-3 common senses.' }, { role: 'user', content: `Word: ${word}${context ? `\nContext: ${context}` : ''}` }], { maxTokens: 500, temperature: 0.2 });
-    let obj; try { obj = JSON.parse(String(raw).replace(/^```json\s*|```$/g, '').trim()); } catch (_) { return; }
-    const meanings = Array.isArray(obj.meanings) ? obj.meanings.map(String).map(x => x.trim()).filter(Boolean) : [];
-    if (!meanings.length) return;
+    const raw = await callAPI([{ role: 'system', content: 'You are an English-Chinese dictionary. Return ONLY JSON: {"senses":[{"pos":"词性","meaning":"简洁中文释义","example":"short natural English example"}]}. Give 1-5 common senses in dictionary style, preserve distinct meanings, no numbering or combined slash-separated senses.' }, { role: 'user', content: `Word or phrase: ${word}${context ? `\nContext: ${context}` : ''}` }], { maxTokens: 1400, temperature: 0.2 });
+    let obj; try { obj = smartParseJSON(String(raw)); } catch (_) { return; }
+    const generated = Array.isArray(obj?.senses) ? obj.senses : Array.isArray(obj?.meanings) ? obj.meanings.map(meaning => ({ meaning, pos: obj.part, example: obj.example })) : [];
     const v = getVocab(); const pos = v.findIndex(x => x.word.toLowerCase() === String(word).toLowerCase()); if (pos < 0) return;
-    v[pos] = { ...v[pos], meanings, translation: meanings.join(' / '), part: String(obj.part || v[pos].part || ''), example: String(obj.example || v[pos].example || ''), meaningStatus: 'ready' };
+    const prior = v[pos].senses || [];
+    const senses = generated.map((sense, i) => ({
+      id: prior[i]?.id || `sense-${Date.now()}-${i}`, text: String(sense?.meaning || sense?.text || '').trim(),
+      pos: String(sense?.pos || '').trim(), example: String(sense?.example || '').trim(),
+      focus: prior[i]?.focus === true, unknown: prior[i]?.unknown === true,
+      direction: prior[i]?.direction || (v[pos].direction === 'word-to-meaning' ? 'en2zh' : 'zh2en')
+    })).filter(sense => sense.text);
+    const meanings = senses.map(sense => sense.text);
+    if (!meanings.length) return;
+    v[pos] = { ...v[pos], senses, meanings, translation: meanings.join(' / '), part: String(obj.part || senses[0]?.pos || v[pos].part || ''), example: String(obj.example || senses[0]?.example || v[pos].example || ''), meaningStatus: 'ready', meaningFormatVersion: 1, needsMeaningStandardization: false };
     saveVocab(v); renderVocab(); toastMsg(`📖 ${word} 的释义已生成`);
   }).catch(e => { dbg('VOCAB_MEANING_BG', e.message); });
+}
+
+let vocabStandardizationPending = false;
+function standardizeLegacyVocabAsync() {
+  if (vocabStandardizationPending || typeof callAPI !== 'function') return;
+  const snapshot = getVocab();
+  const legacy = snapshot.filter(item => item.needsMeaningStandardization && item.senses?.length).slice(0, 10);
+  if (!legacy.length) return;
+  vocabStandardizationPending = true;
+  let shouldContinue = false;
+  Promise.resolve().then(async () => {
+    const raw = await callAPI([
+      { role: 'system', content: 'You are an English-Chinese dictionary editor. Return JSON only: {"items":[{"word":"...","senses":[{"pos":"词性","meaning":"中文释义","example":"自然英文例句"}]}]}. Preserve every supplied meaning separately, add accurate part of speech and one short natural example per meaning, and return every input word exactly once.' },
+      { role: 'user', content: JSON.stringify(legacy.map(item => ({ word: item.word, meanings: item.meanings }))) }
+    ], { maxTokens: 4000, temperature: 0.1 });
+    const parsed = smartParseJSON(String(raw));
+    if (!Array.isArray(parsed?.items) || parsed.items.length !== legacy.length) return;
+    const normalized = new Map(parsed.items.map(item => [String(item.word || '').toLowerCase(), item]));
+    if (legacy.some(item => !normalized.has(item.word.toLowerCase()) || !Array.isArray(normalized.get(item.word.toLowerCase()).senses))) return;
+    const current = getVocab();
+    let changed = false;
+    current.forEach(item => {
+      if (!item.needsMeaningStandardization) return;
+      const source = normalized.get(item.word.toLowerCase());
+      if (!source) return;
+      const senses = source.senses.map((sense, index) => ({
+        ...item.senses[index], text: String(sense.meaning || sense.text || item.senses[index]?.text || '').trim(),
+        pos: String(sense.pos || '').trim(), example: String(sense.example || '').trim()
+      })).filter(sense => sense.text);
+      if (senses.length !== item.senses.length) return;
+      item.senses = senses; item.meanings = senses.map(sense => sense.text); item.translation = item.meanings.join(' / ');
+      item.meaningFormatVersion = 1; item.needsMeaningStandardization = false; changed = true;
+    });
+    if (changed) {
+      saveVocab(current);
+      shouldContinue = current.some(item => item.needsMeaningStandardization && item.senses?.length);
+      renderVocab();
+    }
+  }).catch(error => { if (typeof dbg === 'function') dbg('VOCAB_STANDARDIZE_BG', error.message); })
+    .finally(() => {
+      vocabStandardizationPending = false;
+      if (shouldContinue) setTimeout(standardizeLegacyVocabAsync, 0);
+    });
 }
 
 function showVocabDetail(idx) {
@@ -471,7 +549,7 @@ function showVocabDetail(idx) {
     </div>
     ${item.part ? `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">${esc(item.part)}</div>` : ''}
     <div style="font-size:12px;color:var(--text2);margin-bottom:8px">复习方向：${item.direction === 'word-to-meaning' ? '看英文想中文' : '看中文想英文'}${item.meanings?.length ? ' · ' + item.meanings.length + ' 个释义' : ''}</div>
-    <div style="font-size:14px;line-height:1.8;color:var(--text);margin-bottom:14px" class="md-content">${translation ? (item.meanings || [translation]).map((m, i) => '<div style="padding:5px 0;border-bottom:1px solid var(--border)"><b>' + (i + 1) + '.</b> ' + renderMD(m, 'markdown') + '</div>').join('') : '<span style="color:var(--text2)">未填写释义，可点击编辑后补充</span>'}</div>
+    <div style="font-size:14px;line-height:1.8;color:var(--text);margin-bottom:14px" class="md-content">${translation ? (item.senses?.length ? item.senses : (item.meanings || [translation]).map(text => ({ text }))).map((sense, i) => '<div style="padding:7px 0;border-bottom:1px solid var(--border)"><b>' + (i + 1) + '.</b> ' + (sense.pos ? '<span class="v-part">' + esc(sense.pos) + '</span> ' : '') + renderMD(sense.text, 'markdown') + (sense.focus ? ' <span class="v-part">重点</span>' : '') + (sense.unknown ? ' <span class="v-part">不会</span>' : '') + '<div style="font-size:11px;color:var(--text2)">复习方向：' + (sense.direction === 'en2zh' ? '看英文想中文' : '看中文想英文') + '</div>' + (sense.example ? '<div style="font-size:12px;color:var(--text2)">' + esc(sense.example) + '</div>' : '') + '</div>').join('') : '<span style="color:var(--text2)">未填写释义，可点击编辑后补充</span>'}</div>
     ${item.context ? `<div style="font-size:12px;color:var(--text2);padding:8px 10px;background:var(--bg);border-radius:8px;margin-bottom:10px"><strong>原文语境:</strong> ${esc(item.context)}</div>` : ''}
     ${item.added ? `<div style="font-size:11px;color:var(--text2);margin-bottom:12px">📅 添加于 ${esc(item.added)}</div>` : ''}
     <div style="display:flex;gap:8px;justify-content:flex-end">

@@ -129,6 +129,23 @@ async function startQuiz() {
     chapter.showQuiz(currentQuiz);
   } catch (error) { chapter.error(chapterError(error)); }
 }
+async function recoverQuiz(error: unknown): Promise<boolean> {
+  if (!(error instanceof GameApiError) || error.status !== 409) return false;
+  const refreshed = error.detail.error === 'quiz_refreshed';
+  // Retire an explicitly invalidated ID even if the following reload fails.
+  // Recovery reads saved progress only; it never starts another paid assembly.
+  if (refreshed) { currentQuiz = undefined; chapter.clearQuiz(); }
+  try {
+    const saved = await api.load(); applyJourney(saved); currentQuiz = saved.quiz;
+    if (saved.quiz) chapter.showQuiz(saved.quiz);
+    else chapter.clearQuiz();
+    if (refreshed) chapter.error(chapterError(error));
+    return refreshed || Boolean(saved.quiz);
+  } catch {
+    if (refreshed) { chapter.error(chapterError(error)); return true; }
+    return false;
+  }
+}
 async function answerQuiz(index: number, choice: number) {
   if (!currentQuiz) return;
   chapter.busy('Checking your conclusion…');
@@ -139,9 +156,7 @@ async function answerQuiz(index: number, choice: number) {
   } catch (error) {
     // If a response was lost after the server accepted it, resume the same saved
     // quiz instead of submitting a second answer or silently starting over.
-    if (error instanceof GameApiError && error.status === 409) {
-      try { const saved = await api.load(); applyJourney(saved); if (saved.quiz) { currentQuiz = saved.quiz; chapter.showQuiz(currentQuiz); return; } } catch { /* Show the original reconnect guidance. */ }
-    }
+    if (await recoverQuiz(error)) return;
     chapter.error(chapterError(error));
   }
 }
@@ -154,7 +169,7 @@ async function settleChapter() {
     try { applyJourney(await api.load()); }
     catch { /* The settlement itself is authoritative; a lost refresh must not hide it. */ }
     chapter.showSettlement(result);
-  } catch (error) { chapter.error(chapterError(error)); }
+  } catch (error) { if (!await recoverQuiz(error)) chapter.error(chapterError(error)); }
 }
 async function switchChapter(stageId: StageId) {
   if (conversationRequest || loadingJourney) return;

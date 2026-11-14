@@ -236,6 +236,7 @@ async function ankiAddNotesBatch(notes) {
 // ---- 创建/确保笔记类型 + 牌组 ----
 
 async function ensureQuizModelAndDeck() {
+  if (typeof isNativeSchedulerMode === 'function' && isNativeSchedulerMode()) return;
   const [models, decks] = await Promise.all([
     ankiPostCall({ action: 'modelNames', version: 6 }).then(d => d.result && d.result.result).catch(() => null),
     ankiPostCall({ action: 'deckNames', version: 6 }).then(d => d.result && d.result.result).catch(() => null)
@@ -398,7 +399,13 @@ ${multiWp ? '- One question should test AS MANY weak points as possible (ideally
   ENGLISH equivalent: test the English words it maps to (position/direction/orientation...)
   in natural English sentences, e.g. a fill-in-the-blank or "choose the correct English word".
 - Use natural English at an appropriate level (CET-4/6 ~ IELTS). Sentences must be realistic.
+- Multiple-choice questions must have exactly one defensible answer. Distractors should reflect
+  realistic misunderstandings of the same idea, stay parallel in grammar, specificity, and length,
+  and remain plausible to a learner who has not mastered the point. Do not make them easy through
+  extreme words such as "always", "never", "only", "solely", or "all" unless the context itself
+  makes that wording necessary. If you cannot write three plausible distractors, use another type.
 - For error_correction, the question MUST contain a real, objectively incorrect English sentence.
+- Prefix every error_correction question with the explicit instruction "Correct the error in this sentence:".
   Never mark a grammatical sentence as wrong just to test an alternative word order or style.
   In particular, "enough experience" and "experience enough" can both be grammatical in
   suitable contexts; do not create an error-correction item by changing one to the other.
@@ -467,24 +474,6 @@ function decorateFillBlankQuestion(q) {
   return { ...q, question: decorated };
 }
 
-// ---- AI 题目质量校验 ----
-function isQuizQuestionUsable(q) {
-  if (!q || typeof q !== 'object') return false;
-  const type = String(q.type || '').trim().toLowerCase();
-  const question = String(q.question || '').trim();
-  const answer = String(q.answer || '').trim();
-  const explanation = String(q.explanation || '').trim();
-  if (!question || !answer || !['multiple_choice', 'fill_blank', 'error_correction'].includes(type)) return false;
-  if (type === 'multiple_choice') {
-    return Array.isArray(q.options) && q.options.length === 4 && /^[A-D]$/i.test(answer);
-  }
-  if (type === 'fill_blank') return /_{2,}/.test(question);
-
-  // Reject self-contradictory “corrections” that admit the original is already valid.
-  const contradiction = /(原句|原文|本题)[^。！？\n]{0,40}(正确|无语法错误|没有语法错误|保留原句)|(original sentence|original|sentence)[^.!?\n]{0,40}(correct|no grammar error|grammatically correct|should be retained)/i.test(explanation);
-  return !contradiction && answer !== question;
-}
-
 // ---- 解析 AI 出题响应 ----
 function parseQuizResponse(raw) {
   if (!raw) return null;
@@ -505,6 +494,34 @@ function parseQuizResponse(raw) {
     }
   } catch (e) {}
   return null;
+}
+
+async function reviewGeneratedQuizQuestions(questions) {
+  if (!Array.isArray(questions) || !questions.length) return [];
+  const raw = await callAPI([
+    {
+      role: 'system',
+      content: `You are a strict quality reviewer for English-learning questions for Chinese learners at CET-4/6 to IELTS level. Review each candidate independently and preserve its original index. Approve only questions that are useful, fair, and ready to schedule.
+
+Reject a question if any of these apply:
+- The front does not tell the learner what task to perform, or the answer is not reasonably inferable from the displayed prompt.
+- It is malformed, unnatural, factually incoherent, ambiguous, or has more than one defensible answer.
+- A multiple-choice distractor is silly, unrelated to the sentence/topic, grammatically nonparallel, or makes the correct option obvious without knowing the tested English point.
+- A fill-in answer is underdetermined, the root hint is wrong/missing for a word-form question, or the context gives away a trivial answer without testing the stated point.
+- An error-correction sentence is already grammatical, the correction changes meaning unnecessarily, or the instruction is unclear.
+- It repeats another candidate's core sentence or skill with only superficial wording changes.
+
+Do not reject solely because the question is short. Do not rewrite candidates or infer missing source text. Return ONLY JSON: {"approved_indices":[0],"rejected":[{"index":1,"reason":"short reason"}]}. If none qualify, approved_indices must be [].`
+    },
+    {
+      role: 'user',
+      content: JSON.stringify(questions.map((question, index) => ({ index, ...question })))
+    }
+  ], { temperature: 0, maxTokens: 1800, thinking: { type: 'disabled' } });
+  const parsed = smartParseJSON(raw);
+  if (!parsed || !Array.isArray(parsed.approved_indices)) throw new Error('quiz quality review returned invalid JSON');
+  const approved = new Set(parsed.approved_indices.filter(index => Number.isInteger(index) && index >= 0 && index < questions.length));
+  return questions.filter((_question, index) => approved.has(index));
 }
 
 // ---- 自动生成薄弱点题目 → 推送到 Anki ----
@@ -530,13 +547,37 @@ async function autoGenerateQuizQuestions(wpList) {
       if (qs && qs.length) allQuestions.push(...qs);
     } catch (e) { dbg('QUIZ_GEN', e.message); }
   }
-  const validQuestions = allQuestions.map(decorateFillBlankQuestion).filter(isQuizQuestionUsable);
+  const validQuestions = allQuestions.map(decorateFillBlankQuestion).map(q => {
+    if (!q || String(q.type || '').toLowerCase() !== 'error_correction' || /^\s*(?:correct|fix|rewrite)\s+(?:the\s+)?(?:error|sentence|incorrect)/i.test(q.question || '')) return q;
+    return { ...q, question: 'Correct the error in this sentence:\n' + q.question };
+  }).filter(isQuizQuestionUsable);
   if (!validQuestions.length) {
     dbg('QUIZ_QUALITY', 'AI returned no usable quiz questions');
     return;
   }
+  let reviewedQuestions;
+  try {
+    reviewedQuestions = await reviewGeneratedQuizQuestions(validQuestions);
+  } catch (e) {
+    dbg('QUIZ_QUALITY_REVIEW', e.message);
+    return { added: 0, skipped: validQuestions.length, note: 'quality review unavailable' };
+  }
+  if (!reviewedQuestions.length) {
+    dbg('QUIZ_QUALITY', 'AI quality review rejected every candidate');
+    return { added: 0, skipped: validQuestions.length, note: 'quality review rejected candidates' };
+  }
+  const existingQuestions = await getExistingQuizQuestions();
+  const uniqueQuestions = [];
+  for (const question of reviewedQuestions) {
+    if ([...existingQuestions, ...uniqueQuestions].some(previous => quizQuestionsAreNearDuplicates(question, previous))) continue;
+    uniqueQuestions.push(question);
+  }
+  if (!uniqueQuestions.length) {
+    dbg('QUIZ_QUALITY', 'AI returned only duplicate quiz questions');
+    return { added: 0, skipped: validQuestions.length, note: 'duplicate questions' };
+  }
   // 构建 Anki 笔记
-  const notes = validQuestions.map(q => {
+  const notes = uniqueQuestions.map(q => {
     const qText = ankiQuizQuestionFieldHTML(q);
     return {
       deckName: ankiWeakDeck(),
@@ -545,12 +586,14 @@ async function autoGenerateQuizQuestions(wpList) {
       tags: [ankiUserTag(), 'weak-point', ...(q.weak_point_ids || []).map(wpTag)]
     };
   });
-  const res = await ankiAddNotesBatch(notes);
+  const res = (typeof isNativeSchedulerMode === 'function' && isNativeSchedulerMode() && typeof nativeSchedulerCreateQuizNotes === 'function')
+    ? await nativeSchedulerCreateQuizNotes(notes)
+    : await ankiAddNotesBatch(notes);
   // 将实际添加的 note ID 关联回对应的薄弱点（按 order 一一对应）
   if (res.noteIds && res.noteIds.length && Array.isArray(res.order)) {
     const w = getWeak();
     let changed = false;
-    validQuestions.forEach((q, qi) => {
+    uniqueQuestions.forEach((q, qi) => {
       const nid = res.order[qi];
       if (!nid) return;
       (q.weak_point_ids || []).forEach(id => {
@@ -570,6 +613,7 @@ async function autoGenerateQuizQuestions(wpList) {
 // 将已有薄弱点牌组中的旧填空题补成上海高考式的括号提示。只更新 Question
 // 字段，不触碰 Answer/Explanation，因此不会影响 Anki 的排程或用户已有答案。
 async function repairExistingQuizQuestions() {
+  if (typeof isNativeSchedulerMode === 'function' && isNativeSchedulerMode()) return 0;
   try {
     const found = await ankiPostCall({ action: 'findNotes', version: 6, params: { query: 'deck:' + ankiWeakDeck() + ' tag:weak-point' } });
     const ids = found && found.result && found.result.result;
@@ -631,6 +675,7 @@ function maybeGenerateQuizQuestions(newWpList) {
 
 // ---- TTS 音频附着到 Anki 卡片 ----
 async function ankiAttachAudio(text) {
+  if (typeof isNativeSchedulerMode === 'function' && isNativeSchedulerMode()) return '';
   // 通过 ElevenLabs TTS 生成音频 → storeMediaFile → 返回 [sound:filename] 字符串
   try {
     if (!text || !getSetting('ankiAutoAudio', false)) return '';
@@ -662,9 +707,17 @@ async function ankiAttachAudio(text) {
 async function pushAllToAnki() {
   if (!isAuthed()) { toastMsg('请先登录'); return; }
   toastMsg('📚 正在准备同步...');
+  const nativeMode = typeof isNativeSchedulerMode === 'function' && isNativeSchedulerMode();
   // 1. 检查 Anki 连接
-  const ver = await ankiPostCall({ action: 'version', version: 6 });
-  if (!ver || !ver.ok) { toastMsg('❌ Anki 未运行或 AnkiConnect 未连接'); return; }
+  if (nativeMode) {
+    try {
+      const health = await fetch(nativeSchedulerApiPath('/api/native-anki/health'), { headers: authHeaders() });
+      if (!health.ok) { toastMsg('❌ 网页调度服务不可用'); return; }
+    } catch (_) { toastMsg('❌ 网页调度服务不可用'); return; }
+  } else {
+    const ver = await ankiPostCall({ action: 'version', version: 6 });
+    if (!ver || !ver.ok) { toastMsg('❌ Anki 未运行或 AnkiConnect 未连接'); return; }
+  }
   await ensureQuizModelAndDeck();
   // 先修复已经存在的薄弱点填空卡，再生成新题；这样旧卡也会得到括号词根提示。
   const quizRepaired = await repairExistingQuizQuestions();
@@ -678,6 +731,9 @@ async function pushAllToAnki() {
     const vocabByWord = new Map(vocab.filter(v => v && v.word).map(v => [v.word.trim().toLowerCase(), v]));
     const repairCandidates = [];
     try {
+      if (nativeMode) {
+        existingWords.clear();
+      } else {
       const allNotes = await ankiPostCall({ action: 'findNotes', version: 6, params: { query: 'deck:' + ankiVocabDeck() + ' tag:vocabulary' } });
       if (allNotes && allNotes.ok && allNotes.result && allNotes.result.result) {
         const ids = allNotes.result.result;
@@ -719,6 +775,7 @@ async function pushAllToAnki() {
           }
         }
       }
+      }
     } catch (e) { dbg('ANKI_VOCAB_FETCH', e.message); }
     if (repairCandidates.length) {
       const generated = await generateMissingVocabMeanings(repairCandidates.map(c => c.word));
@@ -753,7 +810,9 @@ async function pushAllToAnki() {
       notes.push({ deckName: ankiVocabDeck(), modelName: VOCAB_MODEL, fields: { Front: front, Back: back }, tags: [ankiUserTag(), 'vocabulary'] });
     }
     if (notes.length) {
-      const r = await ankiAddNotesBatch(notes);
+      const r = (typeof isNativeSchedulerMode === 'function' && isNativeSchedulerMode() && typeof nativeSchedulerCreateNotes === 'function')
+        ? await nativeSchedulerCreateNotes(notes)
+        : await ankiAddNotesBatch(notes);
       vocabAdded = r.added || 0;
       toastMsg('📚 生词本：已添加 ' + vocabAdded + ' / ' + notes.length + '（已存在 ' + vocabSkipped + '，修复旧卡 ' + vocabRepaired + '）');
     } else {
@@ -791,22 +850,11 @@ async function pushAllToAnki() {
 }
 
 // ---- 从 Anki 拉取复习数据 → 更新 weak points 掌握状态 ----
-let _ankiReviewSync = { key: '', started: 0, promise: null };
-function syncAnkiReviewData(options = {}) {
-  const key = String(currentUser() || 'default');
-  const now = Date.now();
-  // Collapse duplicate background syncs caused by login + mode rendering.
-  if (!options.force && _ankiReviewSync.promise && _ankiReviewSync.key === key) return _ankiReviewSync.promise;
-  if (!options.force && _ankiReviewSync.key === key && now - _ankiReviewSync.started < 30000) return Promise.resolve(false);
-  _ankiReviewSync = { key, started: now, promise: null };
-  const promise = syncAnkiReviewDataImpl().finally(() => {
-    if (_ankiReviewSync.key === key) _ankiReviewSync.promise = null;
-  });
-  _ankiReviewSync.promise = promise;
-  return promise;
-}
-
-async function syncAnkiReviewDataImpl() {
+async function syncAnkiReviewData() {
+  if (typeof isNativeSchedulerMode === 'function' && isNativeSchedulerMode()) {
+    try { await syncNativeSchedulerReviewData(); } catch (e) { dbg('NATIVE_SYNC', e.message); }
+    return;
+  }
   try {
     // 检查连接
     const ver = await ankiPostCall({ action: 'version', version: 6 });
@@ -859,6 +907,30 @@ async function syncAnkiReviewDataImpl() {
 async function renderAnkiSidebar() {
   const el = document.getElementById('ankiSidebar');
   if (!el) return;
+  if (typeof isNativeSchedulerMode === 'function' && isNativeSchedulerMode()) {
+    try {
+      const response = await nativeSchedulerDueCards({ limit: 2000 });
+      const cards = Array.isArray(response && response.data) ? response.data : [];
+      const queueCounts = typeof webReviewQueueCounts === 'function'
+        ? webReviewQueueCounts(cards)
+        : cards.reduce((counts, card) => {
+            const state = String(card && (card.state_name || card.state) || '').toLowerCase();
+            if (state === 'new') counts.new++;
+            else if (state === 'learning' || state === 'relearning' || state === 'learn') counts.learn++;
+            else if (state === 'review') counts.review++;
+            return counts;
+          }, { new: 0, learn: 0, review: 0 });
+      const total = Number(response && (response.total ?? response.total_cards ?? response.count));
+      const pending = Number.isFinite(total) && total >= 0 ? total : cards.length;
+      el.innerHTML = '<div class="anki-sidebar-section"><div class="anki-sidebar-header">网页 FSRS</div>' +
+        '<div class="anki-sidebar-stat">待处理 ' + pending + '</div>' +
+        '<div class="anki-sidebar-detail">待新学 ' + queueCounts.new + ' · 待重来 ' + queueCounts.learn + ' · 待复习 ' + queueCounts.review + '</div>' +
+        '<button data-action="start-web-review" style="width:100%;padding:6px 0;border-radius:6px;border:none;background:var(--primary);color:#fff;font-size:12px;cursor:pointer;margin-top:4px">▶ 开始复习</button></div>';
+    } catch (_) {
+      el.innerHTML = '<div class="anki-sidebar-section"><div class="anki-sidebar-header">网页 FSRS</div><div class="anki-sidebar-stat" style="color:var(--text2)">服务不可用</div></div>';
+    }
+    return;
+  }
   try {
     const ver = await ankiPostCall({ action: 'version', version: 6 }).then(d => d.result && d.result.result).catch(() => null);
     if (!ver) {
@@ -921,3 +993,4 @@ async function renderAnkiSidebar() {
     el.innerHTML = '<div class="anki-sidebar-section"><div class="anki-sidebar-header">📚 Anki</div><div class="anki-sidebar-stat" style="color:var(--text2)">❌ 连接失败</div></div>';
   }
 }
+

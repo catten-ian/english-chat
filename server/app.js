@@ -31,7 +31,11 @@ const feedbackRoutes = require('./routes/feedback');
 const weakPointRoutes = require('./routes/weak-points');
 const providerRoutes = require('./routes/providers');
 const readingSourceRoutes = require('./routes/reading-sources');
+const nativeAnkiRoutes = require('./routes/native-anki');
 const worldGameRoutes = require('./routes/world-game');
+// Static prefix kept here for the route contract checker; the handler validates
+// the concrete card id and action in server/routes/native-anki.js.
+const NATIVE_ANKI_CARDS_ROUTE = '/api/native-anki/cards/';
 const { serveStatic, serveGamePage } = require('./routes/static');
 
 /* 启动数据准备：迁移已在 db.js 完成，这里播种默认账户（幂等） */
@@ -82,7 +86,10 @@ const server = http.createServer(async (req, res) => {
     if (method === 'POST' && pathname === '/api/sync/conversations') return await conversationSyncRoutes.peer(req, res);
 
     if (method === 'GET' && !pathname.startsWith('/api/')) {
-      if (['/', '/english', '/english/'].includes(pathname) && ['dev/world-game', 'beta/world-game'].includes(url.searchParams.get('version'))) { serveGamePage(res); return; }
+      if (['/', '/english', '/english/'].includes(pathname) && ['dev/world-game', 'beta/world-game'].includes(url.searchParams.get('version'))) {
+        serveGamePage(res);
+        return;
+      }
       // The public reverse-proxy entry is /english?version=dev.  Relative
       // assets must stay under the dev mount instead of resolving to /js/.
       const baseHref = process.env.AI_EN_PUBLIC_BASE || null;
@@ -179,6 +186,10 @@ const server = http.createServer(async (req, res) => {
 
     // AnkiConnect 代理
     if (method === 'POST' && pathname === '/api/proxy/anki') return await proxyRoutes.ankiProxy(req, res);
+
+    // 网页 FSRS 本地调度器（通过后端认证代理，前端无需接触调度器密钥）
+    if (method === 'GET' && pathname === '/api/native-anki/health') return await nativeAnkiRoutes.nativeAnki(req, res);
+    if (pathname.startsWith('/api/native-anki/')) return await nativeAnkiRoutes.nativeAnki(req, res);
 
     // 静态
     if (method === 'GET') { serveStatic(res, pathname); return; }

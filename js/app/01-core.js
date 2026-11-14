@@ -42,10 +42,11 @@ function agentLog(agent, msg) {
   if (agentRuntimeLog.length > 300) agentRuntimeLog.shift();
 }
 
-// 用户级模型偏好：默认保持 MiniMax M3；自定义 provider 通过服务端
+// 用户级模型偏好：默认使用 gpt-6.1-terra，MiniMax M3.1 作为回退；自定义 provider 通过服务端
 // OpenAI-compatible 代理解析，密钥不会进入浏览器或 user_data。
 const LLM_PROVIDER_OPTIONS = Object.freeze({
-  minimax: { label: 'MiniMax', model: 'MiniMax-M3' },
+  aihub8: { label: 'AIHub8', model: 'gpt-6.1-terra', models: ['gpt-6.1-terra'] },
+  minimax: { label: 'MiniMax', model: 'MiniMax-M3.1', models: ['MiniMax-M3', 'MiniMax-M3.1'] },
   openai: { label: 'OpenAI', model: 'gpt-4o-mini' },
   deepseek: { label: 'DeepSeek', model: 'deepseek-chat' },
   qwen: { label: 'Qwen', model: 'qwen-plus' },
@@ -54,9 +55,17 @@ const LLM_PROVIDER_OPTIONS = Object.freeze({
   ollama: { label: 'Ollama', model: 'qwen3:8b' },
   custom: { label: 'Custom OpenAI-compatible', model: '' }
 });
-function validLlmProvider(provider) { return Object.hasOwn(LLM_PROVIDER_OPTIONS, provider) ? provider : 'minimax'; }
+const MINIMAX_MODEL_OPTIONS = Object.freeze(['MiniMax-M3', 'MiniMax-M3.1']);
+function validLlmProvider(provider) { return Object.hasOwn(LLM_PROVIDER_OPTIONS, provider) ? provider : 'aihub8'; }
+
+function normalizeLLMContent(value) {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(part => typeof part === 'string' ? part : (part && (part.text || part.content || ''))).join('');
+  if (value && typeof value === 'object') return String(value.text || value.content || '');
+  return '';
+}
 function llmPreference() {
-  const provider = getSetting('llmProvider', 'minimax');
+  const provider = getSetting('llmProvider', 'aihub8');
   const validProvider = validLlmProvider(provider);
   const visionProvider = getSetting('llmVisionProvider', 'same');
   return {
@@ -311,8 +320,11 @@ async function callAPI(messages, options) {
     temperature: options.temperature ?? 0.8,
     max_tokens: options.maxTokens ?? 3200
   };
+  // null explicitly opts out of the app's output cap; undefined keeps legacy defaults.
+  if (options.maxTokens === null) delete body.max_tokens;
   // 翻译/词典场景禁用思考模式
   if (options.thinking !== undefined) body.thinking = options.thinking;
+  if (options.reasoningEffort !== undefined) body.reasoning_effort = options.reasoningEffort;
   // Use backend proxy (same-origin) to avoid CORS issues
   const proxyUrl = (BACKEND_URL || '') + '/api/proxy/chat';
   const res = await fetch(proxyUrl, {
@@ -328,7 +340,7 @@ async function callAPI(messages, options) {
   }
   const data = await res.json();
   const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
-  const content = msg.content || '';
+  const content = normalizeLLMContent(msg.content);
   const thinking = msg.reasoning_content || msg.thinking || '';
   lastRawResponse = content;
   lastThinking = thinking || '';

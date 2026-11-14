@@ -4,7 +4,7 @@
    This file must NEVER contain keys.
 ============================================================ */
 const API_URL = 'https://api.minimaxi.com/v1/chat/completions';
-const MODEL = 'MiniMax-M3';
+const MODEL = 'gpt-6.1-terra';
 
 const ELEVEN_VOICE_ID = 'BZgkqPqms7Kj9ulSkVzn';
 const ELEVEN_MODEL = 'eleven_v3';

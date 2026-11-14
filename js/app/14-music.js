@@ -16,6 +16,8 @@
 let musicItems = [];          // [{ file, name }]
 let musicIdx = -1;            // 当前播放索引
 let musicAudio = null;        // Audio 实例
+let musicPreloadAudio = null; // 下一首的预加载 Audio 实例
+let musicPreloadIdx = -1;
 let musicBubbleTimer = null;  // 气泡自动隐藏定时器
 let musicClickTimer = null;   // 单击/双击区分定时器
 let musicTabId = null;        // 本标签页唯一 ID（跨标签页互斥用）
@@ -80,7 +82,7 @@ function initMusicChannel() {
         if (Number.isInteger(m.idx) && m.idx >= 0 && m.idx < musicItems.length) {
           musicIdx = m.idx;
           if (musicAudio && musicAudio.src) {
-            musicAudio.src = (BACKEND_URL || '') + '/music/' + encodeURIComponent(musicItems[m.idx].file);
+            musicAudio.src = musicAssetUrl(musicItems[m.idx]);
           }
           updateMusicUI();
         }
@@ -95,6 +97,40 @@ function initMusicChannel() {
 function musicSettingsOptions() {
   if (!musicItems.length) return '<option value="">暂无曲目</option>';
   return musicItems.map((item, i) => `<option value="${i}" ${i === musicIdx ? 'selected' : ''}>${esc(item.name || item.file)}</option>`).join('');
+}
+
+function musicAssetUrl(item) {
+  if (!item) return '';
+  const file = encodeURIComponent(String(item.file || '')).replace(/%2F/gi, '');
+  const version = item.version ? '?v=' + encodeURIComponent(String(item.version)) : '';
+  return (BACKEND_URL || '') + '/music/' + file + version;
+}
+
+function musicNextIndex() {
+  if (!musicItems.length) return -1;
+  if (musicMode() === 'shuffle' && musicItems.length > 1) {
+    let n = musicIdx;
+    while (n === musicIdx) n = Math.floor(Math.random() * musicItems.length);
+    return n;
+  }
+  return (musicIdx + 1) % musicItems.length;
+}
+
+function musicPreloadNext() {
+  const next = musicNextIndex();
+  if (next < 0 || next === musicIdx || musicPreloadIdx === next) return;
+  try {
+    if (musicPreloadAudio) { musicPreloadAudio.src = ''; musicPreloadAudio = null; }
+    const audio = new Audio();
+    audio.preload = 'auto';
+    audio.src = musicAssetUrl(musicItems[next]);
+    audio.addEventListener('error', function() {
+      if (musicPreloadIdx === next) { musicPreloadIdx = -1; musicPreloadAudio = null; }
+    }, { once: true });
+    if (typeof audio.load === 'function') audio.load();
+    musicPreloadAudio = audio;
+    musicPreloadIdx = next;
+  } catch (e) { musicPreloadAudio = null; musicPreloadIdx = -1; }
 }
 
 function applyMusicEnabledUI() {
@@ -129,7 +165,7 @@ async function musicInit() {
     const res = await fetch((BACKEND_URL || '') + '/api/music/list', { cache: 'no-store' });
     if (!res.ok) throw new Error('music list HTTP ' + res.status);
     const data = await res.json();
-    musicItems = (data.files || []).map(f => ({ file: f.file, name: f.name }));
+    musicItems = (data.files || []).map(f => ({ file: f.file, name: f.name, version: f.version || '' }));
     if (musicItems.length) {
       const savedIdx = parseInt(localStorage.getItem('ai_en_music_idx') || '-1', 10);
       musicIdx = (savedIdx >= 0 && savedIdx < musicItems.length) ? savedIdx : 0;
@@ -212,6 +248,10 @@ function advanceTrack() {
   if (!musicItems.length) return;
   const mode = musicMode();
   if (mode === 'single') { musicPlayIdx(musicIdx); return; }
+  if (musicPreloadIdx >= 0 && musicPreloadIdx !== musicIdx) {
+    musicPlayIdx(musicPreloadIdx);
+    return;
+  }
   if (mode === 'shuffle' && musicItems.length > 1) {
     let n = musicIdx;
     while (n === musicIdx) n = Math.floor(Math.random() * musicItems.length);
@@ -230,10 +270,16 @@ function musicPlayIdx(i, isResume) {
   // but replace the encoded slash defensively if a malformed server entry ever
   // contains one. Audio URLs are same-origin and therefore work for both stable
   // and /api-dev deployments.
-  const encodedFile = encodeURIComponent(String(musicItems[i].file || '')).replace(/%2F/gi, '');
-  const url = (BACKEND_URL || '') + '/music/' + encodedFile;
-  if (!musicAudio) musicAudio = new Audio();
-  musicAudio.src = url;
+  const preloaded = musicPreloadAudio && musicPreloadIdx === i ? musicPreloadAudio : null;
+  if (musicAudio && musicAudio !== preloaded) musicAudio.pause();
+  if (preloaded) {
+    musicAudio = preloaded;
+    musicPreloadAudio = null;
+    musicPreloadIdx = -1;
+  } else {
+    if (!musicAudio) musicAudio = new Audio();
+    musicAudio.src = musicAssetUrl(musicItems[i]);
+  }
   musicAudio.loop = false;
   musicAudio.volume = (parseFloat(localStorage.getItem('ai_en_music_vol') || '60') / 100);
   musicAudio.onended = function() {
@@ -260,6 +306,7 @@ function musicPlayIdx(i, isResume) {
     musicAudio.addEventListener('playing', function() {
       musicErrStreak = 0;
       updateMusicUI();
+      musicPreloadNext();
     });
   }
   musicErrStreak = 0;
@@ -277,10 +324,15 @@ function musicPlayIdx(i, isResume) {
   musicBroadcast({ type: 'play', idx: i });            // 播放新曲 → 顶掉其它页
   musicSyncProgress();
   updateMusicUI();
+  musicPreloadNext();
 }
 
 function musicNext() {
   if (!musicItems.length) return;
+  if (musicPreloadIdx >= 0 && musicPreloadIdx !== musicIdx) {
+    musicPlayIdx(musicPreloadIdx);
+    return;
+  }
   // 随机模式下手动切歌也随机走
   if (musicMode() === 'shuffle' && musicItems.length > 1) {
     let n = musicIdx;

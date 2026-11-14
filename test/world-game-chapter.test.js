@@ -80,6 +80,21 @@ test('quiz shows only the next unanswered question and submits an explicit selec
   assert.deepEqual(h.calls.at(-1), ['settle']);
 });
 
+test('quiz provenance remains explicit on resume without exposing content revisions', () => {
+  const h = harness(); h.panel.update(h.journey); h.panel.open();
+  const quiz = { quizId: 'reviewed-quiz', stageId: 'low-tide', source: 'ai_assembled', revision: 'secret-internal-revision-42', questions: [{ q: 'Which account agrees?', options: ['A', 'B', 'C', 'D'] }], answers: [] };
+  h.panel.showQuiz(quiz);
+  assert.match(h.document.querySelector('.wg-chapter-body').textContent, /AI assembled from reviewed questions/);
+  assert.doesNotMatch(h.document.querySelector('.wg-chapter-body').textContent, /secret-internal-revision|AI.generated/i);
+  h.panel.update({ ...h.journey, quiz: { ...quiz, source: 'authored_fallback' } });
+  assert.match(h.document.querySelector('.wg-chapter-body').textContent, /Reviewed questions - authored fallback/);
+  assert.doesNotMatch(h.document.querySelector('.wg-chapter-body').textContent, /AI assembled/);
+  h.panel.clearQuiz();
+  assert.equal(h.document.querySelector('fieldset'), null);
+  assert.equal(findButton(h.document, 'Resume your conclusion'), undefined);
+  assert.ok(findButton(h.document, 'Make your case'));
+});
+
 test('failed settlements preserve investigation; only authoritative completion offers the next chapter', () => {
   const h = harness(); h.panel.update(h.journey); h.panel.open();
   h.panel.showSettlement({ stageId: 'low-tide', complete: false, summary: 'Check the accounts again.', score: 0, total: 3 });
@@ -209,6 +224,8 @@ test('provider failures surface configuration guidance rather than chapter-lock 
   assert.match(chapterError(new GameApiError(503, { error: 'provider_not_configured', provider: 'minimax' })), /MiniMax is not configured/);
   assert.match(chapterError(new GameApiError(403, { error: '赠送调用仅支持' })), /sponsored calls/);
   assert.match(providerError(401, { error: 'upstream_error' }), /rejected its credentials/);
+  assert.match(chapterError(new GameApiError(409, { error: 'quiz_refreshed' })), /earlier conclusions were refreshed/);
+  assert.match(chapterError(new GameApiError(409, { error: 'quiz_refreshed' })), /interviews and completed chapters are safe/);
   assert.equal(providerError(503, { error: 'provider_not_configured', provider: '<script>alert(1)</script>' }).includes('<script>'), false);
 });
 
@@ -275,4 +292,52 @@ test('main surfaces rejected NPC provider configuration, reconciles its feedback
   assert.match(document.querySelector('#wg-feedback-service-status').textContent, /already queued or ready/);
   assert.equal(document.querySelector('#wg-feedback-list button'), null, 'conflicting retry refreshes authoritative pending state');
   window.dispatchEvent(new window.Event('pagehide'));
+});
+
+test('main retires refreshed answer and settlement IDs, resumes replacements and does not assemble automatically', async () => {
+  for (const operation of ['answer', 'settle']) for (const recovery of ['empty', 'replacement', 'offline']) {
+    const { document, window } = parseHTML('<html><body><main id="game-root"></main></body></html>');
+    const calls = [], shown = [], errors = [];
+    let actions, load, stateReads = 0, clears = 0;
+    const quiz = id => ({ quizId: id, stageId: 'low-tide', source: id === 'old-quiz' ? 'ai_assembled' : 'authored_fallback', questions: [{ q: 'Which account?', options: ['A', 'B', 'C', 'D'] }], answers: [] });
+    load = modules({
+      document, window, HTMLButtonElement: window.HTMLButtonElement, AbortController, AbortSignal, TextDecoder, URLSearchParams,
+      performance: { now: () => 0 }, location: { pathname: '/english', search: '?version=beta/world-game' },
+      localStorage: { getItem: key => key === 'ai_en_token' ? 'fixture-token' : null, setItem() {} }, sessionStorage: { getItem: () => null },
+      setTimeout: () => 1, clearTimeout() {}, requestAnimationFrame: () => 1, cancelAnimationFrame() {},
+      __moduleMocks: {
+        './render/renderer': { createRenderer: () => ({ setMode() {}, render() {}, dispose() {} }) },
+        './ui/chapter': { createChapterPanel(root, handlers) { actions = handlers; return { update() {}, idle() {}, busy() {}, error(text) { errors.push(text); }, showQuiz(value) { shown.push(value.quizId); }, clearQuiz() { clears++; } }; } }
+      },
+      async fetch(url, options) {
+        calls.push({ url, body: options.body && JSON.parse(options.body) });
+        let status = 200, data;
+        if (url.endsWith('/state')) {
+          stateReads++;
+          if (stateReads > 1 && recovery === 'offline') throw new Error('offline');
+          data = { stageId: 'low-tide', unlockedStageIds: ['low-tide'], completedStageIds: [], stages: load('content/world.ts').STAGES, position: { x: 1.2, z: -10.5 }, evidence: [], visitedNpcIds: ['eli', 'mara'], feedback: { records: [], summaries: [] }, ...(stateReads > 1 && recovery === 'replacement' ? { quiz: quiz('new-quiz') } : {}) };
+        } else if (url.endsWith('/feedback')) data = { records: [], summaries: [] };
+        else if (url.endsWith('/questions')) data = quiz('old-quiz');
+        else if (url.endsWith('/answer') || url.endsWith('/settle')) { status = 409; data = { error: 'quiz_refreshed' }; }
+        else assert.fail(`unexpected request ${url}`);
+        return { ok: status === 200, status, json: async () => data };
+      }
+    });
+    load('main.ts'); await new Promise(resolve => setImmediate(resolve));
+    actions.start(); await new Promise(resolve => setImmediate(resolve));
+    const act = () => operation === 'answer' ? actions.answer(0, 1) : actions.settle();
+    act(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(stateReads, 2, `${operation}/${recovery} reloads state`);
+    assert.ok(clears >= 1);
+    assert.match(errors.at(-1), /earlier conclusions were refreshed/);
+    assert.match(errors.at(-1), /interviews and completed chapters are safe/);
+    if (recovery === 'replacement') assert.equal(shown.at(-1), 'new-quiz');
+    const postsBefore = calls.filter(call => call.url.endsWith('/' + operation)).length;
+    act(); await new Promise(resolve => setImmediate(resolve));
+    const posts = calls.filter(call => call.url.endsWith('/' + operation));
+    if (recovery === 'replacement') assert.equal(posts.at(-1).body.quizId, 'new-quiz', 'resumed replacement is authoritative');
+    else assert.equal(posts.length, postsBefore, 'obsolete ID cannot be submitted again even if recovery was offline');
+    assert.equal(calls.filter(call => call.url.endsWith('/questions')).length, 1, 'recovery does not start paid assembly');
+    window.dispatchEvent(new window.Event('pagehide'));
+  }
 });

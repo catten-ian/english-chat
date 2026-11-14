@@ -270,6 +270,65 @@ function smartParseJSON(text) {
 
 function tryParseJSON(s) { return smartParseJSON(s); }
 
+// Keep complete grading/dictionary objects, including provider wrappers and encoded JSON.
+// Never close truncated JSON or turn a partial score into a completed evaluation.
+function parseStructuredResponse(raw, expectedCheck) {
+  const queue = [{ value: raw, depth: 0 }];
+  while (queue.length) {
+    const { value, depth } = queue.shift();
+    // Providers may wrap text in response -> content[] -> { type, text } -> JSON.
+    if (depth > 8) continue;
+    if (typeof value === 'string') {
+      let decoded;
+      try { decoded = JSON.parse(value); } catch (_) {}
+      if (typeof decoded === 'string') queue.push({ value: decoded, depth: depth + 1 });
+      const parsed = smartParseJSON(value);
+      if (parsed) queue.push({ value: parsed, depth: depth + 1 });
+      // The first JSON block may be an example, not the actual result.
+      for (const block of extractBalancedBlocks(value)) {
+        const item = smartParseJSON(block);
+        if (item) queue.push({ value: item, depth: depth + 1 });
+      }
+    } else if (value && typeof value === 'object') {
+      if (!Array.isArray(value) && (!expectedCheck || expectedCheck(value))) return value;
+      if (Array.isArray(value)) for (const item of value.slice(0, 8)) queue.push({ value: item, depth: depth + 1 });
+      for (const key of ['result', 'data', 'evaluation', 'feedback', 'output', 'content', 'text', 'response', 'answer']) {
+        if (value[key] !== undefined) queue.push({ value: value[key], depth: depth + 1 });
+      }
+    }
+  }
+  return null;
+}
+
+// At most two streaming requests: the retry repairs malformed/truncated output.
+async function streamAndParseJSON(messages, options, expectedCheck, onDelta, signal) {
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let raw = '', finishReason = '';
+    const requestMessages = attempt ? [
+      ...messages,
+      { role: 'user', content: 'The previous response was incomplete or not valid for the requested JSON schema. Re-evaluate the original input and return exactly one COMPLETE JSON object using the requested fields and types. Escape quotes and newlines inside strings. Do not include examples, markdown or commentary.' }
+    ] : messages;
+    try {
+      raw = await streamDict(requestMessages, {
+        ...options,
+        onFinish: reason => { finishReason = reason; }
+      }, delta => { raw += delta; if (onDelta) onDelta(delta); }, signal);
+    } catch (error) {
+      if (error.name === 'AbortError' || signal?.aborted || error.status === 401 || error.status === 403 || error.status === 429) throw error;
+      if (error.status && error.status < 500) throw error;
+      lastError = error;
+    }
+    // Some compatible gateways mislabel a complete payload as `length`; the
+    // schema check is authoritative, while truncated JSON still fails it.
+    const obj = parseStructuredResponse(raw, expectedCheck);
+    if (obj) return { obj, raw };
+    if (attempt === 0 && typeof options.onRetry === 'function') options.onRetry();
+    if (!lastError) lastError = new Error(finishReason === 'length' ? '提供商返回内容达到模型输出上限，评分未完成，请重试' : '模型未返回完整有效的评分或查询结果，已自动重试一次，请重试');
+  }
+  throw lastError;
+}
+
 // 调用模型并高容忍解析 JSON；解析失败时自动重试（最多 attempts 次，重试追加严格约束）
 async function callAndParseJSON(messages, options, expectedCheck, attempts) {
   attempts = attempts || 3;

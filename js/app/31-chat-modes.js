@@ -47,7 +47,7 @@
     const options = window.LLM_PROVIDER_OPTIONS || {};
     const provider = Object.prototype.hasOwnProperty.call(options, stored('chatLlmProvider', 'minimax'))
       ? stored('chatLlmProvider', 'minimax') : 'minimax';
-    const fallback = options[provider] && options[provider].model ? options[provider].model : 'MiniMax-M3';
+    const fallback = options[provider] && options[provider].model ? options[provider].model : 'gpt-6.1-terra';
     return {
       provider,
       textModel: safeString(stored('chatLlmTextModel', fallback), 120) || fallback
@@ -187,7 +187,7 @@
       <label style="display:block;font-size:12px;margin:5px 0">模式<select id="setChatMode" style="width:100%;padding:6px;margin-top:3px"><option value="natural" ${v.mode === 'natural' ? 'selected' : ''}>自然聊天</option><option value="debate" ${v.mode === 'debate' ? 'selected' : ''}>人机辩论</option><option value="scenario" ${v.mode === 'scenario' ? 'selected' : ''}>情景会话</option></select></label>
       <label style="display:block;font-size:12px;margin:5px 0">情景预设<select id="setChatScenario" style="width:100%;padding:6px;margin-top:3px">${Object.entries(SCENARIOS).map(([id, x]) => `<option value="${id}" ${v.scenario === id ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
       <label style="display:block;font-size:12px;margin:5px 0">聊天专用提供商<select id="setChatLlmProvider" style="width:100%;padding:6px;margin-top:3px">${Object.entries(providers).map(([id, x]) => `<option value="${id}" ${v.provider === id ? 'selected' : ''}>${esc(x.label || id)}</option>`).join('')}</select></label>
-      <input id="setChatLlmTextModel" value="${esc(v.model)}" placeholder="聊天模型（默认 MiniMax-M3）" style="width:100%;box-sizing:border-box;padding:6px;margin:3px 0">
+      <input id="setChatLlmTextModel" value="${esc(v.model)}" placeholder="聊天模型（默认 gpt-6.1-terra）" style="width:100%;box-sizing:border-box;padding:6px;margin:3px 0">
       <label style="display:block;font-size:12px;margin:5px 0">辩论立场<select id="setChatDebateSide" style="width:100%;padding:6px;margin-top:3px"><option value="ai_pro" ${v.side === 'ai_pro' ? 'selected' : ''}>AI 维护题目立场</option><option value="user_pro" ${v.side === 'user_pro' ? 'selected' : ''}>AI 反驳用户立场</option></select></label>
       <div style="font-size:11px;color:var(--text2);margin-top:6px">支持 Tavern Character Card JSON（含 data）和 World Book entries。导入后会按账户保存。</div>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><label class="a-btn small">导入角色卡<input id="tavernCharacterFile" type="file" accept=".json,application/json" style="display:none"></label><label class="a-btn small">导入世界书<input id="tavernWorldbookFile" type="file" accept=".json,application/json" style="display:none"></label></div>

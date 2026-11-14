@@ -90,7 +90,20 @@ describe('静态文件服务', () => {
     assert.ok(csp, '必须返回 Content-Security-Policy');
     assert.match(csp, /script-src 'self'/, 'script-src 应为严格同源策略');
     assert.ok(!/unsafe-inline/.test(csp.split('script-src')[1].split(';')[0]), 'script-src 不得含 unsafe-inline');
+    assert.match(csp, /script-src 'self' https:\/\/cdn\.jsdelivr\.net/);
+    assert.match(csp, /connect-src 'self' blob: https:\/\/cdn\.jsdelivr\.net https:\/\/esm\.sh https:\/\/dl\.polyhaven\.org/);
     assert.match(csp, /object-src 'none'/, '应禁用插件对象');
+  });
+
+  test('音乐清单带文件版本，音频资源使用长期本地缓存', async () => {
+    const list = await request({ port: srv.port, path: '/api/music/list' });
+    assert.strictEqual(list.status, 200);
+    const item = JSON.parse(list.body).files[0];
+    assert.ok(item && item.version, '音乐条目必须带版本标识');
+    assert.match(item.version, /^\d+-\d+$/, '版本应由修改时间和文件大小组成');
+    const audio = await request({ port: srv.port, path: '/music/' + encodeURIComponent(item.file) });
+    assert.strictEqual(audio.status, 200);
+    assert.strictEqual(audio.headers['cache-control'], 'public, max-age=31536000, immutable');
   });
 
   test('/api/health 不泄露数据库绝对路径', async () => {

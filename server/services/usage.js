@@ -131,8 +131,8 @@ function finishGiftCall(reservationId, status) {
     .run(Number(status) >= 200 && Number(status) < 400 ? 'committed' : 'released', reservationId);
 }
 
-// Gift quota applies to the site's supported learning models. Other upstream
-// services and utility calls must not consume the daily allowance.
+// Gift quota applies only to the site's sponsored learning models. Other
+// upstream services and utility calls must not consume the daily allowance.
 function isGiftLearningRequest(entry) {
   if (!entry || !['minimax', 'aihub8'].includes(entry.provider)) return false;
   const kind = String(entry.kind || '');

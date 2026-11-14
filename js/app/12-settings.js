@@ -12,6 +12,21 @@ function getSavedCharacters() {
   const customs = (Array.isArray(v) ? v : []).filter(c => c && c.id && !builtins.includes(c.id));
   return [...CHARACTERS, ...customs];
 }
+function settingsVersionSwitchMarkup() {
+  const requested = new URLSearchParams(location.search).get('version');
+  const current = requested === 'dev' || requested === 'old' ? requested : 'stable';
+  const versions = [
+    ['dev', 'DEV', '/english/?version=dev'],
+    ['stable', 'STABLE', '/english/?version=stable'],
+    ['old', 'OLD', '/english/?version=old']
+  ];
+  return `<div data-section="version-switch" style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px">🧭 版本切换</div>
+    <nav aria-label="版本切换" style="display:flex;gap:6px;padding:4px;border:1px solid var(--border);border-radius:8px;background:var(--bg)">
+      ${versions.map(([id, label, href]) => `<a href="${href}"${id === current ? ' aria-current="page"' : ''} style="flex:1;text-align:center;padding:7px 5px;border-radius:5px;text-decoration:none;font-size:12px;font-weight:600;color:${id === current ? '#fff' : 'var(--text)'};background:${id === current ? 'var(--primary)' : 'transparent'}">${label}</a>`).join('')}
+    </nav>
+  </div>`;
+}
 function openSettings() {
   // Remove all stuck overlays/modals first
   removeAllModals();
@@ -58,6 +73,7 @@ function openSettings() {
     : '<div class="empty" style="padding:8px 0;font-size:12px">暂无指令</div>';
   modal.innerHTML = `<div class="modal-header"><h3 id="settingsTitle">⚙️ 设置</h3><button class="modal-close" data-action="close-overlay" aria-label="关闭">×</button></div>
     <div class="modal-body">
+    ${settingsVersionSwitchMarkup()}
     <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="account">
       <div style="font-size:14px;font-weight:600;margin-bottom:10px">👤 账户</div>
       <div id="giftQuotaStatus" role="status" style="font-size:12px;margin-bottom:8px">正在读取赠送额度...</div>
@@ -340,13 +356,14 @@ function openSettings() {
 
     <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)" data-section="llm">
       <div style="font-size:14px;font-weight:600;margin-bottom:6px">🤖 大模型与搜索偏好</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:8px">默认使用 MiniMax M3。自定义提供商需在服务端配置对应密钥，浏览器不会保存 API key。</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px">默认使用 gpt-6.1-terra；MiniMax M3.1 在主模型失败时自动回退。自定义提供商需在服务端配置对应密钥，浏览器不会保存 API key。</div>
       <label style="display:block;font-size:12px;margin:6px 0">文本模型
         <select id="setLlmProvider" style="width:100%;padding:6px;margin-top:3px">
-          ${Object.entries(LLM_PROVIDER_OPTIONS).map(([id, def]) => `<option value="${id}">${def.label}${id === 'minimax' ? '（默认）' : ''}</option>`).join('')}
+          ${Object.entries(LLM_PROVIDER_OPTIONS).map(([id, def]) => `<option value="${id}">${def.label}${id === 'aihub8' ? '（默认）' : ''}</option>`).join('')}
         </select>
       </label>
-      <input id="setLlmTextModel" type="text" placeholder="文本模型，例如 MiniMax-M3" style="width:100%;box-sizing:border-box;padding:7px;margin-top:4px">
+      <input id="setLlmTextModel" list="minimaxModelOptions" type="text" placeholder="文本模型，例如 gpt-6.1-terra" style="width:100%;box-sizing:border-box;padding:7px;margin-top:4px">
+      <datalist id="minimaxModelOptions"><option value="MiniMax-M3"></option><option value="MiniMax-M3.1"></option></datalist>
       <label style="display:block;font-size:12px;margin-top:8px">多模态提供商
         <select id="setLlmVisionProvider" style="width:100%;padding:6px;margin-top:3px">
           <option value="same">与文本提供商相同</option>
@@ -413,9 +430,9 @@ function openSettings() {
   const llmVisionEl = document.getElementById('setLlmVisionModel');
   const llmVisionProviderEl = document.getElementById('setLlmVisionProvider');
   const searchProviderEl = document.getElementById('setSearchProvider');
-  if (llmProviderEl) llmProviderEl.value = getSetting('llmProvider', 'minimax');
+  if (llmProviderEl) llmProviderEl.value = getSetting('llmProvider', 'aihub8');
   if (llmVisionProviderEl) llmVisionProviderEl.value = getSetting('llmVisionProvider', 'same');
-  if (llmTextEl) llmTextEl.value = getSetting('llmTextModel', 'MiniMax-M3');
+  if (llmTextEl) llmTextEl.value = getSetting('llmTextModel', 'gpt-6.1-terra');
   if (llmVisionEl) llmVisionEl.value = getSetting('llmVisionModel', '');
   if (llmProviderEl && llmTextEl) {
     let previousProvider = validLlmProvider(llmProviderEl.value);
@@ -485,6 +502,7 @@ function restructureSettingsModal(modal) {
     const body = modal.querySelector('.modal-body');
     if (!body) return;
     const sections = [
+      { title: '🧭 版本切换', key: 'version-switch' },
       { title: '👤 账户', matchText: '当前账户' },
       { title: '📝 作答设置', matchText: '作答设置' },
       { title: '🎭 角色卡', matchText: '新建角色' },
@@ -761,7 +779,7 @@ function saveSettings() {
   const strategist = document.getElementById('setStrategist').checked;
   const executor = document.getElementById('setExecutor').checked;
   const dictProvider = document.getElementById('setDictProvider')?.value || 'ai';
-  const llmProvider = document.getElementById('setLlmProvider')?.value || 'minimax';
+  const llmProvider = document.getElementById('setLlmProvider')?.value || 'aihub8';
   const llmTextModel = (document.getElementById('setLlmTextModel')?.value || '').trim().slice(0, 120) || LLM_PROVIDER_OPTIONS[validLlmProvider(llmProvider)].model;
   const llmVisionProvider = document.getElementById('setLlmVisionProvider')?.value || 'same';
   const llmVisionModel = (document.getElementById('setLlmVisionModel')?.value || '').trim().slice(0, 120);

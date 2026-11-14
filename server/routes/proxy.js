@@ -10,8 +10,9 @@
 
 const { corsHeaders, sendJson, readBody } = require('../helpers');
 const {
-  MINIMAX_KEY, ELEVEN_KEY, MINIMAX_BASE, AIHUB8_MODEL,
-  PROXY_TIMEOUT, STREAM_IDLE_TIMEOUT, STREAM_TOTAL_TIMEOUT, MAX_ANKI_BODY
+  MINIMAX_KEY, ELEVEN_KEY, MINIMAX_BASE,
+  AIHUB8_BASE, AIHUB8_KEY, AIHUB8_MODEL,
+  PROXY_TIMEOUT, STREAM_FIRST_BYTE_TIMEOUT, STREAM_IDLE_TIMEOUT, MAX_ANKI_BODY
 } = require('../config');
 const { proxyRequest } = require('../services/proxy');
 const { ankiCall, ankiCache, parseAnkiBody } = require('../services/anki');
@@ -34,22 +35,53 @@ function prepareChatPayload(input, uid, stream) {
     part && ((part.type === 'text' && typeof part.text === 'string' && !!part.text.trim()) ||
       (part.type === 'image_url' && typeof part.image_url?.url === 'string' && /^(https:\/\/|data:image\/(png|jpeg|webp|gif);base64,)/i.test(part.image_url.url))));
   if (!input.messages.every(m => m && ['system', 'user', 'assistant'].includes(m.role) && validContent(m.content))) return { status: 400, error: 'invalid messages' };
+  // 新请求默认走站点的 gpt-6.1-terra；显式选择 MiniMax 时仍可使用 M3.1。
   const requestedProvider = input.provider || (String(input.model || '').startsWith('MiniMax-') ? 'minimax' : 'aihub8');
   const upstream = resolveProvider(requestedProvider, uid);
   const unlimited = user.username === 'catten' || user.username === 'test';
   const gift = !upstream.personal;
   if (gift && !unlimited && ((upstream.id === 'minimax' && input.model && !['MiniMax-M3', 'MiniMax-M3.1'].includes(input.model)) ||
-      (upstream.id === 'aihub8' && input.model && input.model !== 'gpt-6.1-terra') || !['minimax', 'aihub8'].includes(upstream.id))) {
+      (upstream.id === 'aihub8' && input.model && input.model !== 'gpt-6.1-terra') ||
+      !['minimax', 'aihub8'].includes(upstream.id))) {
     return { status: 403, error: '赠送调用仅支持 gpt-6.1-terra / MiniMax-M3.1，其他模型请配置个人 API key' };
   }
   if (!upstream.configured) return { status: 503, error: 'provider_not_configured', provider: upstream.id };
-  const giftModel = upstream.id === 'aihub8' ? AIHUB8_MODEL() : (input.model === 'MiniMax-M3' ? 'MiniMax-M3' : 'MiniMax-M3.1');
+  const giftModel = upstream.id === 'aihub8'
+    ? AIHUB8_MODEL()
+    : (input.model === 'MiniMax-M3' ? 'MiniMax-M3' : 'MiniMax-M3.1');
   const payload = { ...input, model: gift && !unlimited ? giftModel : sanitizeModel(input.model, upstream), stream: !!stream };
   // Credentials and accounting flags are server-owned, never forwarded from clients.
   for (const key of ['provider', 'personal', 'reservationId', 'userId', 'user_id', 'uid', 'quota']) delete payload[key];
   if (upstream.id !== 'minimax') delete payload.thinking;
   if (gift) payload.messages = [{ role: 'system', content: GIFT_LEARNING_SCOPE }, ...input.messages];
   return { upstream, payload };
+}
+
+async function chatUpstreamWithFallback(primary, payload, signal) {
+  const canceled = provider => ({ response: { status: 499, data: Buffer.from(JSON.stringify({ error: 'request_cancelled' })) }, provider });
+  if (signal?.aborted) return canceled(primary);
+  let response;
+  try {
+    response = await proxyRequest(primary.base + '/v1/chat/completions', Buffer.from(JSON.stringify(payload)), { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + primary.key }, undefined, 'POST', signal);
+  } catch (e) {
+    if (signal?.aborted) return canceled(primary);
+    response = { status: 502, data: Buffer.from(JSON.stringify({ error: 'proxy_failed' })) };
+  }
+  if (signal?.aborted) return canceled(primary);
+  const shouldFallback = (response.status === 429 || response.status >= 500) &&
+    ((primary.id === 'aihub8' && MINIMAX_KEY()) || (primary.id !== 'aihub8' && AIHUB8_KEY()));
+  if (!shouldFallback) return { response, provider: primary };
+  const fallback = primary.id === 'aihub8'
+    ? { id: 'minimax', base: MINIMAX_BASE(), key: MINIMAX_KEY(), defaultModel: 'MiniMax-M3.1', personal: false }
+    : { id: 'aihub8', base: AIHUB8_BASE(), key: AIHUB8_KEY(), defaultModel: AIHUB8_MODEL(), personal: false };
+  const fallbackPayload = { ...payload, model: fallback.defaultModel };
+  try {
+    const retry = await proxyRequest(fallback.base + '/v1/chat/completions', Buffer.from(JSON.stringify(fallbackPayload)), { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + fallback.key }, undefined, 'POST', signal);
+    return { response: retry, provider: fallback };
+  } catch (e) {
+    if (signal?.aborted) return canceled(fallback);
+    return { response: { status: 502, data: Buffer.from(JSON.stringify({ error: 'fallback_proxy_failed' })) }, provider: fallback };
+  }
 }
 // MiniMax chat（非流式）
 async function chat(req, res) {
@@ -65,18 +97,16 @@ async function chat(req, res) {
   const outbound = Buffer.from(JSON.stringify(payload));
   const quota = reserveGiftCall(req.uid, { provider: upstream.id, kind: 'chat', model: payload.model, personal: upstream.personal });
   if (!quota.allowed) { sendJson(res, quota.status, { error: quota.error, quota }, req); return; }
-  let r;
-  try {
-    r = await proxyRequest(upstream.base + '/v1/chat/completions', outbound, { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + upstream.key }, undefined, 'POST', req.signal);
-  } catch (e) {
-    r = { status: req.signal?.aborted ? 499 : 502, data: Buffer.from(JSON.stringify({ error: req.signal?.aborted ? 'request_cancelled' : 'proxy_failed' })) };
-  } finally { finishGiftCall(quota.reservationId, r?.status || 502); }
+  const routed = await chatUpstreamWithFallback(upstream, payload, req.signal);
+  const r = routed.response;
+  const billedProvider = routed.provider;
+  finishGiftCall(quota.reservationId, r?.status || 502);
   // 用量记账（只记数字，不记内容）
   const u = parseChatUsage(r.data) || {};
   recordUsage({
-    userId: req.uid, provider: upstream.id, kind: 'chat', model: u.model || payload.model,
+    userId: req.uid, provider: billedProvider.id, kind: 'chat', model: u.model || (billedProvider.id === 'aihub8' ? AIHUB8_MODEL() : payload.model),
     promptTokens: u.promptTokens, completionTokens: u.completionTokens, totalTokens: u.totalTokens,
-    status: r.status, reservationId: quota.reservationId, personal: upstream.personal
+    status: r.status, reservationId: quota.reservationId, personal: billedProvider.personal
   });
   res.writeHead(r.status, { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders(req) });
   res.end(r.data);
@@ -108,8 +138,7 @@ async function chatStream(req, res) {
 
   // 建连 / 等首字节超时
   let connectTimer = setTimeout(abortUpstream, PROXY_TIMEOUT);
-  // 整个流的总时长上限
-  const totalTimer = setTimeout(abortUpstream, STREAM_TOTAL_TIMEOUT);
+  let firstByteTimer = null;
   let idleTimer = null;
   const bumpIdle = () => {
     if (idleTimer) clearTimeout(idleTimer);
@@ -117,7 +146,7 @@ async function chatStream(req, res) {
   };
   const cleanup = () => {
     if (connectTimer) { clearTimeout(connectTimer); connectTimer = null; }
-    clearTimeout(totalTimer);
+    if (firstByteTimer) { clearTimeout(firstByteTimer); firstByteTimer = null; }
     if (idleTimer) clearTimeout(idleTimer);
     req.removeListener('aborted', abortUpstream);
     res.removeListener('close', abortUpstream);
@@ -153,7 +182,7 @@ async function chatStream(req, res) {
 
   res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', 'Connection': 'close', ...corsHeaders(req) });
   const reader = upstreamResponse.body.getReader();
-  bumpIdle();
+  firstByteTimer = setTimeout(abortUpstream, STREAM_FIRST_BYTE_TIMEOUT);
   // 只保留流的尾部用于抽取 usage 帧（MiniMax 在最后一个 data 帧给 usage）。
   // 不累计整段回复：既省内存，也避免把生成内容留在服务端。
   let tail = '';
@@ -163,6 +192,7 @@ async function chatStream(req, res) {
       const { done, value } = await reader.read();
       if (done) break;
       if (closed || res.writableEnded) break;
+      if (firstByteTimer) { clearTimeout(firstByteTimer); firstByteTimer = null; }
       bumpIdle();
       const chunk = Buffer.from(value);
       tail = (tail + chunk.toString('utf8')).slice(-TAIL_MAX);

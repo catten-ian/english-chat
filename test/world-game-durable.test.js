@@ -41,11 +41,14 @@ test('journey, authoritative positions, complete NPC turns, evidence, quizzes an
     successfulTurn(f.store, 1, 'eli', 'How is the lens?', 'durable-eli');
     successfulTurn(f.store, 1, 'mara', 'What did the water reach?', 'durable-mara');
     f.store.move(1, 'low-tide', { x: 5, z: 4 });
-    const quiz = f.store.createQuiz(1, 'low-tide', [question]);
+    const blueprint = require('../server/services/world-game-quiz').authored('low-tide');
+    const quiz = f.store.createQuiz(1, 'low-tide', blueprint.items, blueprint.metadata);
     f.store.answer(1, quiz.id, 0, 1);
     const before = f.store.state(1);
     f.reopen();
     assert.deepEqual(f.store.state(1), before);
+    assert.equal(f.store.state(1).quiz.source, 'authored_fallback');
+    assert.equal(f.store.state(1).quiz.answers[0].correct, true);
     assert.equal(f.store.history(1, 'low-tide', 'eli')[0].content, 'How is the lens?');
     f.store.settle(1, quiz.id, { complete: true, summary: 'The lantern circuit was restored.', score: 1, total: 1 }, settings);
     assert.equal(f.store.changeStage(1, 'storm-line'), true);

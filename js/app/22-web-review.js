@@ -23,7 +23,7 @@ const VOCAB_REC_STREAK = 3;
 function startWebReview() {
   removeAllModals();
   if (webReviewState && webReviewState.keyHandler) document.removeEventListener('keydown', webReviewState.keyHandler);
-  webReviewState = { cardId: null, total: 0, current: 0, correct: 0, queueStats: null, currentQueue: null, history: [] };
+  webReviewState = { cardId: null, total: 0, current: 0, correct: 0, queueStats: null, currentQueue: null, history: [], native: false, nativeCards: [], nativeIndex: -1, nativeReviewed: Object.create(null) };
   const session = webReviewState;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -43,6 +43,26 @@ function startWebReview() {
   // 异步启动复习
   setTimeout(async () => {
     try {
+      if (!(await webReviewRestoreNativeSchedulerMode())) {
+        modal.innerHTML = webReviewSchedulerUnavailableHTML();
+        return;
+      }
+      if (webReviewState !== session) return;
+      if (typeof isNativeSchedulerMode === 'function' && isNativeSchedulerMode()) {
+        session.native = true;
+        modal.innerHTML = '<div style="text-align:center;padding:20px"><div style="font-size:16px;margin-bottom:12px">⏳ 正在读取网页 FSRS 队列…</div><div class="spinner" style="width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto"></div></div>';
+        const response = await nativeSchedulerDueCards({ limit: 2000 });
+        if (webReviewState !== session) return;
+        session.nativeCards = Array.isArray(response && response.data) ? response.data : [];
+        session.queueStats = webReviewQueueCounts(session.nativeCards);
+        session.total = session.nativeCards.length;
+        if (!session.nativeCards.length) {
+          modal.innerHTML = '<div style="text-align:center;padding:24px"><div style="font-size:40px;margin-bottom:12px">🎉</div><div style="font-size:18px;font-weight:700;margin-bottom:8px">没有待复习卡片</div><div style="font-size:14px;color:var(--text2);margin-bottom:4px">网页 FSRS 队列目前为空</div><button data-action="close-overlay" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">关闭</button></div>';
+          return;
+        }
+        fetchNextWebReviewCard();
+        return;
+      }
       // 先检查 Anki 连接
       const ver = await ankiPostCall({ action: 'version', version: 6 });
       if (webReviewState !== session) return;
@@ -84,16 +104,6 @@ function webReviewDeckMatches(cardData) {
   const base = ankiBaseDeck();
   const decks = [base, base + '::薄弱点', base + '::词汇', base + '::纠错', base + '::拓展'];
   return deck === base || deck.startsWith(base + '::');
-}
-
-function webReviewQueueKind(cardData) {
-  if (!cardData) return null;
-  const queue = cardData.queue;
-  if (queue === 0) return 'new';
-  if (queue === 1 || queue === 3 || queue === 4) return 'learn';
-  if (queue === 2) return 'review';
-  if (queue !== undefined && queue !== null) return null;
-  return ({ 0: 'new', 1: 'learn', 2: 'review', 3: 'learn' })[cardData.type] || null;
 }
 
 async function webReviewRefreshQueueStats(cardData) {
@@ -166,6 +176,25 @@ function showWebReviewDeckMismatch(cardData) {
 function fetchNextWebReviewCard() {
   const st = webReviewState;
   if (!st) return;
+  if (st.native) {
+    st.nativeIndex++;
+    if (st.nativeIndex >= st.nativeCards.length) {
+      finishWebReview();
+      return;
+    }
+    const item = st.nativeCards[st.nativeIndex];
+    const cardData = webReviewNativeCardData(item);
+    if (!cardData || !cardData.cardId) {
+      st.current++;
+      fetchNextWebReviewCard();
+      return;
+    }
+    st.cardId = cardData.cardId;
+    st.current = st.nativeIndex + 1;
+    st.currentQueue = webReviewQueueKind(cardData) || (String(cardData.state_name || cardData.state || '').toLowerCase() === 'new' ? 'new' : null);
+    showWebReviewQuestion(cardData);
+    return;
+  }
   (async () => {
     try {
       const card = await ankiPostCall({ action: 'guiCurrentCard', version: 6 });
@@ -365,21 +394,6 @@ function webReviewParseVocabMeaning(raw, expectedWord) {
   return { word, phonetic, pos, inflection, meanings, details };
 }
 
-function webReviewVocabMeaningBlock(raw, expectedWord, hideAnswer) {
-  const p = webReviewParseVocabMeaning(raw, expectedWord);
-  if (hideAnswer) {
-    const count = String(expectedWord || '').trim().split(/\s+/).filter(Boolean).length || 1;
-    const kind = count > 1 ? '词组' : '单词';
-    const hasMeaning = p.meanings.some(m => /[\u3400-\u9fff]/.test(m));
-    return `<div class="wr-vocab-meaning wr-vocab-prompt"><div class="wr-vocab-prompt-label">中文释义</div>${hasMeaning ? '' : '<div class="wr-vocab-prompt-empty">这张旧卡还没有中文释义，请先在生词本补充</div>'}<div class="wr-vocab-prompt-hint">请输入英文${kind}（${count} 个词）</div></div>`;
-  }
-  return `<div class="wr-vocab-meaning">
-    ${p.phonetic || p.pos ? `<div class="wr-vocab-head">${p.phonetic ? `<span class="wr-vocab-phonetic">${esc(p.phonetic)}</span>` : ''}${p.pos ? `<span class="wr-vocab-pos">${esc(p.pos)}</span>` : ''}</div>` : ''}
-    <ol class="wr-vocab-defs">${p.meanings.map(m => `<li>${esc(m)}</li>`).join('') || '<li>暂无中文释义，请在 Anki 中补充</li>'}</ol>
-    ${!hideAnswer && p.inflection ? `<div class="wr-vocab-inflection"><span>词形变化</span>${esc(p.inflection)}</div>` : ''}
-    ${!hideAnswer && p.details ? `<details class="wr-vocab-details"><summary>更多词典信息</summary><div>${esc(p.details)}</div></details>` : ''}
-  </div>`;
-}
 // 生词复习评分后更新阶段；返回是否升入阶段 2
 function webReviewVocabRecord(word, ease) {
   const key = String(word || '').trim().toLowerCase();
@@ -426,11 +440,7 @@ function webReviewQuizType(cardData) {
     const answerLine = parts.findIndex(line => webReviewVocabAnswerLine(line, frontRaw));
     if (answerLine >= 0) parts.splice(answerLine, 1);
     const example = parts.join('\n').trim();
-    const phase = webReviewVocabPhase(word);
-    if (phase === 2) {
-      return { type: 'dictation', word, meaning, example, explanation: '' };
-    }
-    return { type: 'recall', word, meaning, example, explanation: '' };
+    return webReviewVocabQuiz(word, meaning, example);
   }
   aText = webReviewTextFromHTML(answerRaw).trim();
   exp = webReviewTextFromHTML(explanationRaw).replace(/[。.！!？?]?\s*(?:测试点|测试點)\s*[:：][\s\S]*$/, '').trim();
@@ -460,13 +470,15 @@ function webReviewQuizType(cardData) {
       const pos = stem.indexOf('___');
       if (pos >= 0) stem = stem.slice(0, pos) + '___ (' + rootMatch[1].trim() + ')' + stem.slice(pos + 3);
     }
-    if (!rootMatch && !/[\u3400-\u9fff]/.test(stem)) {
-      const cue = webReviewTextFromHTML(explanationRaw).match(/[\u3400-\u9fff][^\n。！？!?]{0,70}/);
-      if (cue) stem += `（提示：${cue[0].trim()}）`;
-    }
-    return { type: 'fill', stem, answer: aText.replace(/^[A-D][\.、\)]?\s*/, '').trim(), explanation: exp };
+    // Explanation is feedback, not a prompt: copying its first Chinese sentence
+    // here can disclose the answer even when the question already has a root.
+    return { type: 'fill', stem, answer: aText.trim(), explanation: exp };
   }
-  return { type: 'manual', stem: qText.trim(), answer: aText, explanation: exp, answerHtml: (cardData && cardData.answer) || '' };
+  const isWeakPointQuiz = (typeof ANKI_QUIZ_MODEL !== 'undefined' && model === ANKI_QUIZ_MODEL) || /::薄弱点\s*$/.test(deck);
+  const stem = isWeakPointQuiz && aText && qText.trim() !== aText.trim()
+    ? 'Correct the error in this sentence:\n' + qText.trim()
+    : qText.trim();
+  return { type: 'manual', stem, answer: aText, explanation: exp, answerHtml: (cardData && cardData.answer) || '' };
 }
 
 function webReviewVocabMeaningText(raw) {
@@ -558,6 +570,17 @@ function showWebReviewQuestion(cardData) {
   const typeLabel = { mc: '选择题', fill: '填空题', manual: '问答题', recall: '生词 · 看英文想中文', dictation: '生词 · 看中文默写英文' }[quiz.type] || '';
   const head = webReviewQueueHeader(typeLabel);
 
+  if (quiz.invalidReason) {
+    modal.innerHTML = head + `<div class="wr-vocab-card"><div class="wr-vocab-label">卡片内容不完整</div><div class="wr-vocab-instruction">${esc(quiz.invalidReason)}</div><div class="wr-vocab-prompt-hint">跳过不会提交评分，这张卡仍保留在 FSRS 队列中。</div></div><div id="wrResult"></div><div id="wrFoot" style="display:flex;gap:8px;justify-content:space-between;align-items:center"><span><button id="wrPrevQ" style="border:0;background:none;color:var(--text2)">◀ 上一题</button><button data-action="close-web-review" style="border:0;background:none;color:var(--text2)">退出复习</button></span><button id="wrSkipInvalid" style="padding:8px 18px;border:0;border-radius:8px;background:var(--primary);color:#fff">跳过此卡 ▶</button></div>`;
+    const skip = modal.querySelector('#wrSkipInvalid');
+    if (skip) skip.addEventListener('click', () => webReviewSkipInvalid());
+    const previous = modal.querySelector('#wrPrev');
+    if (previous) previous.addEventListener('click', () => webReviewPrev());
+    const prevQ = modal.querySelector('#wrPrevQ');
+    if (prevQ) prevQ.addEventListener('click', () => webReviewPrev());
+    return;
+  }
+
   if (quiz.type === 'mc') {
     const btns = quiz.options.map(o =>
       `<button class="wr-option" data-wr-opt="${o.letter}">
@@ -610,12 +633,35 @@ function showWebReviewQuestion(cardData) {
   }
   const prevQ = modal.querySelector('#wrPrevQ');
   if (prevQ) prevQ.addEventListener('click', () => webReviewPrev());
+  if (webReviewState.native && webReviewState.nativeReviewed[cardData.cardId]) {
+    const reviewed = webReviewState.nativeReviewed[cardData.cardId];
+    webReviewState.locked = true;
+    webReviewState.stage = 'graded';
+    const res = modal.querySelector('#wrResult');
+    if (res) {
+      const answer = quiz.type === 'recall' ? quiz.meaning : (quiz.answerRaw || quiz.answer || quiz.word || '');
+      res.innerHTML = `<div style="padding:12px 14px;border-radius:10px;margin-bottom:12px;background:#f8fafc;border:1px solid var(--border)"><b>已评分：${esc(reviewed.label)}</b><div style="margin-top:8px">参考答案：${esc(answer)}</div>${quiz.explanation ? `<div style="margin-top:8px;white-space:pre-wrap">${esc(quiz.explanation)}</div>` : ''}<div style="font-size:12px;color:var(--text2);margin-top:4px">上一题仅供回看，不会重复提交评分。</div></div><div style="display:flex;gap:8px;justify-content:center"><button id="wrPrevReviewed" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:#fff">◀ 上一题</button><button id="wrNextReviewed" style="padding:9px 14px;border:0;border-radius:8px;background:var(--primary);color:#fff">继续 ▶</button></div>`;
+      const previous = res.querySelector('#wrPrevReviewed');
+      const next = res.querySelector('#wrNextReviewed');
+      if (previous) previous.addEventListener('click', () => webReviewPrev());
+      if (next) next.addEventListener('click', () => webReviewNext());
+      modal.querySelectorAll('[data-wr-opt], #wrReveal, #wrFillSubmit, [data-wr-blank], #wrFill').forEach(el => { el.disabled = true; });
+    }
+  }
+  const previous = modal.querySelector('#wrPrevQ, #wrPrev, #wrPrevReviewed');
+  if (previous && webReviewState.native && webReviewState.nativeIndex <= 0) {
+    previous.disabled = true;
+    previous.title = '当前是本次复习的第一张卡';
+    previous.setAttribute('aria-disabled', 'true');
+    previous.style.opacity = '0.45';
+    previous.style.cursor = 'not-allowed';
+  }
 }
 
 function webReviewFooter(hint) {
   return `<div id="wrFoot" style="display:flex;gap:8px;justify-content:space-between;align-items:center">
     <span style="display:flex;gap:10px;align-items:center">
-      <button id="wrPrevQ" title="上一题（撤销上一张评分）" style="border:none;background:none;color:var(--text2);font-size:13px;cursor:pointer;padding:2px 4px">◀ 上一题</button>
+      <button id="wrPrevQ" title="${webReviewState.native ? '上一题（回看已评分卡片）' : '上一题（撤销上一张评分）'}" style="border:none;background:none;color:var(--text2);font-size:13px;cursor:pointer;padding:2px 4px">◀ 上一题</button>
       <button data-action="close-web-review" style="border:none;background:none;color:var(--text2);font-size:12px;cursor:pointer">退出复习</button>
     </span>
     <span style="font-size:12px;color:var(--text3)">${esc(hint)}</span>
@@ -763,7 +809,6 @@ function webReviewGrade(correct, correctText, explanation) {
   st.locked = true;
   st.stage = 'graded';
   st.judgedCorrect = !!correct;
-  if (correct) st.correct++;
   const res = document.getElementById('wrResult');
   if (res) {
     res.innerHTML = `<div style="padding:12px 14px;border-radius:10px;margin-bottom:12px;background:${correct ? '#f0fdf4' : '#fef2f2'};border:1px solid ${correct ? '#22c55e' : '#ef4444'}">
@@ -838,16 +883,27 @@ function webReviewBindGradeBar(container) {
 
 /* 按默认档位进入下一题（Enter/→/下一题按钮） */
 function webReviewNext() {
-  webReviewCommit(webReviewState ? webReviewState.defaultEase : 3);
+  const st = webReviewState;
+  if (st && st.native && st.nativeReviewed[st.cardId]) { fetchNextWebReviewCard(); return; }
+  webReviewCommit(st ? st.defaultEase : 3);
 }
 
-/* 撤销上一张的评分，回到上一张。
-   注意 AnkiConnect 行为：guiUndo 成功后当前显示的卡可能不变（被撤销的卡
-   稍后会在队列中重新出现），因此以「undo 返回 true + 当前卡重渲染」为准，
-   不做 cardId 严格核对（实测该核对与 Anki 异步刷新存在竞态，会误报失败）。 */
+// FSRS 回看不重复评分；AnkiConnect 使用 guiUndo，当前卡可能暂时不变。
 async function webReviewPrev() {
   const st = webReviewState;
   if (!st || st.committing) return;
+  if (st.native) {
+    if (st.nativeIndex <= 0) { toastMsg('已经是第一张了'); return; }
+    st.nativeIndex--;
+    const item = st.nativeCards[st.nativeIndex];
+    const cardData = webReviewNativeCardData(item);
+    if (!cardData) { toastMsg('无法读取上一张卡片'); return; }
+    st.cardId = cardData.cardId;
+    st.current = st.nativeIndex + 1;
+    st.currentQueue = webReviewQueueKind(cardData);
+    showWebReviewQuestion(cardData);
+    return;
+  }
   if (st.current <= 1 && !st.prevCardId) { toastMsg('已经是第一张了'); return; }
   try {
     const r = await ankiPostCall({ action: 'guiUndo', version: 6 });
@@ -880,6 +936,7 @@ async function webReviewPrev() {
 async function webReviewCommit(ease) {
   const st = webReviewState;
   if (!st || st.committing) return;
+  if (st.native) return webReviewCommitNative(ease);
   st.committing = true;
   let gradedCorrect = false;
   try {
@@ -919,16 +976,23 @@ function finishWebReview() {
     <div style="font-size:18px;font-weight:700;margin-bottom:8px">复习完成!</div>
     <div style="font-size:14px;color:var(--text2);margin-bottom:4px">共 ${webReviewState.total} 题 · 正确 ${webReviewState.correct} 题</div>
     <div style="font-size:24px;font-weight:700;color:${pct >= 70 ? 'var(--green)' : 'var(--red)'}">正确率 ${pct}%</div>
-    <button data-action="close-overlay" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">关闭</button>
+    ${webReviewState.native && webReviewState.nativeCards.length ? '<button id="wrPrevFinished" style="margin-top:16px;margin-right:8px;padding:8px 18px;border:1px solid var(--border);border-radius:8px;background:#fff">◀ 上一题</button>' : ''}
+    <button data-action="close-web-review" style="margin-top:16px;padding:8px 24px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">关闭</button>
   </div>`;
+  const previous = modal.querySelector('#wrPrevFinished');
+  if (previous) previous.addEventListener('click', () => webReviewPrev());
+  if (webReviewState.native) renderAnkiSidebar();
 }
 
-function closeWebReview() {
+async function closeWebReview() {
   if (webReviewState && webReviewState.keyHandler) {
     document.removeEventListener('keydown', webReviewState.keyHandler);
   }
   webReviewState = null;
   const modal = document.getElementById('ankiReviewModal');
   if (modal) modal.parentElement.remove();
-  renderAnkiSidebar();
+  await renderAnkiSidebar();
+  if (document.getElementById('pmAnkiDeck') && typeof renderPracticeAnkiDeck === 'function') {
+    await renderPracticeAnkiDeck();
+  }
 }

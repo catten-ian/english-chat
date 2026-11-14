@@ -57,7 +57,7 @@ test('every prepared article is a substantial offline fallback', () => {
   const source = fs.readFileSync(require.resolve('../js/app/28-reading-exports.js'), 'utf8');
   const sandbox = {};
   vm.runInNewContext(source.slice(0, source.indexOf('function readingPreparedArticle')) + ';this.articles = READING_PREPARED_ARTICLES;', sandbox);
-  assert.ok(sandbox.articles.length >= 2);
+  assert.ok(sandbox.articles.length >= 6);
   for (const article of sandbox.articles) {
     const count = article.paragraphs.join(' ').split(/\s+/).length;
     assert.ok(count >= 600, article.title + ': ' + count + ' words');

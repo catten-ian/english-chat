@@ -48,7 +48,7 @@ function validateBase(base, id) {
   try { url = new URL(value); } catch (_) { throw new Error('请输入有效的 HTTPS API 地址'); }
   // User-controlled URLs must not turn the authenticated proxy into an SSRF endpoint.
   // Extra compatible hosts require an explicit server-side allowlist.
-  const allowed = new Set(['api.aihub8.top', 'api.minimaxi.com', 'api.minimax.io', 'api.openai.com', 'api.deepseek.com',
+  const allowed = new Set(['api.minimaxi.com', 'api.minimax.io', 'api.aihub8.top', 'api.openai.com', 'api.deepseek.com',
     'dashscope.aliyuncs.com', 'dashscope-intl.aliyuncs.com', 'api.siliconflow.cn', 'api.siliconflow.com',
     'openrouter.ai', 'api.search.brave.com', 'api.bing.microsoft.com', 'api.tavily.com', 'google.serper.dev']);
   for (const hostname of (process.env.AI_EN_PROVIDER_HOSTS || '').split(',')) {

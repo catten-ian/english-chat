@@ -17,12 +17,12 @@ const { STATIC_MIME, STATIC_DIRS, INDEX_FILE, GAME_DIR } = require('../config');
 // （头像 dataURL、TTS 与录音为 blob URL）；字体同源；禁止 frame/object。
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  "script-src 'self' https://cdn.jsdelivr.net https://esm.sh",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "media-src 'self' blob:",
   "font-src 'self'",
-  "connect-src 'self' blob:",
+  "connect-src 'self' blob: https://cdn.jsdelivr.net https://esm.sh https://dl.polyhaven.org",
   "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'self'",
@@ -45,7 +45,7 @@ function resolveInside(root, relPath) {
   return resolved;
 }
 
-function sendFile(res, abs) {
+function sendFile(res, abs, cacheControl) {
   const ext = path.extname(abs).toLowerCase();
   const mime = STATIC_MIME[ext];
   if (!mime) { sendJson(res, 404, { error: 'not found' }); return; }
@@ -53,7 +53,7 @@ function sendFile(res, abs) {
     if (err) { sendJson(res, 404, { error: 'not found' }); return; }
     res.writeHead(200, {
       'Content-Type': mime,
-      'Cache-Control': 'no-cache',
+      'Cache-Control': cacheControl || 'no-cache',
       'X-Content-Type-Options': 'nosniff',
       'Content-Security-Policy': CSP
     });
@@ -85,15 +85,32 @@ function serveStatic(res, pathname, opts) {
 
   for (const [prefix, root] of Object.entries(STATIC_DIRS)) {
     if (!decoded.startsWith(prefix)) continue;
-    if (decoded === prefix) { sendFile(res, path.join(root, 'index.html')); return; }
+    if (decoded === prefix) {
+      sendFile(res, path.join(root, 'index.html'));
+      return;
+    }
     const abs = resolveInside(root, decoded.slice(prefix.length));
     if (!abs) { sendJson(res, 404, { error: 'not found' }); return; }
-    sendFile(res, abs);
+    // Music URLs include the source file version, so audio can be kept in the
+    // browser cache for a long time without serving a stale replacement.
+    sendFile(res, abs, prefix === '/music/' ? 'public, max-age=31536000, immutable' : undefined);
     return;
   }
   sendJson(res, 404, { error: 'not found' });
 }
 
-function serveGamePage(res) { sendFile(res, path.join(GAME_DIR, 'index.html')); }
+function serveGamePage(res) {
+  const file = path.join(GAME_DIR, 'index.html');
+  fs.readFile(file, 'utf8', (err, html) => {
+    if (err) { sendJson(res, 404, { error: 'game not built' }); return; }
+    res.writeHead(200, {
+      'Content-Type': STATIC_MIME['.html'],
+      'Cache-Control': 'no-cache',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': CSP
+    });
+    res.end(html);
+  });
+}
 
 module.exports = { serveStatic, serveGamePage };

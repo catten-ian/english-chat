@@ -202,7 +202,7 @@ export function createMapRenderer(canvas: HTMLCanvasElement): Renderer {
         ink.strokeStyle = '#f2d79b77'; ink.lineWidth = 1;
         ink.setLineDash([3, 5]); ink.beginPath(); ink.arc(point.x, point.y, npc.interactionRadius * zoom, 0, Math.PI * 2); ink.stroke(); ink.setLineDash([]);
       }
-      person(point.x, point.y, npc.id === 'eli' ? '#b7966b' : '#6d9c97');
+      person(point.x, point.y, npc.id === 'eli' ? '#b7966b' : npc.id === 'jonah' ? '#8aabc0' : '#6d9c97');
       ink.font = '12px Georgia, serif'; ink.textAlign = 'center'; ink.textBaseline = 'middle';
       const label = npc.name;
       const labelWidth = ink.measureText(label).width + 18;
@@ -211,7 +211,11 @@ export function createMapRenderer(canvas: HTMLCanvasElement): Renderer {
       ink.fillStyle = '#eee1c8'; ink.fillText(label, point.x, point.y - 26);
     }
     const p = project(state.player.x, state.player.z);
-    ink.strokeStyle = '#e7efdc'; ink.lineWidth = 1.4; ink.beginPath(); ink.ellipse(p.x, p.y + 5, 10, 6, 0, 0, Math.PI * 2); ink.stroke();
+    // Soft golden glow marks the player's position on the illustrated map.
+    const pglow = ink.createRadialGradient(p.x, p.y + 5, 6, p.x, p.y + 5, 22);
+    pglow.addColorStop(0, '#e8c97a38'); pglow.addColorStop(1, '#e8c97a00');
+    ink.fillStyle = pglow; ink.fillRect(p.x - 22, p.y - 18, 44, 44);
+    ink.strokeStyle = '#e8c97a99'; ink.lineWidth = 1.4; ink.beginPath(); ink.ellipse(p.x, p.y + 5, 10, 6, 0, 0, Math.PI * 2); ink.stroke();
     person(p.x, p.y, '#44565f', true);
     ink.save(); ink.translate(p.x, p.y); ink.rotate(facing);
     ink.fillStyle = '#f1dfb0'; ink.beginPath(); ink.moveTo(0, -22); ink.lineTo(-3, -17); ink.lineTo(3, -17); ink.closePath(); ink.fill(); ink.restore();

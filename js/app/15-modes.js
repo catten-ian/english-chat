@@ -9,6 +9,10 @@ let currentMode = 'chat'; // chat | reading | practice | writing | translation |
 let trSource = 'bank';    // bank | ai
 let chSource = 'bank';    // bank | ai
 let currentTranslation = null;
+let trOnlyNew = false;
+let trFeedbackItems = [];
+let trFeedbackPage = 0;
+let trSubmissionSeq = 0;
 let trHistoryExpanded = false;
 // 学习中心（practice）当前子页：review | overview | cost
 let currentPracticeTab = 'review';

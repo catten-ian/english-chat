@@ -16,7 +16,16 @@ function musicList(req, res) {
     const files = fs.readdirSync(MUSIC_DIR)
       .filter(f => AUDIO_EXT.has(path.extname(f).toLowerCase()))
       .sort((a, b) => a.localeCompare(b, 'zh-CN'))
-      .map(f => ({ file: f, name: f.replace(/\.[^.]+$/, '').replace(/^\s*\d+[\s._-]+/, '').trim() || f }));
+      .map(f => {
+        const stat = fs.statSync(path.join(MUSIC_DIR, f));
+        return {
+          file: f,
+          name: f.replace(/\.[^.]+$/, '').replace(/^\s*\d+[\s._-]+/, '').trim() || f,
+          // Changing a source file changes its URL and therefore invalidates
+          // the client's immutable local cache entry.
+          version: `${Math.trunc(stat.mtimeMs)}-${stat.size}`
+        };
+      });
     sendJson(res, 200, { files }, req);
   } catch (e) {
     sendJson(res, 500, { error: 'failed', detail: e.message }, req);

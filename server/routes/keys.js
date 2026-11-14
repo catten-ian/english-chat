@@ -112,7 +112,7 @@ async function testKey(req, res, service) {
     try {
       // max_tokens=1 的最小请求：验证鉴权与连通，成本几乎为 0
       const r = await proxyRequest(MINIMAX_BASE() + '/v1/chat/completions',
-        Buffer.from(JSON.stringify({ model: 'MiniMax-M3', messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 })),
+        Buffer.from(JSON.stringify({ model: 'MiniMax-M3.1', messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 })),
         { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + key });
       if (r.status === 200) { sendJson(res, 200, { ok: true, detail: '连接成功（MiniMax 鉴权通过）' }, req); return; }
       let detail = 'HTTP ' + r.status;

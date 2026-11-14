@@ -31,6 +31,52 @@ function material(color: string, roughness = 0.72, metalness = 0) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness });
 }
 
+/** Soft additive halo sprite drawn on a CPU canvas — no extra render pass required. */
+function makeGlowSprite(r: number, g: number, b: number, size: number): THREE.Sprite {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const ctx = c.getContext('2d')!;
+  const grad = ctx.createRadialGradient(64, 64, 2, 64, 64, 64);
+  grad.addColorStop(0, `rgba(${r},${g},${b},0.90)`);
+  grad.addColorStop(0.22, `rgba(${r},${g},${b},0.52)`);
+  grad.addColorStop(0.55, `rgba(${r},${g},${b},0.14)`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.SpriteMaterial({ map: tex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(size, size, 1);
+  return sprite;
+}
+
+/** World-space nameplate rendered as a Sprite with canvas typography. */
+function makeNameplateSprite(name: string, role: string): THREE.Sprite {
+  const c = document.createElement('canvas'); c.width = 280; c.height = 76;
+  const ctx = c.getContext('2d')!;
+  ctx.clearRect(0, 0, 280, 76);
+  ctx.beginPath(); ctx.roundRect(3, 3, 274, 70, 9);
+  ctx.fillStyle = '#10211ec4'; ctx.fill();
+  ctx.strokeStyle = '#d9c19768'; ctx.lineWidth = 1.4; ctx.stroke();
+  ctx.fillStyle = '#edc18c'; ctx.font = '13px Georgia, serif'; ctx.textAlign = 'center';
+  ctx.fillText(role, 140, 26);
+  ctx.fillStyle = '#f5ecdd'; ctx.font = '500 20px Georgia, serif';
+  ctx.fillText(name, 140, 55);
+  const tex = new THREE.CanvasTexture(c); tex.needsUpdate = true;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, opacity: 0 });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(2.8, 0.76, 1);
+  return sprite;
+}
+
+/** Thin glowing ring flat on the ground — appears when player enters interaction radius. */
+function makeInteractionRing(radius: number): THREE.Mesh {
+  const geo = new THREE.RingGeometry(radius - 0.52, radius - 0.22, 56);
+  const mat = new THREE.MeshBasicMaterial({ color: '#e8c97a', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const ring = new THREE.Mesh(geo, mat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.03;
+  return ring;
+}
+
 type CharacterRig = { root: THREE.Group; fallback: THREE.Group; mixer?: THREE.AnimationMixer; actions: Map<string, THREE.AnimationAction>; activeAction?: THREE.AnimationAction };
 const CHARACTER_FILES: Record<string, string> = {
   player: 'protagonist.glb',
@@ -88,7 +134,7 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   let disposed = false;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#65758c');
-  scene.fog = new THREE.FogExp2('#78899b', 0.012);
+  scene.fog = new THREE.FogExp2('#617080', 0.010);
   const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 240);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.shadowMap.enabled = true;
@@ -107,6 +153,9 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   sun.shadow.camera.updateProjectionMatrix(); scene.add(sun);scene.add(sun.target);
   const harborFill = new THREE.DirectionalLight('#9cb6df', 0.4);
   harborFill.position.set(8, 9, -24); scene.add(harborFill);
+  // Soft sea-horizon rim light separates characters from the dark background.
+  const rimLight = new THREE.DirectionalLight('#88afc8', 0.28);
+  rimLight.position.set(0, 7, -18); scene.add(rimLight);
   const environmentGenerator = new THREE.PMREMGenerator(renderer);
   let environment: THREE.WebGLRenderTarget | undefined;
   let skyTexture: THREE.DataTexture | undefined;
@@ -115,10 +164,10 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
     texture.mapping = THREE.EquirectangularReflectionMapping;
     environment = environmentGenerator.fromEquirectangular(texture);
     scene.environment = environment.texture;
-    scene.environmentIntensity = .65;
+    scene.environmentIntensity = .72;
     skyTexture = texture;
     scene.background = texture;
-    scene.backgroundBlurriness = .015;
+    scene.backgroundBlurriness = .025;
     scene.backgroundIntensity = .45;
     scene.environmentRotation.y = scene.backgroundRotation.y = 2.8;
     environmentGenerator.dispose();
@@ -147,11 +196,11 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
         const materials = Array.isArray(object.material) ? object.material : [object.material];
         for (const surface of materials) {
           if (surface instanceof THREE.MeshStandardMaterial) {
-            surface.color.set('#12303b');
-            surface.roughness = 0.12;
-            surface.metalness = 0.14;
-            surface.envMapIntensity = 1.1;
-            if (surface.normalMap) surface.normalScale.setScalar(0.18);
+            surface.color.set('#0d2a37');
+            surface.roughness = 0.07;
+            surface.metalness = 0.18;
+            surface.envMapIntensity = 1.4;
+            if (surface.normalMap) surface.normalScale.setScalar(0.24);
             waterMaterials.push(surface);
           }
         }
@@ -164,7 +213,17 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   for (const [x,z] of [[7,-4],[10,4.2],[18,13]]) {
     const lamp = new THREE.PointLight('#ffb56b', 36, 10, 2);
     lamp.position.set(-x, 2.25, z); scene.add(lamp);
+    // Additive halo reads as warm bloom at distance without a post-processing pass.
+    const halo = makeGlowSprite(255, 197, 122, 3.2);
+    halo.position.set(-x, 2.35, z); scene.add(halo);
+    const core = makeGlowSprite(255, 236, 196, 1.1);
+    core.position.set(-x, 2.35, z); scene.add(core);
   }
+  // Lighthouse beacon: a warm halo high above the headland marks the returning light.
+  const beacon = makeGlowSprite(255, 232, 196, 6);
+  beacon.position.set(17, 11.5, 17.2); scene.add(beacon);
+  const beaconCore = makeGlowSprite(255, 248, 224, 2.2);
+  beaconCore.position.set(17, 11.5, 17.2); scene.add(beaconCore);
 
   const player = new THREE.Group(); scene.add(player);
   const characters = new Map<string, CharacterRig>();
@@ -172,12 +231,18 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
   characters.set('player', playerRig);
   void loadCharacter(playerRig, CHARACTER_FILES.player, () => disposed);
   const npcMeshes = new Map<string, THREE.Group>();
+  const npcRings = new Map<string, THREE.Mesh>();
+  const npcNameplates = new Map<string, THREE.Sprite>();
   const addNpc = (npc: Npc) => {
     const group = new THREE.Group(); group.position.set(-npc.position.x, floorHeightAt(npc.position.x,npc.position.z), npc.position.z);
     scene.add(group);
     const rig = { root: group, fallback: addFallbackCharacter(group, npc.accent), actions: new Map<string, THREE.AnimationAction>() } satisfies CharacterRig;
     characters.set(npc.id, rig);
     void loadCharacter(rig, CHARACTER_FILES[npc.id], () => disposed);
+    const ring = makeInteractionRing(npc.interactionRadius);
+    group.add(ring); npcRings.set(npc.id, ring);
+    const nameplate = makeNameplateSprite(npc.name, npc.role);
+    nameplate.position.y = 2.55; group.add(nameplate); npcNameplates.set(npc.id, nameplate);
     npcMeshes.set(npc.id, group);
   };
   WORLD.npcs.forEach(addNpc);
@@ -216,8 +281,24 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
       }
     }
     for (const [id, group] of npcMeshes) {
-      group.visible = state.activeNpcIds.includes(id as Npc['id']);
+      const active = state.activeNpcIds.includes(id as Npc['id']);
+      group.visible = active;
       if (state.nearbyNpc === id) group.rotation.y = Math.atan2(player.position.x-group.position.x,player.position.z-group.position.z);
+      // Animate proximity ring: fades in when nearby, pulses gently.
+      const ring = npcRings.get(id);
+      if (ring) {
+        const ringMat = ring.material as THREE.MeshBasicMaterial;
+        const isNearby = active && state.nearbyNpc === id;
+        const target = isNearby ? 0.42 + Math.sin(elapsed * 2.6) * 0.22 : 0;
+        ringMat.opacity += (target - ringMat.opacity) * Math.min(1, dt * 7);
+      }
+      // Nameplate fades in when NPC is active, fades to lower opacity at distance.
+      const nameplate = npcNameplates.get(id);
+      if (nameplate) {
+        const npMat = nameplate.material as THREE.SpriteMaterial;
+        const targetAlpha = active ? 0.9 : 0;
+        npMat.opacity += (targetAlpha - npMat.opacity) * Math.min(1, dt * 5);
+      }
     }
     const partnerId = state.activeNpc || state.nearbyNpc;
     const partner = partnerId && state.activeNpcIds.includes(partnerId) ? npcMeshes.get(partnerId) : undefined;
@@ -235,7 +316,13 @@ export function createThreeRenderer(canvas: HTMLCanvasElement): Renderer {
     sun.target.position.set(player.position.x,0,player.position.z);
     sun.position.set(player.position.x+26,17,player.position.z+24);
     elapsed += dt;
-    for (const surface of waterMaterials) if (surface.normalMap) surface.normalMap.offset.set(elapsed*.006,elapsed*.003);
+    // Organic wave motion — dual-frequency oscillation avoids the mechanical linear scroll.
+    for (const surface of waterMaterials) if (surface.normalMap) {
+      surface.normalMap.offset.set(
+        Math.sin(elapsed * 0.28) * 0.06 + elapsed * 0.0045,
+        elapsed * 0.0022
+      );
+    }
     renderer.render(scene, camera);
   };
   resize(); window.addEventListener('resize', resize);

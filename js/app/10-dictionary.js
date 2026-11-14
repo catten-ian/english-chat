@@ -82,9 +82,12 @@ async function queryDict() {
   const input = document.getElementById('dictInput');
   let text = input.value.trim();
   if (!text) return;
+  const slashMenu = document.getElementById('dictSlashMenu');
+  if (slashMenu) slashMenu.style.display = 'none';
   // Detect /ask command
-  const isAsk = text.startsWith('/ask ');
-  if (isAsk) text = text.slice(5).trim();
+  const isAsk = /^\/ask(?:\s|$)/.test(text);
+  text = text.replace(/^\/(?:ask|t|translate)(?:\s+|$)/, '').trim();
+  if (!text) { toastMsg('请在命令后输入要查询的内容'); input.focus(); return; }
   const btn = document.getElementById('dictBtn');
   const resultEl = document.getElementById('dictResult');
   btn.disabled = true;
@@ -92,7 +95,7 @@ async function queryDict() {
   resultEl.innerHTML = '<div class="loading">⏳ 查询中...</div>';
 
   const lookupMode = getSetting('dictProvider', 'ai');
-  if (lookupMode === 'dictionary' && /^[a-zA-Z][a-zA-Z\s'-]*$/.test(text)) {
+  if (!isAsk && lookupMode === 'dictionary' && /^[a-zA-Z][a-zA-Z\s'-]*$/.test(text)) {
     try {
       const word = encodeURIComponent(text.toLowerCase());
       const res = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + word);
@@ -129,7 +132,7 @@ async function queryDict() {
   const isEnglishSentence = /^[a-zA-Z\s',.!?;-]+$/.test(text) && text.split(/\s+/).length > 3 && !isQuestion;
 
   try {
-    let systemPrompt, maxTokens = 4500;
+    let systemPrompt;
     // Add conversation context for all queries
     const context = getActivePath().slice(-20).map(m => (m.role === 'user' ? 'User: ' : 'Alex: ') + (m.content || '')).join('\n');
     const contextBlock = context ? '\n\nConversation context (for reference):\n' + context : '';
@@ -142,7 +145,7 @@ async function queryDict() {
       systemPrompt = 'You are a professional translator and English teacher. Translate the Chinese input into English, providing MULTIPLE expression options at different levels. Return ONLY valid JSON:\n{\n  "type": "zh2en",\n  "original": "the Chinese input",\n  "translations": [{"level": "基础/自然/地道/高级", "text": "English expression", "note": "brief usage note in Chinese"}],\n  "key_phrases": [{"phrase": "phrase", "meaning": "Chinese meaning"}],\n  "extensions": [{"type": "synonym|idiom|knowledge|grammar", "title": "...", "content": "learning point in Chinese"}],\n  "weak_points": [{"category": "grammar|collocation|vocabulary", "point": "generalizable knowledge point", "suggestion": "how to improve"}]\n}';
     } else if (isEnglishWord) {
       // English word dictionary
-      systemPrompt = 'You are a dictionary assistant. For the given English word/phrase, provide a detailed dictionary entry in Chinese. If the word is a morphological variant (plural, past tense, -ing, etc.), show the base/lemma form as the main entry and list all variants. Return ONLY valid JSON:\n{\n  "type": "dict",\n  "word": "base form",\n  "input": "the original selected text",\n  "phonetic": "/IPA/",\n  "part": "词性",\n  "variants": {"plural": "forms", "past": "forms", "present": "forms", "comparative": "forms"} as applicable,\n  "meanings": ["释义1", "释义2"],\n  "examples": [{"en": "English sentence", "zh": "中文翻译"}],\n  "collocations": ["搭配1 (翻译)", "搭配2 (翻译)"],\n  "synonyms": [{"word": "同义词", "note": "辨析说明"}],\n  "etymology": "word origin explanation in Chinese",\n  "extensions": [{"type": "synonym|idiom|knowledge|grammar", "title": "...", "content": "learning point in Chinese"}]\n}';
+      systemPrompt = 'You are a dictionary assistant. For the given English word/phrase, provide a detailed dictionary entry in Chinese. If the word is a morphological variant (plural, past tense, -ing, etc.), show the base/lemma form as the main entry and list all variants. Return ONLY valid JSON:\n{\n  "type": "dict",\n  "word": "base form",\n  "input": "the original selected text",\n  "phonetic": "/IPA/",\n  "part": "词性",\n  "variants": {"plural": "forms", "past": "forms", "present": "forms", "comparative": "forms"},\n  "meanings": ["释义1", "释义2"],\n  "examples": [{"en": "English sentence", "zh": "中文翻译"}],\n  "collocations": ["搭配1 (翻译)", "搭配2 (翻译)"],\n  "synonyms": [{"word": "同义词", "note": "辨析说明"}],\n  "etymology": "word origin explanation in Chinese",\n  "extensions": [{"type": "synonym|idiom|knowledge|grammar", "title": "...", "content": "learning point in Chinese"}]\n}';
     } else if (isEnglishSentence || isQuestion) {
       // English sentence analysis or question
       systemPrompt = 'You are an English tutor. Analyze the given English text or answer the question. Provide translation, breakdown, key vocabulary, and learning points. Return ONLY valid JSON:\n{\n  "type": "analysis",\n  "original": "the input",\n  "translation": "Chinese translation (if applicable)",\n  "answer": "answer to the question (if applicable)",\n  "breakdown": "analysis in Chinese",\n  "vocab": [{"word": "word", "meaning": "Chinese meaning", "part": "part of speech", "note": "usage note"}],\n  "phrases": [{"phrase": "phrase", "meaning": "Chinese meaning"}],\n  "extensions": [{"type": "synonym|idiom|knowledge|grammar", "title": "...", "content": "learning point in Chinese"}],\n  "weak_points": [{"category": "grammar|collocation|vocabulary", "point": "generalizable knowledge point", "suggestion": "how to improve"}]\n}';
@@ -157,11 +160,10 @@ async function queryDict() {
     let accText = '';
     let obj = null;
     const seenFields = new Set();
-    // 手动超时控制器（60s）
+    // streamDict 负责首字/空闲超时；不要用固定总时长中止长回复。
     const timeoutCtrl = new AbortController();
-    const timeoutId2 = setTimeout(() => timeoutCtrl.abort(), 60000);
     try {
-      const full = await streamDict(messages, { temperature: 0.4, maxTokens: maxTokens }, (d) => {
+      const result = await streamAndParseJSON(messages, { temperature: 0.4, maxTokens: null, onRetry: () => { accText = ''; seenFields.clear(); resultEl.innerHTML = '<div class="loading">⏳ 结果格式不完整，正在自动重新查询…</div>'; } }, value => typeof value.type === 'string', (d) => {
         accText += d;
         const cleanAcc = stripThinking(accText);
         if (cleanAcc === accText && !accText.includes('"')) {
@@ -181,17 +183,12 @@ async function queryDict() {
           resultEl.innerHTML = (incrementalHtml || '<div class="loading" style="padding:8px">⏳ 查询中...</div>') + rawHtml;
         }
       }, timeoutCtrl.signal);
-      clearTimeout(timeoutId2);
-      obj = smartParseJSON(full);
+      obj = result.obj;
+      accText = result.raw;
     } catch (e) {
-      clearTimeout(timeoutId2);
       if (e && (e.name === 'AbortError' || e.code === 20)) throw e;
       dbg('DICT_STREAM_ERR', e.message);
-    }
-    if (!obj) {
-      const retried = await callAndParseJSON(messages, { temperature: 0.4, maxTokens: maxTokens }, (o) => o && typeof o.type === 'string');
-      obj = retried.obj;
-      if (retried.raw) accText = retried.raw;
+      throw e;
     }
     const cleaned = stripThinking(accText);
 

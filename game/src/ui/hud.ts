@@ -68,6 +68,9 @@ export function createHud(root: HTMLElement): Hud {
     }
     if (npc?.id !== lastNearby) {
       nearby.textContent = npc ? `Within talking distance · ${npc.name}` : 'Walk to a resident to begin a conversation';
+      // Brief golden flash signals a newly-detected nearby resident.
+      if (npc) { nearby.classList.remove('wg-nearby-enter'); void nearby.offsetWidth; nearby.classList.add('wg-nearby-enter'); }
+      else nearby.classList.remove('wg-nearby-enter');
       // A streamed speaker must not change merely because the player walks away.
       if (form.hidden) speaker.textContent = npc ? npc.name.toUpperCase() : 'NO ONE NEARBY';
       interact.hidden = !npc;
